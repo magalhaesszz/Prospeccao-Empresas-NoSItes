@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}CRM — Prospector{% endblock %}
+
+{% block content %}
+<div class="container container-wide">
+
+  <div class="page-header">
+    <h1 class="page-title">📋 CRM — Funil de Vendas</h1>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="filtro-crm" type="text" placeholder="Filtrar por nome..." class="input-filtro" oninput="filtrarCards()"/>
+      <button class="btn btn-secondary btn-sm" onclick="carregarKanban()">↻ Atualizar</button>
+    </div>
+  </div>
+
+  <!-- Kanban board -->
+  <div id="kanban-board" class="kanban-board"></div>
+
+</div>
+
+<!-- Painel de notas (slide lateral) -->
+<div id="painel-notas" class="painel-notas">
+  <div class="painel-header">
+    <strong id="painel-nome">Empresa</strong>
+    <button onclick="fecharPainel()" class="btn-fechar">✕</button>
+  </div>
+
+  <!-- Info da empresa -->
+  <div id="painel-info" class="painel-info"></div>
+
+  <!-- Status rápido -->
+  <div class="painel-status">
+    <label style="font-size:.8rem;color:var(--muted)">Mover para:</label>
+    <div id="painel-status-btns" class="status-btns"></div>
+  </div>
+
+  <!-- Notas -->
+  <div class="painel-notas-lista">
+    <h3 style="font-size:.9rem;font-weight:600;margin-bottom:10px">Notas</h3>
+    <div id="lista-notas"></div>
+  </div>
+
+  <div class="painel-add-nota">
+    <textarea id="input-nota" rows="3" placeholder="Adicionar nota..." class="textarea-nota"></textarea>
+    <button class="btn btn-primary btn-sm" onclick="adicionarNota()" style="width:100%;margin-top:6px">+ Adicionar Nota</button>
+  </div>
+
+  <!-- WhatsApp rápido -->
+  <div class="painel-wa" style="border-top:1px solid var(--border)">
+    <button id="btn-wa-painel" class="btn btn-whatsapp" style="width:100%" onclick="enviarWaPainel()">
+      📱 Enviar WhatsApp
+    </button>
+  </div>
+</div>
+<div id="overlay-painel" class="overlay-painel hidden" onclick="fecharPainel()"></div>
+{% endblock %}
+
+{% block scripts %}<script src="/crm.js"></script>{% endblock %}

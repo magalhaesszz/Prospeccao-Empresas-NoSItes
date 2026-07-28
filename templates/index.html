@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Busca — Prospector{% endblock %}
+
+{% block content %}
+<div class="container">
+
+  <!-- Busca -->
+  <section class="card">
+    <h2 class="card-title">🔍 Nova Busca</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cidade / Estado</label>
+        <input id="cidade" type="text" placeholder="Ex: Goiânia, GO"/>
+      </div>
+      <div class="form-group">
+        <label>Categoria</label>
+        <input id="categoria" type="text" placeholder="Ex: barbearias"/>
+      </div>
+      <button id="btn-buscar" class="btn btn-primary" onclick="iniciarBusca()">🔍 Buscar</button>
+    </div>
+    <!-- Busca em lote -->
+    <details style="margin-top:14px">
+      <summary class="detalhes-toggle">📋 Busca em lote (múltiplas buscas)</summary>
+      <div style="margin-top:10px">
+        <label style="font-size:.8rem;color:var(--muted)">Uma busca por linha: categoria, cidade</label>
+        <textarea id="lote-texto" rows="4" class="textarea-lote" placeholder="barbearias, Goiânia GO&#10;restaurantes, Brasília DF&#10;advogados, São Paulo SP"></textarea>
+        <button class="btn btn-secondary" style="margin-top:8px" onclick="iniciarLote()">Executar Lote</button>
+      </div>
+    </details>
+  </section>
+
+  <!-- Progresso -->
+  <section id="secao-progresso" class="card hidden">
+    <div class="progresso-header">
+      <span id="txt-progresso">Iniciando...</span>
+      <span id="txt-contagem" class="contagem">0 / 0</span>
+    </div>
+    <div class="barra-bg"><div id="barra-fill" class="barra-fill" style="width:0%"></div></div>
+    <p id="txt-empresa" class="empresa-atual"></p>
+  </section>
+
+  <!-- Ações -->
+  <section id="secao-acoes" class="card hidden">
+    <div class="acoes-row">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span id="txt-selecionados" class="selecionados-label">0 selecionados</span>
+        <label class="toggle-label">
+          <input type="checkbox" id="chk-sem-site" onchange="filtrarTabela()"/> Só sem site
+        </label>
+      </div>
+      <div class="acoes-btns">
+        <button class="btn btn-secondary" onclick="selecionarTodos()">☑ Todos</button>
+        <button class="btn btn-whatsapp"  onclick="enviarSelecionados()">📱 WhatsApp</button>
+        <button class="btn btn-excel"     onclick="exportar('xlsx')">📊 Excel</button>
+        <button class="btn btn-secondary" onclick="exportar('csv')">📄 CSV</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Resultados -->
+  <section id="secao-resultados" class="card hidden">
+    <div class="resultados-header">
+      <h2 class="card-title">Resultados <span id="badge-total" class="badge badge-azul">0</span></h2>
+    </div>
+    <div class="tabela-wrapper">
+      <table>
+        <thead><tr>
+          <th><input type="checkbox" id="chk-todos" onchange="toggleCheckboxTodos(this)"/></th>
+          <th>Score</th><th>Nome</th><th>Telefone</th>
+          <th class="hide-mobile">Endereço</th>
+          <th>Site</th><th>Status</th><th>Ação</th>
+        </tr></thead>
+        <tbody id="corpo-tabela"></tbody>
+      </table>
+    </div>
+    <div id="paginacao" class="paginacao"></div>
+  </section>
+
+  <!-- Histórico -->
+  <section class="card">
+    <div class="historico-topo">
+      <h2 class="card-title">📂 Histórico</h2>
+      <button class="btn btn-secondary btn-sm" onclick="carregarHistorico()">↻</button>
+    </div>
+    <div id="historico-lista"><p class="vazio">Nenhuma busca ainda.</p></div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="/app.js"></script>{% endblock %}

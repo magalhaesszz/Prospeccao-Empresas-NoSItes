@@ -1,0 +1,8 @@
+flask
+selenium
+webdriver-manager
+undetected-chromedriver
+requests
+beautifulsoup4
+openpyxl
+phonenumbers

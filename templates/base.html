@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>{% block title %}Prospector{% endblock %}</title>
+  <link rel="stylesheet" href="/style.css"/>
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-brand">🗺️ Prospector</a>
+  <div class="nav-links">
+    <a href="/"          class="nav-link {{ 'active' if page=='busca'     }}">🔍 Busca</a>
+    <a href="/crm"       class="nav-link {{ 'active' if page=='crm'       }}">📋 CRM</a>
+    <a href="/dashboard" class="nav-link {{ 'active' if page=='dashboard' }}">📊 Dashboard</a>
+    <a href="/templates" class="nav-link {{ 'active' if page=='templates' }}">💬 Templates</a>
+    <a href="/blacklist" class="nav-link {{ 'active' if page=='blacklist' }}">🚫 Blacklist</a>
+  </div>
+  <button class="btn btn-sm btn-secondary" onclick="logout()" id="btn-logout" style="display:none">Sair</button>
+</nav>
+
+<div class="page-content">
+  {% block content %}{% endblock %}
+</div>
+
+<div id="toast" class="toast oculto"></div>
+
+<script>
+async function logout(){
+  await fetch('/api/logout',{method:'POST'});
+  location.href='/login';
+}
+function mostrarToast(msg, tipo='info'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast '+tipo;
+  setTimeout(()=>t.className='toast oculto',3500);
+}
+// Mostra botão sair se senha configurada
+fetch('/api/status').then(r=>r.json()).catch(()=>{});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

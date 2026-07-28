@@ -1,0 +1,43 @@
+# Para rodar LOCALMENTE: copie .env.example para .env, preencha e rode:
+#   docker-compose up --build
+#
+# No Railway: cada serviço é criado separado (não use este arquivo lá).
+#   Serviço 1 → seu repo GitHub (usa Dockerfile automaticamente)
+#   Serviço 2 → imagem Docker "atendai/evolution-api:latest"
+
+version: "3.8"
+
+services:
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      WEBHOOK_WHATSAPP: http://evolution:8080
+    volumes:
+      - db_data:/data
+    depends_on:
+      - evolution
+    restart: unless-stopped
+
+  evolution:
+    image: atendai/evolution-api:latest
+    ports:
+      - "8081:8080"
+    environment:
+      SERVER_URL: http://localhost:8081
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-minha-chave-local}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      DATABASE_ENABLED: "false"
+      REDIS_ENABLED: "false"
+      DEL_INSTANCE: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  evolution_instances:

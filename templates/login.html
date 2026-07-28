@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Login — Prospector</title>
+  <link rel="stylesheet" href="/style.css"/>
+  <style>
+    .login-wrap{ display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .login-card{ width:100%; max-width:380px; padding:40px 32px; }
+    .login-icon{ text-align:center; font-size:2.5rem; margin-bottom:16px; }
+    .login-card h1{ text-align:center; font-size:1.4rem; color:var(--blue); margin-bottom:24px; }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="card login-card">
+    <div class="login-icon">🗺️</div>
+    <h1>Prospector de Empresas</h1>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Senha do Painel</label>
+      <input id="senha" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="login()">Entrar</button>
+    <p id="erro-login" style="color:var(--red);text-align:center;margin-top:12px;font-size:.875rem;display:none">Senha incorreta.</p>
+  </div>
+</div>
+<script>
+async function login(){
+  const senha = document.getElementById('senha').value;
+  const resp  = await fetch('/api/login',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({senha})
+  });
+  if(resp.ok){ location.href='/'; }
+  else { document.getElementById('erro-login').style.display='block'; }
+}
+</script>
+</body>
+</html>
