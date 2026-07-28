@@ -523,6 +523,70 @@ body.painel-aberto{overflow:hidden}
 .bottom-nav-item.active{color:#fff}
 .bottom-nav-item:hover{color:#fff;background:var(--sidebar-hover)}
 
+/* ===== WhatsApp Page ===== */
+.wa-status-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.wa-status-icon{font-size:2.5rem;line-height:1;flex-shrink:0}
+.wa-status-info{flex:1}
+.wa-status-titulo{font-size:1.1rem;font-weight:700;margin-bottom:2px}
+.wa-status-sub{font-size:.875rem;color:var(--muted)}
+
+.qr-wrap{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.qr-instrucoes{flex:1;min-width:200px}
+.qr-instrucoes p{
+  font-size:.875rem;color:var(--muted);margin-bottom:10px;
+  display:flex;align-items:flex-start;gap:8px;
+}
+.qr-box{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r);padding:16px;
+  display:flex;align-items:center;justify-content:center;
+  min-width:220px;min-height:220px;
+}
+.qr-img{width:200px;height:200px;border-radius:8px;display:none}
+.qr-loading{color:var(--muted);font-size:.875rem;text-align:center}
+.wa-timer{font-size:.8rem;color:var(--muted);font-weight:500}
+
+.wa-config-grid{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.wa-config-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;border:1px solid var(--border);
+  border-radius:var(--r-sm);transition:background .15s;
+}
+.wa-config-item.ok{border-color:#A7F3D0;background:#F0FDF4}
+.wa-config-item.faltando{border-color:#FECACA;background:#FFF5F5}
+.wa-config-label{font-size:.8rem;font-weight:600;color:var(--muted);min-width:80px}
+.wa-config-valor{flex:1;font-size:.875rem;color:var(--text);font-family:monospace}
+.wa-config-badge{font-size:1rem}
+.wa-config-ok{font-size:.875rem;color:var(--green);font-weight:500;margin-bottom:8px}
+.wa-config-warn{font-size:.875rem;color:var(--yellow);font-weight:500;margin-bottom:8px}
+
+.wa-guia{
+  margin-top:14px;padding:16px;background:var(--bg);
+  border-radius:var(--r-sm);border:1px solid var(--border);
+}
+.wa-guia p{font-size:.875rem;color:var(--muted);margin-bottom:6px;line-height:1.6}
+.wa-guia strong{color:var(--text)}
+.wa-guia code{display:block;margin:6px 0;padding:6px 10px;font-size:.82rem}
+.wa-env-table{display:flex;flex-direction:column;gap:4px;margin:8px 0}
+.wa-env-row{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:6px 10px;background:var(--card);
+  border-radius:6px;border:1px solid var(--border);
+  font-size:.82rem;
+}
+.wa-env-row code{border:none;background:none;padding:0;font-size:.82rem;color:var(--blue)}
+.wa-env-row span{color:var(--muted)}
+
+.wa-stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;
+}
+.wa-stat{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:16px;text-align:center;
+}
+.wa-stat-val{display:block;font-size:1.8rem;font-weight:700;color:var(--text);letter-spacing:-.03em}
+.wa-stat-lab{font-size:.75rem;color:var(--muted);margin-top:4px;display:block;font-weight:500}
+
 /* ===== Utilities ===== */
 .hidden{display:none!important}
 .vazio{text-align:center;color:var(--muted);padding:32px 0;font-size:.875rem}

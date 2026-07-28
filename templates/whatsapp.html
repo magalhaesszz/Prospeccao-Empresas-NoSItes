@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp — Prospector{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:900px">
+
+  <div class="page-header">
+    <h1 class="page-title">📱 WhatsApp</h1>
+    <button class="btn btn-secondary btn-sm" onclick="atualizarStatus()">↻ Atualizar</button>
+  </div>
+
+  <!-- Status da conexão -->
+  <div class="card" id="card-status">
+    <div class="wa-status-row">
+      <div class="wa-status-icon" id="status-icon">⏳</div>
+      <div class="wa-status-info">
+        <div class="wa-status-titulo" id="status-titulo">Verificando conexão...</div>
+        <div class="wa-status-sub"   id="status-sub">Aguarde</div>
+      </div>
+      <div id="status-acoes"></div>
+    </div>
+  </div>
+
+  <!-- QR Code (só aparece quando desconectado) -->
+  <div class="card hidden" id="card-qr">
+    <h2 class="card-title">📷 Escanear QR Code</h2>
+    <div class="qr-wrap">
+      <div class="qr-instrucoes">
+        <p>1. Abra o WhatsApp no seu celular</p>
+        <p>2. Toque em <strong>Dispositivos Conectados</strong></p>
+        <p>3. Toque em <strong>Conectar Dispositivo</strong></p>
+        <p>4. Aponte a câmera para o QR abaixo</p>
+      </div>
+      <div class="qr-box">
+        <img id="qr-img" src="" alt="QR Code" class="qr-img"/>
+        <div id="qr-loading" class="qr-loading">Carregando QR...</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="buscarQR()">↻ Novo QR Code</button>
+      <span class="wa-timer" id="qr-timer"></span>
+    </div>
+  </div>
+
+  <!-- Configuração -->
+  <div class="card" id="card-config">
+    <h2 class="card-title">⚙️ Configuração Evolution API</h2>
+    <div id="config-status"></div>
+    <div class="wa-config-grid" id="config-grid"></div>
+
+    <details style="margin-top:20px">
+      <summary class="detalhes-toggle">📖 Como configurar? (passo a passo)</summary>
+      <div class="wa-guia">
+        <p><strong>1. Crie um novo serviço no Railway</strong></p>
+        <p>No painel do Railway → New Service → Docker Image → cole:</p>
+        <code>atendai/evolution-api:latest</code>
+
+        <p style="margin-top:12px"><strong>2. Adicione as variáveis no serviço Evolution API:</strong></p>
+        <div class="wa-env-table">
+          <div class="wa-env-row"><code>AUTHENTICATION_TYPE</code><span>apikey</span></div>
+          <div class="wa-env-row"><code>AUTHENTICATION_API_KEY</code><span>crie uma chave forte (ex: MinhaChave123!)</span></div>
+          <div class="wa-env-row"><code>DATABASE_ENABLED</code><span>true</span></div>
+          <div class="wa-env-row"><code>DATABASE_CONNECTION_URI</code><span>sua URL do Supabase (mesma que usa aqui)</span></div>
+          <div class="wa-env-row"><code>DATABASE_CONNECTION_DB_PREFIX_NAME</code><span>evolution</span></div>
+        </div>
+
+        <p style="margin-top:12px"><strong>3. Copie a URL pública do serviço Evolution API</strong></p>
+        <p>Ex: <code>https://evolution-api-production-xxxx.up.railway.app</code></p>
+
+        <p style="margin-top:12px"><strong>4. No seu app principal (este aqui), adicione as variáveis:</strong></p>
+        <div class="wa-env-table">
+          <div class="wa-env-row"><code>WEBHOOK_WHATSAPP</code><span>URL do Evolution API acima</span></div>
+          <div class="wa-env-row"><code>EVOLUTION_INSTANCE</code><span>nome da instância (ex: meu-negocio)</span></div>
+          <div class="wa-env-row"><code>EVOLUTION_API_KEY</code><span>a chave que você criou no passo 2</span></div>
+        </div>
+
+        <p style="margin-top:12px"><strong>5. Volte aqui e escaneie o QR Code</strong></p>
+        <p>Após salvar as variáveis, o Railway vai reiniciar. Volte nesta página e clique em <strong>↻ Atualizar</strong>.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- Enviar mensagem de teste -->
+  <div class="card" id="card-teste">
+    <h2 class="card-title">🧪 Enviar Mensagem de Teste</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Telefone (com DDD e código do país)</label>
+        <input id="teste-numero" type="tel" placeholder="+5562999999999"/>
+      </div>
+      <div class="form-group" style="flex:2">
+        <label>Mensagem</label>
+        <input id="teste-mensagem" type="text" placeholder="Olá! Teste de conexão do Prospector."/>
+      </div>
+      <button class="btn btn-whatsapp" onclick="enviarTeste()" id="btn-teste">📱 Enviar</button>
+    </div>
+    <p id="teste-resultado" style="margin-top:10px;font-size:.875rem"></p>
+  </div>
+
+  <!-- Disparos em massa -->
+  <div class="card">
+    <h2 class="card-title">🚀 Disparo em Massa</h2>
+    <p style="color:var(--muted);font-size:.875rem;margin-bottom:16px">
+      Para disparar mensagens em massa, vá para a página de <strong>Busca</strong> (selecione as empresas)
+      ou para o <strong>CRM</strong> (clique no botão 📱 de cada card).
+    </p>
+    <div class="wa-stats" id="wa-stats">
+      <div class="wa-stat"><span class="wa-stat-val" id="st-hoje">—</span><span class="wa-stat-lab">Enviadas hoje</span></div>
+      <div class="wa-stat"><span class="wa-stat-val" id="st-total">—</span><span class="wa-stat-lab">Total enviadas</span></div>
+      <div class="wa-stat"><span class="wa-stat-val" id="st-erros">—</span><span class="wa-stat-lab">Com erro</span></div>
+      <div class="wa-stat"><span class="wa-stat-val" id="st-pendentes">—</span><span class="wa-stat-lab">Pendentes</span></div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="/whatsapp_page.js"></script>{% endblock %}

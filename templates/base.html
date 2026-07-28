@@ -39,6 +39,10 @@
       <span class="sidebar-icon">🚫</span>
       <span class="sidebar-label">Blacklist</span>
     </a>
+    <a href="/whatsapp" class="sidebar-item {{ 'active' if page=='whatsapp' }}">
+      <span class="sidebar-icon">📱</span>
+      <span class="sidebar-label">WhatsApp</span>
+    </a>
   </nav>
   <div class="sidebar-footer">
     <button class="sidebar-item" onclick="logout()" id="btn-logout"
@@ -83,6 +87,9 @@
     </a>
     <a href="/blacklist" class="bottom-nav-item {{ 'active' if page=='blacklist' }}">
       <span class="bnav-icon">🚫</span><span>Blacklist</span>
+    </a>
+    <a href="/whatsapp" class="bottom-nav-item {{ 'active' if page=='whatsapp' }}">
+      <span class="bnav-icon">📱</span><span>WhatsApp</span>
     </a>
   </div>
 </nav>

@@ -135,6 +135,11 @@ def blacklist_page():
     return render_template("blacklist.html", page="blacklist")
 
 
+@app.route("/whatsapp")
+def whatsapp_page():
+    return render_template("whatsapp.html", page="whatsapp")
+
+
 # ── SSE ───────────────────────────────────────────────────────────────────────
 @app.route("/api/events")
 def api_events():
@@ -427,6 +432,151 @@ def api_templates_delete(tid):
 def api_templates_ativar(tid):
     ativar_template(tid)
     return jsonify({"ok": True})
+
+
+# ── WhatsApp Management ───────────────────────────────────────────────────────
+@app.route("/api/whatsapp/status")
+def api_wa_status():
+    """Checa estado da conexão com a Evolution API."""
+    import requests as req
+    webhook = CONFIG.get("webhook_whatsapp", "").strip()
+    instance = CONFIG.get("evolution_instance", "").strip()
+    api_key  = CONFIG.get("evolution_api_key",  "").strip()
+
+    cfg = {
+        "webhook_url":   webhook or None,
+        "instance":      instance or None,
+        "api_key_mask":  (api_key[:4] + "****" + api_key[-2:]) if len(api_key) > 6 else ("****" if api_key else None),
+    }
+
+    if not (webhook and instance and api_key):
+        return jsonify({"configurado": False, "conectado": False, "config": cfg})
+
+    try:
+        r = req.get(
+            f"{webhook.rstrip('/')}/instance/connectionState/{instance}",
+            headers={"apikey": api_key},
+            timeout=8,
+        )
+        data   = r.json()
+        state  = (data.get("instance", {}).get("state") or
+                  data.get("state") or "").lower()
+        numero = data.get("instance", {}).get("profilePictureUrl") and data.get("instance", {}).get("profileName")
+        conectado = state in ("open", "connected")
+        return jsonify({
+            "configurado": True,
+            "conectado":   conectado,
+            "state":       state,
+            "numero":      data.get("instance", {}).get("profileName") or "",
+            "config":      cfg,
+        })
+    except Exception as e:
+        return jsonify({"configurado": True, "conectado": False, "erro": str(e), "config": cfg})
+
+
+@app.route("/api/whatsapp/qrcode")
+def api_wa_qrcode():
+    """Obtém QR Code para conectar WhatsApp."""
+    import requests as req
+    webhook  = CONFIG.get("webhook_whatsapp", "").strip()
+    instance = CONFIG.get("evolution_instance", "").strip()
+    api_key  = CONFIG.get("evolution_api_key",  "").strip()
+
+    if not (webhook and instance and api_key):
+        return jsonify({"erro": "Evolution API não configurada."})
+
+    try:
+        r = req.get(
+            f"{webhook.rstrip('/')}/instance/connect/{instance}",
+            headers={"apikey": api_key},
+            timeout=15,
+        )
+        data = r.json()
+        # Já conectado
+        if data.get("instance", {}).get("state") in ("open", "connected"):
+            return jsonify({"conectado": True})
+        # Retorna base64
+        base64 = data.get("base64") or data.get("qrcode", {}).get("base64")
+        if base64:
+            if not base64.startswith("data:"):
+                base64 = "data:image/png;base64," + base64
+            return jsonify({"base64": base64})
+        return jsonify({"erro": "QR não disponível. Instância pode já estar conectada."})
+    except Exception as e:
+        return jsonify({"erro": str(e)})
+
+
+@app.route("/api/whatsapp/desconectar", methods=["POST"])
+def api_wa_desconectar():
+    """Desconecta a instância do WhatsApp."""
+    import requests as req
+    webhook  = CONFIG.get("webhook_whatsapp", "").strip()
+    instance = CONFIG.get("evolution_instance", "").strip()
+    api_key  = CONFIG.get("evolution_api_key",  "").strip()
+
+    if not (webhook and instance and api_key):
+        return jsonify({"ok": False, "erro": "Não configurado."})
+
+    try:
+        r = req.delete(
+            f"{webhook.rstrip('/')}/instance/logout/{instance}",
+            headers={"apikey": api_key},
+            timeout=10,
+        )
+        return jsonify({"ok": r.ok})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/api/whatsapp/teste", methods=["POST"])
+def api_wa_teste():
+    """Envia mensagem de teste."""
+    from whatsapp.disparar import _enviar_via_webhook
+    dados    = request.get_json(silent=True) or {}
+    numero   = (dados.get("numero") or "").strip()
+    mensagem = (dados.get("mensagem") or "Olá! Teste do Prospector. 🚀").strip()
+
+    if not numero:
+        return jsonify({"ok": False, "erro": "Número obrigatório."})
+
+    try:
+        _enviar_via_webhook(numero, mensagem)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/api/whatsapp/stats")
+def api_wa_stats():
+    """Stats de disparos WhatsApp."""
+    from database.db import get_connection
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT COUNT(*) FROM empresas WHERE mensagem_enviada=1")
+    total = c.fetchone()[0] or 0
+
+    c.execute("""
+        SELECT COUNT(*) FROM empresas
+        WHERE mensagem_enviada=1
+          AND ultimo_contato::date = CURRENT_DATE
+    """)
+    hoje = c.fetchone()[0] or 0
+
+    c.execute("SELECT COUNT(*) FROM empresas WHERE erro_envio IS NOT NULL AND erro_envio != ''")
+    erros = c.fetchone()[0] or 0
+
+    c.execute("""
+        SELECT COUNT(*) FROM empresas
+        WHERE mensagem_enviada=0
+          AND tem_site=0
+          AND telefone IS NOT NULL
+          AND telefone != ''
+    """)
+    pendentes = c.fetchone()[0] or 0
+
+    conn.close()
+    return jsonify({"total_enviadas": total, "enviadas_hoje": hoje, "com_erro": erros, "pendentes": pendentes})
 
 
 # ── Blacklist ──────────────────────────────────────────────────────────────────
