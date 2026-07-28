@@ -1,43 +1,64 @@
 """
-Banco de dados SQLite — schema completo com CRM, templates, blacklist e notas.
-Suporta migração incremental (não apaga dados existentes).
+Banco de dados PostgreSQL (Supabase).
+Mesma API pública do SQLite — zero mudanças nos outros módulos.
 """
-import sqlite3
 import os
 import logging
+import psycopg2
+import psycopg2.extras
 
 logger = logging.getLogger(__name__)
 
-# Em produção: defina DB_PATH=/data/prospector.db e monte um volume Railway em /data
-# Localmente: usa prospector.db na raiz do projeto
-# Em produção: defina DB_PATH=/data/prospector.db e monte um volume Railway em /data
-# Localmente: usa prospector.db na raiz do projeto
-DB_PATH = os.environ.get(
-    "DB_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prospector.db")
-)
-_db_dir = os.path.dirname(DB_PATH)
-if _db_dir:
-    os.makedirs(_db_dir, exist_ok=True)
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+
+def _parse_url(url):
+    """Parse DATABASE_URL com suporte a @ na senha."""
+    rest     = url.split("://", 1)[1]
+    at_idx   = rest.rfind("@")          # último @ separa credenciais do host
+    creds    = rest[:at_idx]
+    hostpart = rest[at_idx + 1:]
+
+    col      = creds.index(":")
+    user     = creds[:col]
+    password = creds[col + 1:]
+
+    hp     = hostpart.split("/")
+    hprt   = hp[0].split(":")
+    host   = hprt[0]
+    port   = int(hprt[1]) if len(hprt) > 1 else 5432
+    dbname = hp[1].split("?")[0] if len(hp) > 1 else "postgres"
+
+    return dict(host=host, port=port, dbname=dbname, user=user, password=password)
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")  # melhor concorrência
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    params = _parse_url(DATABASE_URL)
+    return psycopg2.connect(**params, sslmode="require")
 
+
+def _all(cur):
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _one(cur):
+    row = cur.fetchone()
+    if not row:
+        return None
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, row))
+
+
+# ── Init ──────────────────────────────────────────────────────────────────────
 
 def inicializar_banco():
-    """Cria tabelas e colunas novas sem apagar dados existentes."""
     conn = get_connection()
     c = conn.cursor()
 
-    # ── Buscas ───────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS buscas (
-            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            id                SERIAL PRIMARY KEY,
             cidade            TEXT    NOT NULL,
             categoria         TEXT    NOT NULL,
             total_encontradas INTEGER DEFAULT 0,
@@ -46,11 +67,10 @@ def inicializar_banco():
         )
     """)
 
-    # ── Empresas ─────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS empresas (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            busca_id         INTEGER,
+            id               SERIAL PRIMARY KEY,
+            busca_id         INTEGER REFERENCES buscas(id),
             nome             TEXT    NOT NULL,
             telefone         TEXT,
             endereco         TEXT,
@@ -64,54 +84,50 @@ def inicializar_banco():
             erro_envio       TEXT,
             ultimo_contato   TIMESTAMP,
             template_usado   INTEGER,
-            data_prospeccao  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (busca_id) REFERENCES buscas(id)
+            data_prospeccao  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # Migração incremental — adiciona colunas se não existirem
-    _adicionar_coluna(c, "empresas", "email",            "TEXT")
-    _adicionar_coluna(c, "empresas", "score",            "INTEGER DEFAULT 0")
-    _adicionar_coluna(c, "empresas", "status",           "TEXT DEFAULT 'novo'")
-    _adicionar_coluna(c, "empresas", "tentativas_envio", "INTEGER DEFAULT 0")
-    _adicionar_coluna(c, "empresas", "erro_envio",       "TEXT")
-    _adicionar_coluna(c, "empresas", "ultimo_contato",   "TIMESTAMP")
-    _adicionar_coluna(c, "empresas", "template_usado",   "INTEGER")
+    for col, defn in [
+        ("email",            "TEXT"),
+        ("score",            "INTEGER DEFAULT 0"),
+        ("status",           "TEXT DEFAULT 'novo'"),
+        ("tentativas_envio", "INTEGER DEFAULT 0"),
+        ("erro_envio",       "TEXT"),
+        ("ultimo_contato",   "TIMESTAMP"),
+        ("template_usado",   "INTEGER"),
+    ]:
+        c.execute(f"ALTER TABLE empresas ADD COLUMN IF NOT EXISTS {col} {defn}")
 
-    # ── Templates de mensagem ────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS templates (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome       TEXT NOT NULL,
-            mensagem   TEXT NOT NULL,
-            ativo      INTEGER DEFAULT 0,
-            enviados   INTEGER DEFAULT 0,
-            criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id        SERIAL PRIMARY KEY,
+            nome      TEXT NOT NULL,
+            mensagem  TEXT NOT NULL,
+            ativo     INTEGER DEFAULT 0,
+            enviados  INTEGER DEFAULT 0,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # ── Blacklist ────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS blacklist (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            id            SERIAL PRIMARY KEY,
             telefone      TEXT UNIQUE NOT NULL,
             motivo        TEXT,
             adicionado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # ── Notas de CRM ─────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS notas (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER NOT NULL,
+            id         SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
             texto      TEXT    NOT NULL,
-            criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+            criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # Índices
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_telefone ON empresas(telefone)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_status   ON empresas(status)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_notas_empresa     ON notas(empresa_id)")
@@ -119,24 +135,19 @@ def inicializar_banco():
 
     conn.commit()
     conn.close()
-    logger.info("Banco inicializado: %s", DB_PATH)
+    logger.info("Banco PostgreSQL (Supabase) inicializado.")
 
 
-def _adicionar_coluna(cursor, tabela, coluna, definicao):
-    """Adiciona coluna se não existir — idempotente."""
-    try:
-        cursor.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}")
-    except sqlite3.OperationalError:
-        pass  # coluna já existe
-
-
-# ── Buscas ───────────────────────────────────────────────────────────────────
+# ── Buscas ────────────────────────────────────────────────────────────────────
 
 def criar_busca(cidade, categoria):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO buscas (cidade, categoria) VALUES (?, ?)", (cidade, categoria))
-    busca_id = c.lastrowid
+    c.execute(
+        "INSERT INTO buscas (cidade, categoria) VALUES (%s, %s) RETURNING id",
+        (cidade, categoria)
+    )
+    busca_id = c.fetchone()[0]
     conn.commit()
     conn.close()
     return busca_id
@@ -144,8 +155,9 @@ def criar_busca(cidade, categoria):
 
 def atualizar_contagem_busca(busca_id, total, sem_site):
     conn = get_connection()
-    conn.execute(
-        "UPDATE buscas SET total_encontradas=?, sem_site=? WHERE id=?",
+    c = conn.cursor()
+    c.execute(
+        "UPDATE buscas SET total_encontradas=%s, sem_site=%s WHERE id=%s",
         (total, sem_site, busca_id)
     )
     conn.commit()
@@ -154,29 +166,31 @@ def atualizar_contagem_busca(busca_id, total, sem_site):
 
 def listar_historico():
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM buscas ORDER BY data_busca DESC").fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM buscas ORDER BY data_busca DESC")
+    rows = _all(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
 def salvar_empresa(empresa, busca_id):
-    """Salva empresa. Evita duplicata por telefone. Retorna ID."""
     conn = get_connection()
     c = conn.cursor()
 
     if empresa.get("telefone"):
-        c.execute("SELECT id FROM empresas WHERE telefone=?", (empresa["telefone"],))
-        existente = c.fetchone()
-        if existente:
+        c.execute("SELECT id FROM empresas WHERE telefone=%s", (empresa["telefone"],))
+        row = c.fetchone()
+        if row:
             conn.close()
-            return existente["id"]
+            return row[0]
 
     c.execute("""
         INSERT INTO empresas
             (busca_id, nome, telefone, endereco, email, tem_site, site_url, score, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'novo')
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo')
+        RETURNING id
     """, (
         busca_id,
         empresa["nome"],
@@ -187,7 +201,7 @@ def salvar_empresa(empresa, busca_id):
         empresa.get("site_url", ""),
         empresa.get("score", 0),
     ))
-    emp_id = c.lastrowid
+    emp_id = c.fetchone()[0]
     conn.commit()
     conn.close()
     return emp_id
@@ -195,33 +209,38 @@ def salvar_empresa(empresa, busca_id):
 
 def buscar_empresa_por_id(empresa_id):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM empresas WHERE id=?", (empresa_id,)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM empresas WHERE id=%s", (empresa_id,))
+    row = _one(c)
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
 def buscar_todas_empresas(busca_id=None, apenas_sem_mensagem=False, status=None):
     conn = get_connection()
+    c = conn.cursor()
     query = "SELECT * FROM empresas WHERE 1=1"
     params = []
     if busca_id:
-        query += " AND busca_id=?"
+        query += " AND busca_id=%s"
         params.append(busca_id)
     if apenas_sem_mensagem:
         query += " AND mensagem_enviada=0"
     if status:
-        query += " AND status=?"
+        query += " AND status=%s"
         params.append(status)
     query += " ORDER BY score DESC, data_prospeccao DESC"
-    rows = conn.execute(query, params).fetchall()
+    c.execute(query, params)
+    rows = _all(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def atualizar_status_empresa(empresa_id, novo_status):
     conn = get_connection()
-    conn.execute(
-        "UPDATE empresas SET status=?, ultimo_contato=CURRENT_TIMESTAMP WHERE id=?",
+    c = conn.cursor()
+    c.execute(
+        "UPDATE empresas SET status=%s, ultimo_contato=CURRENT_TIMESTAMP WHERE id=%s",
         (novo_status, empresa_id)
     )
     conn.commit()
@@ -230,11 +249,12 @@ def atualizar_status_empresa(empresa_id, novo_status):
 
 def marcar_mensagem_enviada(empresa_id, template_id=None):
     conn = get_connection()
-    conn.execute("""
+    c = conn.cursor()
+    c.execute("""
         UPDATE empresas
         SET mensagem_enviada=1, status='contatado',
-            ultimo_contato=CURRENT_TIMESTAMP, template_usado=?
-        WHERE id=?
+            ultimo_contato=CURRENT_TIMESTAMP, template_usado=%s
+        WHERE id=%s
     """, (template_id, empresa_id))
     conn.commit()
     conn.close()
@@ -242,10 +262,11 @@ def marcar_mensagem_enviada(empresa_id, template_id=None):
 
 def registrar_erro_envio(empresa_id, erro):
     conn = get_connection()
-    conn.execute("""
+    c = conn.cursor()
+    c.execute("""
         UPDATE empresas
-        SET tentativas_envio = tentativas_envio + 1, erro_envio=?
-        WHERE id=?
+        SET tentativas_envio = tentativas_envio + 1, erro_envio=%s
+        WHERE id=%s
     """, (erro, empresa_id))
     conn.commit()
     conn.close()
@@ -255,16 +276,21 @@ def registrar_erro_envio(empresa_id, erro):
 
 def listar_templates():
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM templates ORDER BY ativo DESC, criado_em DESC").fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM templates ORDER BY ativo DESC, criado_em DESC")
+    rows = _all(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def criar_template(nome, mensagem):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO templates (nome, mensagem) VALUES (?, ?)", (nome, mensagem))
-    tid = c.lastrowid
+    c.execute(
+        "INSERT INTO templates (nome, mensagem) VALUES (%s, %s) RETURNING id",
+        (nome, mensagem)
+    )
+    tid = c.fetchone()[0]
     conn.commit()
     conn.close()
     return tid
@@ -272,8 +298,9 @@ def criar_template(nome, mensagem):
 
 def atualizar_template(template_id, nome, mensagem):
     conn = get_connection()
-    conn.execute(
-        "UPDATE templates SET nome=?, mensagem=? WHERE id=?",
+    c = conn.cursor()
+    c.execute(
+        "UPDATE templates SET nome=%s, mensagem=%s WHERE id=%s",
         (nome, mensagem, template_id)
     )
     conn.commit()
@@ -282,30 +309,34 @@ def atualizar_template(template_id, nome, mensagem):
 
 def deletar_template(template_id):
     conn = get_connection()
-    conn.execute("DELETE FROM templates WHERE id=?", (template_id,))
+    c = conn.cursor()
+    c.execute("DELETE FROM templates WHERE id=%s", (template_id,))
     conn.commit()
     conn.close()
 
 
 def ativar_template(template_id):
     conn = get_connection()
-    conn.execute("UPDATE templates SET ativo=0")
-    conn.execute("UPDATE templates SET ativo=1 WHERE id=?", (template_id,))
+    c = conn.cursor()
+    c.execute("UPDATE templates SET ativo=0")
+    c.execute("UPDATE templates SET ativo=1 WHERE id=%s", (template_id,))
     conn.commit()
     conn.close()
 
 
 def get_template_ativo():
-    """Retorna o template ativo ou None."""
     conn = get_connection()
-    row = conn.execute("SELECT * FROM templates WHERE ativo=1 LIMIT 1").fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM templates WHERE ativo=1 LIMIT 1")
+    row = _one(c)
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
 def incrementar_enviados_template(template_id):
     conn = get_connection()
-    conn.execute("UPDATE templates SET enviados=enviados+1 WHERE id=?", (template_id,))
+    c = conn.cursor()
+    c.execute("UPDATE templates SET enviados=enviados+1 WHERE id=%s", (template_id,))
     conn.commit()
     conn.close()
 
@@ -314,36 +345,43 @@ def incrementar_enviados_template(template_id):
 
 def listar_blacklist():
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM blacklist ORDER BY adicionado_em DESC").fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM blacklist ORDER BY adicionado_em DESC")
+    rows = _all(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def adicionar_blacklist(telefone, motivo=""):
     conn = get_connection()
+    c = conn.cursor()
     try:
-        conn.execute(
-            "INSERT INTO blacklist (telefone, motivo) VALUES (?, ?)",
+        c.execute(
+            "INSERT INTO blacklist (telefone, motivo) VALUES (%s, %s)",
             (telefone, motivo)
         )
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
-        return False  # já existe
+    except psycopg2.IntegrityError:
+        conn.rollback()
+        return False
     finally:
         conn.close()
 
 
 def remover_blacklist(blacklist_id):
     conn = get_connection()
-    conn.execute("DELETE FROM blacklist WHERE id=?", (blacklist_id,))
+    c = conn.cursor()
+    c.execute("DELETE FROM blacklist WHERE id=%s", (blacklist_id,))
     conn.commit()
     conn.close()
 
 
 def esta_na_blacklist(telefone):
     conn = get_connection()
-    row = conn.execute("SELECT id FROM blacklist WHERE telefone=?", (telefone,)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT id FROM blacklist WHERE telefone=%s", (telefone,))
+    row = c.fetchone()
     conn.close()
     return row is not None
 
@@ -352,22 +390,24 @@ def esta_na_blacklist(telefone):
 
 def listar_notas(empresa_id):
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM notas WHERE empresa_id=? ORDER BY criado_em DESC",
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM notas WHERE empresa_id=%s ORDER BY criado_em DESC",
         (empresa_id,)
-    ).fetchall()
+    )
+    rows = _all(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def adicionar_nota(empresa_id, texto):
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO notas (empresa_id, texto) VALUES (?, ?)",
+        "INSERT INTO notas (empresa_id, texto) VALUES (%s, %s) RETURNING id",
         (empresa_id, texto)
     )
-    nota_id = c.lastrowid
+    nota_id = c.fetchone()[0]
     conn.commit()
     conn.close()
     return nota_id
@@ -375,15 +415,16 @@ def adicionar_nota(empresa_id, texto):
 
 def deletar_nota(nota_id):
     conn = get_connection()
-    conn.execute("DELETE FROM notas WHERE id=?", (nota_id,))
+    c = conn.cursor()
+    c.execute("DELETE FROM notas WHERE id=%s", (nota_id,))
     conn.commit()
     conn.close()
 
 
 def contar_notas(empresa_id):
     conn = get_connection()
-    row = conn.execute(
-        "SELECT COUNT(*) as n FROM notas WHERE empresa_id=?", (empresa_id,)
-    ).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM notas WHERE empresa_id=%s", (empresa_id,))
+    row = c.fetchone()
     conn.close()
-    return row["n"] if row else 0
+    return row[0] if row else 0
