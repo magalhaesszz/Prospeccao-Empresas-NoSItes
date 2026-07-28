@@ -4,42 +4,119 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
   <title>{% block title %}Prospector{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css"/>
   {% block head %}{% endblock %}
 </head>
 <body>
 
-<nav class="nav">
-  <a href="/" class="nav-brand">🗺️ Prospector</a>
-  <div class="nav-links">
-    <a href="/"          class="nav-link {{ 'active' if page=='busca'     }}">🔍 Busca</a>
-    <a href="/crm"       class="nav-link {{ 'active' if page=='crm'       }}">📋 CRM</a>
-    <a href="/dashboard" class="nav-link {{ 'active' if page=='dashboard' }}">📊 Dashboard</a>
-    <a href="/templates" class="nav-link {{ 'active' if page=='templates' }}">💬 Templates</a>
-    <a href="/blacklist" class="nav-link {{ 'active' if page=='blacklist' }}">🚫 Blacklist</a>
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="sidebar-logo-icon">🗺️</span>
+    <span class="sidebar-logo-text">Prospector</span>
   </div>
-  <button class="btn btn-sm btn-secondary" onclick="logout()" id="btn-logout" style="display:none">Sair</button>
-</nav>
+  <nav class="sidebar-nav">
+    <a href="/"          class="sidebar-item {{ 'active' if page=='busca'     }}">
+      <span class="sidebar-icon">🔍</span>
+      <span class="sidebar-label">Busca</span>
+    </a>
+    <a href="/crm"       class="sidebar-item {{ 'active' if page=='crm'       }}">
+      <span class="sidebar-icon">📋</span>
+      <span class="sidebar-label">CRM</span>
+    </a>
+    <a href="/dashboard" class="sidebar-item {{ 'active' if page=='dashboard' }}">
+      <span class="sidebar-icon">📊</span>
+      <span class="sidebar-label">Dashboard</span>
+    </a>
+    <a href="/templates" class="sidebar-item {{ 'active' if page=='templates' }}">
+      <span class="sidebar-icon">💬</span>
+      <span class="sidebar-label">Templates</span>
+    </a>
+    <a href="/blacklist" class="sidebar-item {{ 'active' if page=='blacklist' }}">
+      <span class="sidebar-icon">🚫</span>
+      <span class="sidebar-label">Blacklist</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <button class="sidebar-item" onclick="logout()" id="btn-logout"
+      style="display:none;width:100%;background:none;border:none;cursor:pointer;text-align:left;color:rgba(255,255,255,.6)">
+      <span class="sidebar-icon">🚪</span>
+      <span class="sidebar-label">Sair</span>
+    </button>
+  </div>
+</aside>
 
-<div class="page-content">
-  {% block content %}{% endblock %}
-</div>
+<!-- Mobile overlay -->
+<div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="fecharSidebar()"></div>
+
+<!-- Mobile top bar -->
+<header class="mobile-header">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="mobile-title">Prospector</span>
+  <span style="width:40px"></span>
+</header>
+
+<!-- Main -->
+<main class="main-content">
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+<!-- Bottom nav (mobile) -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-items">
+    <a href="/"          class="bottom-nav-item {{ 'active' if page=='busca'     }}">
+      <span class="bnav-icon">🔍</span><span>Busca</span>
+    </a>
+    <a href="/crm"       class="bottom-nav-item {{ 'active' if page=='crm'       }}">
+      <span class="bnav-icon">📋</span><span>CRM</span>
+    </a>
+    <a href="/dashboard" class="bottom-nav-item {{ 'active' if page=='dashboard' }}">
+      <span class="bnav-icon">📊</span><span>Board</span>
+    </a>
+    <a href="/templates" class="bottom-nav-item {{ 'active' if page=='templates' }}">
+      <span class="bnav-icon">💬</span><span>Templates</span>
+    </a>
+    <a href="/blacklist" class="bottom-nav-item {{ 'active' if page=='blacklist' }}">
+      <span class="bnav-icon">🚫</span><span>Blacklist</span>
+    </a>
+  </div>
+</nav>
 
 <div id="toast" class="toast oculto"></div>
 
 <script>
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  const open=sb.classList.toggle('open');
+  open?ov.classList.remove('hidden'):ov.classList.add('hidden');
+}
+function fecharSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.add('hidden');
+}
 async function logout(){
   await fetch('/api/logout',{method:'POST'});
   location.href='/login';
 }
-function mostrarToast(msg, tipo='info'){
+function mostrarToast(msg,tipo='info'){
   const t=document.getElementById('toast');
   t.textContent=msg;
   t.className='toast '+tipo;
-  setTimeout(()=>t.className='toast oculto',3500);
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.className='toast oculto',3500);
 }
-// Mostra botão sair se senha configurada
-fetch('/api/status').then(r=>r.json()).catch(()=>{});
+fetch('/api/status').then(r=>r.json()).then(d=>{
+  if(d&&d.senha_configurada){
+    const b=document.getElementById('btn-logout');
+    if(b)b.style.display='';
+  }
+}).catch(()=>{});
 </script>
 {% block scripts %}{% endblock %}
 </body>

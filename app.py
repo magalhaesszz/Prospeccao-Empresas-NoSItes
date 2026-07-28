@@ -171,7 +171,9 @@ def api_events():
 @app.route("/api/status")
 def api_status():
     with _lock:
-        return jsonify({k: v for k, v in _estado.items()})
+        dados = {k: v for k, v in _estado.items()}
+    dados["senha_configurada"] = bool(CONFIG.get("senha_painel", "").strip())
+    return jsonify(dados)
 
 
 # ── Busca ─────────────────────────────────────────────────────────────────────

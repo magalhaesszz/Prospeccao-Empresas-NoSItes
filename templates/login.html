@@ -3,37 +3,109 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
-  <title>Login — Prospector</title>
-  <link rel="stylesheet" href="/style.css"/>
+  <title>Entrar — Prospector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    .login-wrap{ display:flex; align-items:center; justify-content:center; min-height:100vh; }
-    .login-card{ width:100%; max-width:380px; padding:40px 32px; }
-    .login-icon{ text-align:center; font-size:2.5rem; margin-bottom:16px; }
-    .login-card h1{ text-align:center; font-size:1.4rem; color:var(--blue); margin-bottom:24px; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      min-height:100vh;
+      background:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%);
+      display:flex;align-items:center;justify-content:center;
+      padding:20px;
+      -webkit-font-smoothing:antialiased;
+    }
+    .login-wrap{width:100%;max-width:400px}
+    .login-brand{
+      text-align:center;margin-bottom:28px;
+    }
+    .login-icon{
+      display:inline-flex;align-items:center;justify-content:center;
+      width:64px;height:64px;
+      background:rgba(37,99,235,.2);
+      border:1px solid rgba(37,99,235,.3);
+      border-radius:20px;
+      font-size:2rem;margin-bottom:14px;
+    }
+    .login-brand h1{
+      font-size:1.5rem;font-weight:700;color:#fff;
+      letter-spacing:-.03em;margin-bottom:4px;
+    }
+    .login-brand p{font-size:.875rem;color:rgba(255,255,255,.5)}
+    .login-card{
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:20px;
+      padding:32px;
+      backdrop-filter:blur(12px);
+    }
+    label{
+      display:block;font-size:.75rem;font-weight:600;
+      color:rgba(255,255,255,.5);
+      text-transform:uppercase;letter-spacing:.06em;
+      margin-bottom:8px;
+    }
+    input[type="password"]{
+      width:100%;padding:12px 16px;
+      background:rgba(255,255,255,.06);
+      border:1.5px solid rgba(255,255,255,.12);
+      border-radius:10px;
+      font-size:1rem;color:#fff;outline:none;
+      font-family:inherit;
+      transition:border-color .2s,box-shadow .2s;
+    }
+    input[type="password"]::placeholder{color:rgba(255,255,255,.25)}
+    input[type="password"]:focus{
+      border-color:rgba(37,99,235,.7);
+      box-shadow:0 0 0 3px rgba(37,99,235,.2);
+    }
+    .btn-entrar{
+      width:100%;margin-top:20px;padding:13px;
+      background:linear-gradient(135deg,#2563EB,#1D4ED8);
+      color:#fff;border:none;border-radius:10px;
+      font-size:.95rem;font-weight:600;cursor:pointer;
+      font-family:inherit;
+      transition:all .2s;
+      box-shadow:0 4px 14px rgba(37,99,235,.4);
+    }
+    .btn-entrar:hover{
+      transform:translateY(-1px);
+      box-shadow:0 8px 20px rgba(37,99,235,.5);
+    }
+    .btn-entrar:active{transform:translateY(0)}
+    .erro{
+      color:#F87171;text-align:center;
+      margin-top:14px;font-size:.875rem;
+      display:none;
+    }
   </style>
 </head>
 <body>
 <div class="login-wrap">
-  <div class="card login-card">
+  <div class="login-brand">
     <div class="login-icon">🗺️</div>
-    <h1>Prospector de Empresas</h1>
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Senha do Painel</label>
-      <input id="senha" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()"/>
-    </div>
-    <button class="btn btn-primary" style="width:100%" onclick="login()">Entrar</button>
-    <p id="erro-login" style="color:var(--red);text-align:center;margin-top:12px;font-size:.875rem;display:none">Senha incorreta.</p>
+    <h1>Prospector</h1>
+    <p>Prospecção inteligente de empresas</p>
+  </div>
+  <div class="login-card">
+    <label for="senha">Senha do Painel</label>
+    <input id="senha" type="password" placeholder="••••••••"
+      onkeydown="if(event.key==='Enter')login()"/>
+    <button class="btn-entrar" onclick="login()">Entrar</button>
+    <p id="erro-login" class="erro">Senha incorreta. Tente novamente.</p>
   </div>
 </div>
 <script>
 async function login(){
-  const senha = document.getElementById('senha').value;
-  const resp  = await fetch('/api/login',{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({senha})
+  const senha=document.getElementById('senha').value;
+  const resp=await fetch('/api/login',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({senha})
   });
-  if(resp.ok){ location.href='/'; }
-  else { document.getElementById('erro-login').style.display='block'; }
+  if(resp.ok){location.href='/';}
+  else{document.getElementById('erro-login').style.display='block';}
 }
 </script>
 </body>
