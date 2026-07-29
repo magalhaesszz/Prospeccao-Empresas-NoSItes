@@ -803,10 +803,10 @@ def api_wa_mensagens():
         return jsonify({"erro": "jid obrigatório.", "mensagens": []})
 
     headers = {"apikey": api_key, "Content-Type": "application/json"}
-    # Pede histórico amplo — Evolution v2 aceita page/offset; tentamos limite alto
-    corpo = {"where": {"key": {"remoteJid": jid}}, "limit": 200}
+    limite  = min(int(request.args.get("limit", 500)), 1000)
+    corpo   = {"where": {"key": {"remoteJid": jid}}, "limit": limite}
     try:
-        r = req.post(f"{base}/chat/findMessages/{instance}", headers=headers, json=corpo, timeout=25)
+        r = req.post(f"{base}/chat/findMessages/{instance}", headers=headers, json=corpo, timeout=30)
         if not r.ok:
             return jsonify({"erro": f"HTTP {r.status_code}: {r.text[:200]}", "mensagens": []})
         dados = r.json()
@@ -817,11 +817,12 @@ def api_wa_mensagens():
         else:
             msgs = dados
 
+        TIPOS_MIDIA = {"imagem", "audio", "video", "figurinha", "documento"}
         mensagens = []
         for m in msgs:
-            key = m.get("key", {})
-            p = _parse_msg(m.get("message", {}) or {})
-            mensagens.append({
+            key  = m.get("key", {})
+            p    = _parse_msg(m.get("message", {}) or {})
+            item = {
                 "de_mim":    bool(key.get("fromMe")),
                 "tipo":      p["tipo"],
                 "texto":     p["texto"],
@@ -829,11 +830,52 @@ def api_wa_mensagens():
                 "mimetype":  p["mimetype"],
                 "timestamp": m.get("messageTimestamp") or 0,
                 "status":    m.get("status") or "",
-            })
+            }
+            # Para mídia: inclui o objeto completo pra que o front possa buscar base64 via proxy
+            if p["tipo"] in TIPOS_MIDIA:
+                item["raw_msg"] = m.get("message", {})
+            mensagens.append(item)
+
         mensagens.sort(key=lambda x: x["timestamp"] or 0)
         return jsonify({"mensagens": mensagens, "total": len(mensagens)})
     except Exception as e:
         return jsonify({"erro": str(e), "mensagens": []})
+
+
+@app.route("/api/whatsapp/media", methods=["POST"])
+def api_wa_media():
+    """
+    Proxy: busca base64 de uma mensagem de mídia da Evolution API.
+    Body: {"message": <raw_message_object>}
+    Retorna: {"base64": "data:audio/ogg;base64,...", "mimetype": "..."}
+    """
+    import requests as req
+    base, instance, api_key = _wa_config()
+    dados = request.get_json(silent=True) or {}
+    raw_msg = dados.get("message")
+    if not raw_msg:
+        return jsonify({"erro": "message obrigatório."}), 400
+    if not (base and instance and api_key):
+        return jsonify({"erro": "Não configurado."}), 400
+
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    try:
+        r = req.post(
+            f"{base}/chat/getBase64FromMediaMessage/{instance}",
+            headers=headers,
+            json={"message": raw_msg, "convertToMp4": False},
+            timeout=30,
+        )
+        if not r.ok:
+            return jsonify({"erro": f"HTTP {r.status_code}"}), 400
+        d = r.json()
+        b64  = d.get("base64") or d.get("data") or ""
+        mime = d.get("mimetype") or ""
+        if b64 and not b64.startswith("data:"):
+            b64 = f"data:{mime};base64,{b64}"
+        return jsonify({"base64": b64, "mimetype": mime})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
 
 
 @app.route("/api/whatsapp/pendentes")

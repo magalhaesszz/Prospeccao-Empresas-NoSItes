@@ -416,18 +416,29 @@ async function abrirConversa(c) {
 }
 
 function renderMensagens(msgs) {
+  _msgAtual = msgs;
+  Object.keys(_mediaCache).forEach(k => delete _mediaCache[k]); // limpa cache
+
   let html = "";
   let ultimaData = "";
-  msgs.forEach(m => {
+  let ultimaDeMim = null;
+
+  msgs.forEach((m, idx) => {
     const data = fmtDataSep(m.timestamp);
     if (data && data !== ultimaData) {
       html += `<div class="wa-msg-data"><span>${data}</span></div>`;
       ultimaData = data;
+      ultimaDeMim = null;
     }
+
+    // Agrupa mensagens do mesmo remetente (margem menor)
+    const mesmaDe = ultimaDeMim === m.de_mim;
+    ultimaDeMim = m.de_mim;
+
     html += `
-      <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}">
-        <div class="wa-msg-bolha">
-          ${renderConteudoMsg(m)}
+      <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}${mesmaDe ? " wa-msg-seq" : ""}">
+        <div class="wa-msg-bolha${m.tipo !== "texto" ? " wa-msg-bolha-midia" : ""}">
+          ${renderConteudoMsg(m, idx)}
           <span class="wa-msg-hora">${fmtHora(m.timestamp)}${m.de_mim ? " ✓✓" : ""}</span>
         </div>
       </div>`;
@@ -435,36 +446,92 @@ function renderMensagens(msgs) {
   return html;
 }
 
-function renderConteudoMsg(m) {
+// Cache de mídia já carregada (key = índice da msg)
+const _mediaCache = {};
+
+function renderConteudoMsg(m, idx) {
   const tipo = m.tipo || "texto";
-  const url  = m.url  || "";
   const txt  = esc(m.texto || "");
 
-  if (tipo === "imagem" && url) {
-    return `<img class="wa-msg-img" src="${esc(url)}" loading="lazy"
-              onclick="abrirLightbox('${esc(url)}')" alt="Imagem"/>
-            ${txt ? `<div style="margin-top:4px">${txt}</div>` : ""}`;
-  }
-  if (tipo === "figurinha" && url) {
-    return `<img class="wa-msg-figurinha" src="${esc(url)}" loading="lazy" alt="Figurinha"/>`;
-  }
-  if (tipo === "audio" && url) {
-    return `<audio class="wa-msg-audio" controls src="${esc(url)}" preload="none"></audio>`;
-  }
-  if (tipo === "video" && url) {
-    return `<video class="wa-msg-video" controls src="${esc(url)}" preload="none"></video>`;
-  }
-  if (tipo === "documento" && url) {
-    return `<a class="wa-msg-doc" href="${esc(url)}" target="_blank" rel="noopener">
-              📄 ${txt || "Documento"}
-            </a>`;
-  }
-  if (tipo === "localizacao") {
-    return `<span>${txt}</span>`;
-  }
-  // texto e fallback
-  return txt || "[mensagem]";
+  // Texto puro
+  if (tipo === "texto") return txt || "[mensagem]";
+  if (tipo === "localizacao") return `📍 ${txt}`;
+  if (tipo === "contato") return `👤 ${txt}`;
+
+  // Se já temos base64 em cache, usa direto
+  if (_mediaCache[idx]) return _renderMidiaBase64(tipo, _mediaCache[idx], txt);
+
+  // Placeholder com botão carregar (lazy)
+  const icone = {
+    imagem: "🖼️", audio: "🎵", video: "🎥",
+    figurinha: "🌟", documento: "📄"
+  }[tipo] || "📎";
+
+  const label = {
+    imagem: "Foto", audio: "Áudio", video: "Vídeo",
+    figurinha: "Figurinha", documento: txt || "Documento"
+  }[tipo] || tipo;
+
+  return `<div class="wa-midia-placeholder" onclick="carregarMidia(${idx}, this)">
+    <span class="wa-midia-icone">${icone}</span>
+    <span class="wa-midia-label">${label}</span>
+    <span class="wa-midia-btn">▶ Carregar</span>
+  </div>`;
 }
+
+function _renderMidiaBase64(tipo, src, txt) {
+  if (tipo === "audio") {
+    return `<audio class="wa-msg-audio" controls src="${src}" preload="auto"></audio>`;
+  }
+  if (tipo === "imagem") {
+    return `<img class="wa-msg-img" src="${src}" loading="lazy"
+              onclick="abrirLightbox('${src.replace(/'/g,"\\'")}')"/>
+            ${txt ? `<div class="wa-msg-legenda">${txt}</div>` : ""}`;
+  }
+  if (tipo === "figurinha") {
+    return `<img class="wa-msg-figurinha" src="${src}" loading="lazy"/>`;
+  }
+  if (tipo === "video") {
+    return `<video class="wa-msg-video" controls src="${src}" preload="none"></video>`;
+  }
+  if (tipo === "documento") {
+    return `<a class="wa-msg-doc" href="${src}" target="_blank" rel="noopener">📄 ${txt || "Documento"}</a>`;
+  }
+  return `<a href="${src}" target="_blank">📎 Abrir arquivo</a>`;
+}
+
+async function carregarMidia(idx, el) {
+  const m = _msgAtual[idx];
+  if (!m || !m.raw_msg) {
+    el.innerHTML = '<span style="color:var(--red)">Mídia não disponível</span>';
+    return;
+  }
+  el.innerHTML = '<span class="wa-midia-carregando">⏳ Carregando...</span>';
+  try {
+    const r = await fetch("/api/whatsapp/media", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: m.raw_msg }),
+    });
+    const d = await r.json();
+    if (!d.base64 || d.erro) {
+      el.innerHTML = `<span style="color:var(--red)">Erro: ${esc(d.erro || "sem dados")}</span>`;
+      return;
+    }
+    _mediaCache[idx] = d.base64;
+    // Substitui o placeholder pelo conteúdo real
+    const bolha = el.closest(".wa-msg-bolha");
+    if (bolha) {
+      const hora = bolha.querySelector(".wa-msg-hora")?.outerHTML || "";
+      bolha.innerHTML = _renderMidiaBase64(m.tipo, d.base64, m.texto || "") + hora;
+    }
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--red)">Erro de rede</span>';
+  }
+}
+
+// Array das msgs da conversa aberta (pra carregarMidia acessar raw_msg)
+let _msgAtual = [];
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 function abrirLightbox(url) {
