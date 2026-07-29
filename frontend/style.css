@@ -646,6 +646,19 @@ code{
 .banner-disparo-txt strong{color:var(--green-d)}
 .banner-disparo.hidden{display:none}
 
+/* ===== Box disparo em massa ===== */
+.disparo-massa-box{
+  display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;
+  padding:16px;background:var(--bg);border-radius:var(--r-sm);
+  border:1px solid var(--border);margin-bottom:16px;
+}
+.disparo-massa-box .form-group{margin:0}
+@media(max-width:640px){
+  .disparo-massa-box{flex-direction:column;align-items:stretch}
+  .disparo-massa-box .form-group{max-width:100%!important}
+  .disparo-massa-box .btn{width:100%;justify-content:center}
+}
+
 /* ===== Chat / Conversas WhatsApp ===== */
 .wa-chat{
   display:grid;grid-template-columns:300px 1fr;gap:0;

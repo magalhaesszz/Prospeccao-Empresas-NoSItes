@@ -738,6 +738,55 @@ def api_wa_mensagens():
         return jsonify({"erro": str(e), "mensagens": []})
 
 
+@app.route("/api/whatsapp/pendentes")
+def api_wa_pendentes():
+    """Conta empresas prontas pra disparo: sem site, com telefone, não enviadas."""
+    from database.db import get_connection
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT COUNT(*) FROM empresas
+        WHERE mensagem_enviada=0 AND tem_site=0
+          AND telefone IS NOT NULL AND telefone != ''
+    """)
+    n = c.fetchone()[0] or 0
+    conn.close()
+    return jsonify({"pendentes": n})
+
+
+@app.route("/api/whatsapp/disparar-pendentes", methods=["POST"])
+def api_wa_disparar_pendentes():
+    """Dispara para TODAS as empresas pendentes (sem site, com tel, não enviadas)."""
+    with _lock:
+        if _estado["enviando"]:
+            return jsonify({"erro": "Envio já em andamento."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    limite = dados.get("limite")  # opcional: máximo de disparos nesta rodada
+
+    from database.db import get_connection
+    conn = get_connection()
+    c = conn.cursor()
+    query = """
+        SELECT * FROM empresas
+        WHERE mensagem_enviada=0 AND tem_site=0
+          AND telefone IS NOT NULL AND telefone != ''
+        ORDER BY score DESC, data_prospeccao DESC
+    """
+    if isinstance(limite, int) and limite > 0:
+        query += f" LIMIT {int(limite)}"
+    c.execute(query)
+    cols = [d[0] for d in c.description]
+    empresas = [dict(zip(cols, r)) for r in c.fetchall()]
+    conn.close()
+
+    if not empresas:
+        return jsonify({"erro": "Nenhuma empresa pendente."}), 400
+
+    threading.Thread(target=_executar_envio, args=(empresas,), daemon=True).start()
+    return jsonify({"mensagem": f"Disparo iniciado para {len(empresas)} empresa(s) pendente(s)."})
+
+
 @app.route("/api/whatsapp/responder", methods=["POST"])
 def api_wa_responder():
     """Envia resposta manual dentro de uma conversa."""

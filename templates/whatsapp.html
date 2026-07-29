@@ -125,9 +125,18 @@
   <div class="card">
     <h2 class="card-title">🚀 Disparo em Massa</h2>
     <p style="color:var(--muted);font-size:.875rem;margin-bottom:16px">
-      Para disparar mensagens em massa, vá para a página de <strong>Busca</strong> (selecione as empresas)
-      ou para o <strong>CRM</strong> (clique no botão 📱 de cada card).
+      Dispara para <strong>todas</strong> as empresas pendentes do banco (sem site, com telefone, ainda não contatadas).
+      Respeita blacklist, horário comercial e intervalo anti-ban.
     </p>
+    <div class="disparo-massa-box">
+      <div class="form-group" style="max-width:160px">
+        <label>Limite (opcional)</label>
+        <input id="disparo-limite" type="number" min="1" placeholder="Ex: 50 (vazio = todos)"/>
+      </div>
+      <button class="btn btn-whatsapp" id="btn-disparar-pendentes" onclick="dispararPendentes()">
+        🚀 Disparar para <span id="qtd-pendentes">…</span> pendentes
+      </button>
+    </div>
     <div class="wa-stats" id="wa-stats">
       <div class="wa-stat"><span class="wa-stat-val" id="st-hoje">—</span><span class="wa-stat-lab">Enviadas hoje</span></div>
       <div class="wa-stat"><span class="wa-stat-val" id="st-total">—</span><span class="wa-stat-lab">Total enviadas</span></div>

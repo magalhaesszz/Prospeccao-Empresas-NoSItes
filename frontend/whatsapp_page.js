@@ -8,6 +8,7 @@ let _pollTimer = null;
 document.addEventListener("DOMContentLoaded", () => {
   atualizarStatus();
   carregarStats();
+  carregarPendentes();
   // Poll status a cada 8s enquanto na página
   _pollTimer = setInterval(() => atualizarStatus(true), 8000);
 });
@@ -225,6 +226,53 @@ async function carregarStats() {
     document.getElementById("st-erros").textContent    = d.com_erro ?? "—";
     document.getElementById("st-pendentes").textContent = d.pendentes ?? "—";
   } catch (_) {}
+}
+
+// ── Disparo em massa (pendentes) ──────────────────────────────────────────────
+
+async function carregarPendentes() {
+  try {
+    const r = await fetch("/api/whatsapp/pendentes");
+    const d = await r.json();
+    const el = document.getElementById("qtd-pendentes");
+    if (el) el.textContent = d.pendentes ?? 0;
+    const btn = document.getElementById("btn-disparar-pendentes");
+    if (btn) btn.disabled = !d.pendentes;
+  } catch (_) {}
+}
+
+async function dispararPendentes() {
+  const limiteRaw = document.getElementById("disparo-limite").value.trim();
+  const limite = limiteRaw ? parseInt(limiteRaw, 10) : null;
+  const qtd = document.getElementById("qtd-pendentes").textContent;
+
+  const msg = limite
+    ? `Disparar para até ${limite} empresa(s) pendente(s)?`
+    : `Disparar para TODAS as ${qtd} empresa(s) pendentes?`;
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById("btn-disparar-pendentes");
+  btn.disabled = true;
+
+  try {
+    const r = await fetch("/api/whatsapp/disparar-pendentes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(limite ? { limite } : {}),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      mostrarToast("Erro: " + (d.erro || "falha"), "error");
+      btn.disabled = false;
+      return;
+    }
+    mostrarToast("⏳ " + d.mensagem, "info");
+    // Recarrega stats/pendentes depois de um tempo
+    setTimeout(() => { carregarStats(); carregarPendentes(); }, 5000);
+  } catch (e) {
+    mostrarToast("Erro de rede.", "error");
+    btn.disabled = false;
+  }
 }
 
 // ── Conversas ─────────────────────────────────────────────────────────────────
