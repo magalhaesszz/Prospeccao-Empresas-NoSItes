@@ -8,7 +8,7 @@ import secrets, logging, re
 logger = logging.getLogger(__name__)
 
 
-_MODELO = "gemini-1.5-flash"
+_MODELO = "gemini-2.0-flash-lite"
 
 def _gerar(prompt, api_key):
     from google import genai
