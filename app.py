@@ -639,6 +639,121 @@ def api_wa_stats():
     return jsonify({"total_enviadas": total, "enviadas_hoje": hoje, "com_erro": erros, "pendentes": pendentes})
 
 
+# ── Conversas WhatsApp (Evolution API) ─────────────────────────────────────────
+
+def _wa_config():
+    return (
+        CONFIG.get("webhook_whatsapp", "").strip().rstrip("/"),
+        CONFIG.get("evolution_instance", "").strip(),
+        CONFIG.get("evolution_api_key",  "").strip(),
+    )
+
+
+@app.route("/api/whatsapp/conversas")
+def api_wa_conversas():
+    """Lista as conversas (chats) da instância conectada."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    if not (base and instance and api_key):
+        return jsonify({"erro": "Evolution API não configurada.", "conversas": []})
+
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    try:
+        r = req.post(f"{base}/chat/findChats/{instance}", headers=headers, json={}, timeout=20)
+        if not r.ok:
+            return jsonify({"erro": f"HTTP {r.status_code}", "conversas": []})
+        dados = r.json()
+        chats = dados if isinstance(dados, list) else dados.get("chats", dados.get("data", []))
+
+        conversas = []
+        for ch in chats:
+            jid = ch.get("remoteJid") or ch.get("id") or ch.get("jid") or ""
+            if not jid or jid.endswith("@g.us") or "status@broadcast" in jid:
+                continue  # pula grupos e status
+            numero = jid.split("@")[0]
+            conversas.append({
+                "jid":        jid,
+                "numero":     numero,
+                "nome":       ch.get("pushName") or ch.get("name") or ch.get("profileName") or numero,
+                "foto":       ch.get("profilePicUrl") or ch.get("profilePictureUrl") or "",
+                "ultima_msg": ch.get("lastMessage", {}).get("message", {}).get("conversation", "")
+                              if isinstance(ch.get("lastMessage"), dict) else "",
+                "timestamp":  ch.get("updatedAt") or ch.get("lastMsgTimestamp") or "",
+                "nao_lidas":  ch.get("unreadCount") or ch.get("unreadMessages") or 0,
+            })
+        return jsonify({"conversas": conversas})
+    except Exception as e:
+        return jsonify({"erro": str(e), "conversas": []})
+
+
+@app.route("/api/whatsapp/mensagens")
+def api_wa_mensagens():
+    """Mensagens de uma conversa específica (por jid)."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    jid = (request.args.get("jid") or "").strip()
+    if not (base and instance and api_key):
+        return jsonify({"erro": "Não configurado.", "mensagens": []})
+    if not jid:
+        return jsonify({"erro": "jid obrigatório.", "mensagens": []})
+
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    try:
+        r = req.post(
+            f"{base}/chat/findMessages/{instance}",
+            headers=headers,
+            json={"where": {"key": {"remoteJid": jid}}},
+            timeout=20,
+        )
+        if not r.ok:
+            return jsonify({"erro": f"HTTP {r.status_code}", "mensagens": []})
+        dados = r.json()
+        # Evolution v2 pode aninhar em messages.records
+        if isinstance(dados, dict):
+            msgs = dados.get("messages", dados.get("data", []))
+            if isinstance(msgs, dict):
+                msgs = msgs.get("records", [])
+        else:
+            msgs = dados
+
+        mensagens = []
+        for m in msgs:
+            key = m.get("key", {})
+            conteudo = m.get("message", {}) or {}
+            texto = (
+                conteudo.get("conversation")
+                or conteudo.get("extendedTextMessage", {}).get("text")
+                or conteudo.get("imageMessage", {}).get("caption")
+                or ("[mídia]" if conteudo else "")
+            )
+            mensagens.append({
+                "de_mim":    bool(key.get("fromMe")),
+                "texto":     texto or "",
+                "timestamp": m.get("messageTimestamp") or 0,
+            })
+        # Ordena por timestamp crescente
+        mensagens.sort(key=lambda x: x["timestamp"] or 0)
+        return jsonify({"mensagens": mensagens})
+    except Exception as e:
+        return jsonify({"erro": str(e), "mensagens": []})
+
+
+@app.route("/api/whatsapp/responder", methods=["POST"])
+def api_wa_responder():
+    """Envia resposta manual dentro de uma conversa."""
+    from whatsapp.disparar import _enviar_via_webhook
+    dados  = request.get_json(silent=True) or {}
+    numero = (dados.get("numero") or "").strip()
+    texto  = (dados.get("texto") or "").strip()
+    if not numero or not texto:
+        return jsonify({"ok": False, "erro": "Número e texto obrigatórios."})
+    try:
+        _enviar_via_webhook(numero, texto)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
+
 # ── Blacklist ──────────────────────────────────────────────────────────────────
 @app.route("/api/blacklist", methods=["GET"])
 def api_blacklist_get():

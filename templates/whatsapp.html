@@ -97,6 +97,30 @@
     <p id="teste-resultado" style="margin-top:10px;font-size:.875rem"></p>
   </div>
 
+  <!-- Conversas -->
+  <div class="card" id="card-conversas">
+    <div class="page-header" style="margin-bottom:12px">
+      <h2 class="card-title" style="margin:0">💬 Minhas Conversas</h2>
+      <button class="btn btn-secondary btn-sm" onclick="carregarConversas()">↻ Atualizar</button>
+    </div>
+    <div class="wa-chat">
+      <div class="wa-chat-lista" id="chat-lista">
+        <p class="vazio" style="padding:20px">Clique em ↻ para carregar as conversas.</p>
+      </div>
+      <div class="wa-chat-painel" id="chat-painel">
+        <div class="wa-chat-vazio" id="chat-vazio">Selecione uma conversa para ver as mensagens.</div>
+        <div class="wa-chat-conteudo hidden" id="chat-conteudo">
+          <div class="wa-chat-cabecalho" id="chat-cabecalho"></div>
+          <div class="wa-chat-mensagens" id="chat-mensagens"></div>
+          <div class="wa-chat-input">
+            <input type="text" id="chat-resposta" placeholder="Digite uma resposta..." onkeydown="if(event.key==='Enter')responderConversa()"/>
+            <button class="btn btn-whatsapp btn-sm" onclick="responderConversa()">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Disparos em massa -->
   <div class="card">
     <h2 class="card-title">🚀 Disparo em Massa</h2>

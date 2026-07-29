@@ -227,6 +227,90 @@ async function carregarStats() {
   } catch (_) {}
 }
 
+// ── Conversas ─────────────────────────────────────────────────────────────────
+
+let _chatAtual = null;
+
+async function carregarConversas() {
+  const lista = document.getElementById("chat-lista");
+  lista.innerHTML = '<p class="vazio" style="padding:20px">Carregando...</p>';
+  try {
+    const r = await fetch("/api/whatsapp/conversas");
+    const d = await r.json();
+    if (d.erro) {
+      lista.innerHTML = `<p class="vazio" style="padding:20px">${esc(d.erro)}</p>`;
+      return;
+    }
+    if (!d.conversas || !d.conversas.length) {
+      lista.innerHTML = '<p class="vazio" style="padding:20px">Nenhuma conversa ainda.</p>';
+      return;
+    }
+    lista.innerHTML = d.conversas.map(c => `
+      <div class="wa-chat-item" onclick='abrirConversa(${JSON.stringify(c).replace(/'/g, "&#39;")})'>
+        <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}"/>` : "👤"}</div>
+        <div class="wa-chat-item-info">
+          <div class="wa-chat-item-nome">${esc(c.nome)}</div>
+          <div class="wa-chat-item-prev">${esc(c.ultima_msg || c.numero)}</div>
+        </div>
+        ${c.nao_lidas ? `<span class="wa-chat-badge">${c.nao_lidas}</span>` : ""}
+      </div>`).join("");
+  } catch (e) {
+    lista.innerHTML = '<p class="vazio" style="padding:20px">Erro ao carregar conversas.</p>';
+  }
+}
+
+async function abrirConversa(c) {
+  _chatAtual = c;
+  document.getElementById("chat-vazio").classList.add("hidden");
+  document.getElementById("chat-conteudo").classList.remove("hidden");
+  document.getElementById("chat-cabecalho").innerHTML =
+    `<strong>${esc(c.nome)}</strong> <span style="color:var(--muted);font-size:.8rem">${esc(c.numero)}</span>`;
+
+  const cont = document.getElementById("chat-mensagens");
+  cont.innerHTML = '<p class="vazio">Carregando mensagens...</p>';
+
+  try {
+    const r = await fetch("/api/whatsapp/mensagens?jid=" + encodeURIComponent(c.jid));
+    const d = await r.json();
+    if (d.erro || !d.mensagens || !d.mensagens.length) {
+      cont.innerHTML = `<p class="vazio">${d.erro ? esc(d.erro) : "Sem mensagens."}</p>`;
+      return;
+    }
+    cont.innerHTML = d.mensagens.map(m => `
+      <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}">
+        <div class="wa-msg-bolha">${esc(m.texto)}</div>
+      </div>`).join("");
+    cont.scrollTop = cont.scrollHeight;
+  } catch (e) {
+    cont.innerHTML = '<p class="vazio">Erro ao carregar mensagens.</p>';
+  }
+}
+
+async function responderConversa() {
+  if (!_chatAtual) return;
+  const input = document.getElementById("chat-resposta");
+  const texto = input.value.trim();
+  if (!texto) return;
+  input.value = "";
+
+  const cont = document.getElementById("chat-mensagens");
+  cont.insertAdjacentHTML("beforeend",
+    `<div class="wa-msg wa-msg-eu"><div class="wa-msg-bolha">${esc(texto)}</div></div>`);
+  cont.scrollTop = cont.scrollHeight;
+
+  try {
+    const r = await fetch("/api/whatsapp/responder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numero: _chatAtual.numero, texto }),
+    });
+    const d = await r.json();
+    if (!d.ok) mostrarToast("Erro: " + (d.erro || "falha no envio"), "error");
+  } catch (e) {
+    mostrarToast("Erro de rede.", "error");
+  }
+}
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
 function esc(t) {
