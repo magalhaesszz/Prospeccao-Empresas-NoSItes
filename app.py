@@ -497,7 +497,7 @@ def api_wa_qrcode():
         )
         cr_data = cr.json()
         # 409 = já existe, tudo bem. Outro erro = retorna pro usuário
-        if not cr.ok and cr.status_code != 409:
+        if not cr.ok and cr.status_code not in (409, 403):
             return jsonify({"erro": f"Erro ao criar instância: {str(cr_data)[:300]}"})
     except Exception as e:
         return jsonify({"erro": f"Não conseguiu conectar na Evolution API: {str(e)}"})
