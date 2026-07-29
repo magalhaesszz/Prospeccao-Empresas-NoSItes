@@ -6,7 +6,10 @@
 
   <!-- Busca -->
   <section class="card">
-    <h2 class="card-title">🔍 Nova Busca</h2>
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Nova Busca
+    </h2>
     <div class="form-row">
       <div class="form-group">
         <label>Cidade / Estado</label>
@@ -16,11 +19,14 @@
         <label>Categoria</label>
         <input id="categoria" type="text" placeholder="Ex: barbearias"/>
       </div>
-      <button id="btn-buscar" class="btn btn-primary" onclick="iniciarBusca()">🔍 Buscar</button>
+      <button id="btn-buscar" class="btn btn-primary" onclick="iniciarBusca()">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Buscar
+      </button>
     </div>
     <!-- Busca em lote -->
     <details style="margin-top:14px">
-      <summary class="detalhes-toggle">📋 Busca em lote (múltiplas buscas)</summary>
+      <summary class="detalhes-toggle">Busca em lote (múltiplas buscas)</summary>
       <div style="margin-top:10px">
         <label style="font-size:.8rem;color:var(--muted)">Uma busca por linha: categoria, cidade</label>
         <textarea id="lote-texto" rows="4" class="textarea-lote" placeholder="barbearias, Goiânia GO&#10;restaurantes, Brasília DF&#10;advogados, São Paulo SP"></textarea>
@@ -49,10 +55,22 @@
         </label>
       </div>
       <div class="acoes-btns">
-        <button class="btn btn-secondary" onclick="selecionarTodos()">☑ Todos</button>
-        <button class="btn btn-whatsapp"  onclick="enviarSelecionados()">📱 WhatsApp</button>
-        <button class="btn btn-excel"     onclick="exportar('xlsx')">📊 Excel</button>
-        <button class="btn btn-secondary" onclick="exportar('csv')">📄 CSV</button>
+        <button class="btn btn-secondary" onclick="selecionarTodos()">
+          <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Todos
+        </button>
+        <button class="btn btn-whatsapp" onclick="enviarSelecionados()">
+          <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+          WhatsApp
+        </button>
+        <button class="btn btn-excel" onclick="exportar('xlsx')">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Excel
+        </button>
+        <button class="btn btn-secondary" onclick="exportar('csv')">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          CSV
+        </button>
       </div>
     </div>
   </section>
@@ -60,7 +78,9 @@
   <!-- Resultados -->
   <section id="secao-resultados" class="card hidden">
     <div class="resultados-header">
-      <h2 class="card-title">Resultados <span id="badge-total" class="badge badge-azul">0</span></h2>
+      <h2 class="card-title">
+        Resultados <span id="badge-total" class="badge badge-azul">0</span>
+      </h2>
     </div>
     <div class="tabela-wrapper">
       <table>
@@ -79,8 +99,11 @@
   <!-- Histórico -->
   <section class="card">
     <div class="historico-topo">
-      <h2 class="card-title">📂 Histórico</h2>
-      <button class="btn btn-secondary btn-sm" onclick="carregarHistorico()">↻</button>
+      <h2 class="card-title">
+        <svg class="icon-card" viewBox="0 0 24 24"><path d="M3 3h6l3 3 3-3h6v5H3z"/><path d="M3 8v13h18V8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        Histórico
+      </h2>
+      <button class="btn btn-secondary btn-sm" onclick="carregarHistorico()">Atualizar</button>
     </div>
     <div id="historico-lista"><p class="vazio">Nenhuma busca ainda.</p></div>
   </section>

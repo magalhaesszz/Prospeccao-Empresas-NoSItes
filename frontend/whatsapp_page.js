@@ -38,7 +38,7 @@ function renderizarStatus(d) {
   const cardQr = document.getElementById("card-qr");
 
   if (!d.configurado) {
-    icon.textContent   = "⚙️";
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
     titulo.textContent = "Evolution API não configurada";
     sub.textContent    = "Configure as variáveis de ambiente (veja o guia abaixo)";
     acoes.innerHTML    = "";
@@ -50,7 +50,7 @@ function renderizarStatus(d) {
   renderizarConfig(d.config);
 
   if (d.conectado) {
-    icon.textContent   = "✅";
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/><polyline points="9 12 11 14 15 10"/></svg>';
     icon.style.filter  = "none";
     titulo.textContent = "WhatsApp Conectado";
     sub.textContent    = d.numero ? `Número: ${d.numero}` : "Conexão ativa";
@@ -58,7 +58,7 @@ function renderizarStatus(d) {
     cardQr.classList.add("hidden");
     clearTimeout(_qrTimer);
   } else {
-    icon.textContent   = "🔴";
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#E11D48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>';
     titulo.textContent = "WhatsApp Desconectado";
     sub.textContent    = "Escaneie o QR Code para conectar";
     acoes.innerHTML    = `<button class="btn btn-primary" onclick="iniciarConexao()">Conectar</button>`;
@@ -70,7 +70,7 @@ function renderizarStatus(d) {
 }
 
 function renderizarStatusErro(msg) {
-  document.getElementById("status-icon").textContent   = "❌";
+  document.getElementById("status-icon").innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#E11D48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
   document.getElementById("status-titulo").textContent = "Erro";
   document.getElementById("status-sub").textContent    = msg;
 }
@@ -353,7 +353,7 @@ function renderConversas(convs) {
           <span class="wa-chat-item-prev">${esc(c.ultima_msg || "—")}</span>
           ${c.nao_lidas ? `<span class="wa-chat-badge">${c.nao_lidas}</span>` : ""}
         </div>
-        ${c.cliente ? '<span class="wa-chat-tag">🎯 Prospectado</span>' : ""}
+        ${c.cliente ? '<span class="wa-chat-tag">Prospectado</span>' : ""}
       </div>
     </div>`).join("");
 }
@@ -394,7 +394,7 @@ async function abrirConversa(c) {
     <button class="wa-chat-voltar" onclick="voltarLista()" title="Voltar">‹</button>
     <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}" onerror="this.parentNode.textContent='👤'"/>` : "👤"}</div>
     <div>
-      <div class="wa-chat-cab-nome">${esc(c.nome)} ${c.cliente ? '<span class="wa-chat-tag">🎯 Prospectado</span>' : ""}</div>
+      <div class="wa-chat-cab-nome">${esc(c.nome)} ${c.cliente ? '<span class="wa-chat-tag">Prospectado</span>' : ""}</div>
       <div class="wa-chat-cab-num">+${esc(c.numero)}</div>
     </div>`;
 

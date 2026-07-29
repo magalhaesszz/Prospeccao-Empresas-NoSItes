@@ -290,9 +290,9 @@ function mostrarBannerDisparo(qtd) {
   }
   banner.innerHTML = `
     <div class="banner-disparo-txt">
-      <strong>🎯 ${qtd} empresa(s) sem site</strong> prontas para disparo imediato.
+      <strong>${qtd} empresa(s) sem site</strong> prontas para disparo imediato.
     </div>
-    <button class="btn btn-whatsapp" onclick="enviarSelecionados()">📱 Disparar agora</button>
+    <button class="btn btn-whatsapp" onclick="enviarSelecionados()">Disparar agora</button>
     <button class="btn btn-secondary btn-sm" onclick="fecharBannerDisparo()">✕</button>
   `;
   banner.classList.remove("hidden");

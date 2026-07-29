@@ -5,14 +5,18 @@
 <div class="container" style="max-width:900px">
 
   <div class="page-header">
-    <h1 class="page-title">📱 WhatsApp</h1>
-    <button class="btn btn-secondary btn-sm" onclick="atualizarStatus()">↻ Atualizar</button>
+    <h1 class="page-title">WhatsApp</h1>
+    <button class="btn btn-secondary btn-sm" onclick="atualizarStatus()">Atualizar</button>
   </div>
 
   <!-- Status da conexão -->
   <div class="card" id="card-status">
     <div class="wa-status-row">
-      <div class="wa-status-icon" id="status-icon">⏳</div>
+      <div class="wa-status-icon" id="status-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>
+        </svg>
+      </div>
       <div class="wa-status-info">
         <div class="wa-status-titulo" id="status-titulo">Verificando conexão...</div>
         <div class="wa-status-sub"   id="status-sub">Aguarde</div>
@@ -21,9 +25,12 @@
     </div>
   </div>
 
-  <!-- QR Code (só aparece quando desconectado) -->
+  <!-- QR Code -->
   <div class="card hidden" id="card-qr">
-    <h2 class="card-title">📷 Escanear QR Code</h2>
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M17 17h4v4h-4z"/><path d="M14 21h3"/></svg>
+      Escanear QR Code
+    </h2>
     <div class="qr-wrap">
       <div class="qr-instrucoes">
         <p>1. Abra o WhatsApp no seu celular</p>
@@ -37,19 +44,22 @@
       </div>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="buscarQR()">↻ Novo QR Code</button>
+      <button class="btn btn-primary" onclick="buscarQR()">Novo QR Code</button>
       <span class="wa-timer" id="qr-timer"></span>
     </div>
   </div>
 
   <!-- Configuração -->
   <div class="card" id="card-config">
-    <h2 class="card-title">⚙️ Configuração Evolution API</h2>
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Configuração Evolution API
+    </h2>
     <div id="config-status"></div>
     <div class="wa-config-grid" id="config-grid"></div>
 
     <details style="margin-top:20px">
-      <summary class="detalhes-toggle">📖 Como configurar? (passo a passo)</summary>
+      <summary class="detalhes-toggle">Como configurar? (passo a passo)</summary>
       <div class="wa-guia">
         <p><strong>1. Crie um novo serviço no Railway</strong></p>
         <p>No painel do Railway → New Service → Docker Image → cole:</p>
@@ -67,7 +77,7 @@
         <p style="margin-top:12px"><strong>3. Copie a URL pública do serviço Evolution API</strong></p>
         <p>Ex: <code>https://evolution-api-production-xxxx.up.railway.app</code></p>
 
-        <p style="margin-top:12px"><strong>4. No seu app principal (este aqui), adicione as variáveis:</strong></p>
+        <p style="margin-top:12px"><strong>4. No seu app principal, adicione as variáveis:</strong></p>
         <div class="wa-env-table">
           <div class="wa-env-row"><code>WEBHOOK_WHATSAPP</code><span>URL do Evolution API acima</span></div>
           <div class="wa-env-row"><code>EVOLUTION_INSTANCE</code><span>nome da instância (ex: meu-negocio)</span></div>
@@ -75,14 +85,17 @@
         </div>
 
         <p style="margin-top:12px"><strong>5. Volte aqui e escaneie o QR Code</strong></p>
-        <p>Após salvar as variáveis, o Railway vai reiniciar. Volte nesta página e clique em <strong>↻ Atualizar</strong>.</p>
+        <p>Após salvar as variáveis, o Railway vai reiniciar. Volte nesta página e clique em <strong>Atualizar</strong>.</p>
       </div>
     </details>
   </div>
 
   <!-- Enviar mensagem de teste -->
   <div class="card" id="card-teste">
-    <h2 class="card-title">🧪 Enviar Mensagem de Teste</h2>
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      Enviar Mensagem de Teste
+    </h2>
     <div class="form-row">
       <div class="form-group">
         <label>Telefone (com DDD e código do país)</label>
@@ -92,7 +105,10 @@
         <label>Mensagem</label>
         <input id="teste-mensagem" type="text" placeholder="Olá! Teste de conexão do Prospector."/>
       </div>
-      <button class="btn btn-whatsapp" onclick="enviarTeste()" id="btn-teste">📱 Enviar</button>
+      <button class="btn btn-whatsapp" onclick="enviarTeste()" id="btn-teste">
+        <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+        Enviar
+      </button>
     </div>
     <p id="teste-resultado" style="margin-top:10px;font-size:.875rem"></p>
   </div>
@@ -104,17 +120,21 @@
       <!-- Coluna esquerda: lista -->
       <div class="wa-chat-side">
         <div class="wa-chat-side-topo">
-          <span class="wa-chat-titulo">💬 Conversas <span id="chat-contador" class="wa-chat-count"></span></span>
+          <span class="wa-chat-titulo">Conversas <span id="chat-contador" class="wa-chat-count"></span></span>
           <div style="display:flex;gap:4px">
-            <button class="wa-chat-refresh" onclick="carregarConversas()" title="Atualizar">↻</button>
-            <button class="wa-chat-refresh" id="btn-fullscreen" onclick="toggleTelaCheia()" title="Tela cheia">⛶</button>
+            <button class="wa-chat-refresh" onclick="carregarConversas()" title="Atualizar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <button class="wa-chat-refresh" id="btn-fullscreen" onclick="toggleTelaCheia()" title="Tela cheia">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            </button>
           </div>
         </div>
         <div class="wa-chat-busca">
-          <input type="text" id="chat-busca" placeholder="🔍 Buscar conversa..." oninput="filtrarConversas()"/>
+          <input type="text" id="chat-busca" placeholder="Buscar conversa..." oninput="filtrarConversas()"/>
         </div>
         <div class="wa-chat-lista" id="chat-lista">
-          <p class="vazio" style="padding:24px">Clique em ↻ para carregar.</p>
+          <p class="vazio" style="padding:24px">Clique em atualizar para carregar.</p>
         </div>
       </div>
 
@@ -122,8 +142,8 @@
       <div class="wa-chat-painel" id="chat-painel">
         <div class="wa-chat-vazio" id="chat-vazio">
           <div style="text-align:center">
-            <div style="font-size:3rem;margin-bottom:8px">💬</div>
-            Selecione uma conversa para ver as mensagens.
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="52" height="52" style="margin-bottom:12px;opacity:.3"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+            <div>Selecione uma conversa para ver as mensagens.</div>
           </div>
         </div>
         <div class="wa-chat-conteudo hidden" id="chat-conteudo">
@@ -131,9 +151,9 @@
           <div class="wa-chat-mensagens" id="chat-mensagens"></div>
           <div class="wa-emoji-picker hidden" id="emoji-picker"></div>
           <div class="wa-chat-input">
-            <button class="wa-emoji-btn" onclick="toggleEmoji()" title="Emoji">😊</button>
+            <button class="wa-emoji-btn" onclick="toggleEmoji()" title="Emoji">&#128512;</button>
             <input type="text" id="chat-resposta" placeholder="Digite uma mensagem..." onkeydown="if(event.key==='Enter')responderConversa()"/>
-            <button class="wa-chat-enviar" onclick="responderConversa()" title="Enviar">➤</button>
+            <button class="wa-chat-enviar" onclick="responderConversa()" title="Enviar">&#10148;</button>
           </div>
         </div>
       </div>
@@ -143,7 +163,10 @@
 
   <!-- Disparos em massa -->
   <div class="card">
-    <h2 class="card-title">🚀 Disparo em Massa</h2>
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Disparo em Massa
+    </h2>
     <p style="color:var(--muted);font-size:.875rem;margin-bottom:16px">
       Dispara para <strong>todas</strong> as empresas pendentes do banco (sem site, com telefone, ainda não contatadas).
       Respeita blacklist, horário comercial e intervalo anti-ban.
@@ -151,10 +174,11 @@
     <div class="disparo-massa-box">
       <div class="form-group" style="max-width:160px">
         <label>Limite (opcional)</label>
-        <input id="disparo-limite" type="number" min="1" placeholder="Ex: 50 (vazio = todos)"/>
+        <input id="disparo-limite" type="number" min="1" placeholder="Ex: 50"/>
       </div>
       <button class="btn btn-whatsapp" id="btn-disparar-pendentes" onclick="dispararPendentes()">
-        🚀 Disparar para <span id="qtd-pendentes">…</span> pendentes
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Disparar para <span id="qtd-pendentes">...</span> pendentes
       </button>
     </div>
     <div class="wa-stats" id="wa-stats">

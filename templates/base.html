@@ -6,48 +6,130 @@
   <title>{% block title %}Prospector{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css"/>
   {% block head %}{% endblock %}
 </head>
 <body>
 
+<!-- Floating Background Icons -->
+<div class="bg-floats" aria-hidden="true">
+  <!-- WhatsApp / Mensagem -->
+  <div class="bg-f bg-f1">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="170" height="170">
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>
+    </svg>
+  </div>
+  <!-- Rocket / Disparo -->
+  <div class="bg-f bg-f2">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="95" height="95">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+    </svg>
+  </div>
+  <!-- Target / Mira -->
+  <div class="bg-f bg-f3">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="210" height="210">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="6"/>
+      <circle cx="12" cy="12" r="2"/>
+    </svg>
+  </div>
+  <!-- Zap / Lightning -->
+  <div class="bg-f bg-f4">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="65" height="65">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  </div>
+  <!-- BarChart -->
+  <div class="bg-f bg-f5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="130" height="130">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6"  y1="20" x2="6"  y2="14"/>
+      <line x1="2"  y1="20" x2="22" y2="20"/>
+    </svg>
+  </div>
+  <!-- Send arrow -->
+  <div class="bg-f bg-f6">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" width="85" height="85">
+      <line x1="22" y1="2" x2="11" y2="13"/>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  </div>
+</div>
+
 <!-- Sidebar -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
-    <span class="sidebar-logo-icon">🗺️</span>
-    <span class="sidebar-logo-text">Prospector</span>
+    <div class="sidebar-logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <circle cx="11" cy="11" r="3"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </div>
+    <div class="sidebar-logo-text">
+      <span class="sidebar-logo-name">Prospector</span>
+      <span class="sidebar-logo-tag">Sistema Inteligente</span>
+    </div>
   </div>
+
   <nav class="sidebar-nav">
-    <a href="/"          class="sidebar-item {{ 'active' if page=='busca'     }}">
-      <span class="sidebar-icon">🔍</span>
+    <div class="sidebar-section">Menu</div>
+
+    <a href="/" class="sidebar-item {{ 'active' if page=='busca' }}">
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </span>
       <span class="sidebar-label">Busca</span>
     </a>
-    <a href="/crm"       class="sidebar-item {{ 'active' if page=='crm'       }}">
-      <span class="sidebar-icon">📋</span>
+
+    <a href="/crm" class="sidebar-item {{ 'active' if page=='crm' }}">
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </span>
       <span class="sidebar-label">CRM</span>
     </a>
+
     <a href="/dashboard" class="sidebar-item {{ 'active' if page=='dashboard' }}">
-      <span class="sidebar-icon">📊</span>
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+      </span>
       <span class="sidebar-label">Dashboard</span>
     </a>
+
     <a href="/templates" class="sidebar-item {{ 'active' if page=='templates' }}">
-      <span class="sidebar-icon">💬</span>
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </span>
       <span class="sidebar-label">Templates</span>
     </a>
+
     <a href="/blacklist" class="sidebar-item {{ 'active' if page=='blacklist' }}">
-      <span class="sidebar-icon">🚫</span>
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9.5" y1="9.5" x2="14.5" y2="14.5"/><line x1="14.5" y1="9.5" x2="9.5" y2="14.5"/></svg>
+      </span>
       <span class="sidebar-label">Blacklist</span>
     </a>
+
     <a href="/whatsapp" class="sidebar-item {{ 'active' if page=='whatsapp' }}">
-      <span class="sidebar-icon">📱</span>
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+      </span>
       <span class="sidebar-label">WhatsApp</span>
     </a>
+
+    <div class="sidebar-phrase">Prospecte &middot; Conecte &middot; Venda</div>
   </nav>
+
   <div class="sidebar-footer">
-    <button class="sidebar-item" onclick="logout()" id="btn-logout"
-      style="display:none;width:100%;background:none;border:none;cursor:pointer;text-align:left;color:rgba(255,255,255,.6)">
-      <span class="sidebar-icon">🚪</span>
+    <button class="sidebar-item" onclick="logout()" id="btn-logout" style="display:none">
+      <span class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </span>
       <span class="sidebar-label">Sair</span>
     </button>
   </div>
@@ -58,7 +140,9 @@
 
 <!-- Mobile top bar -->
 <header class="mobile-header">
-  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <button class="hamburger" onclick="toggleSidebar()">
+    <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
   <span class="mobile-title">Prospector</span>
   <span style="width:40px"></span>
 </header>
@@ -73,23 +157,29 @@
 <!-- Bottom nav (mobile) -->
 <nav class="bottom-nav">
   <div class="bottom-nav-items">
-    <a href="/"          class="bottom-nav-item {{ 'active' if page=='busca'     }}">
-      <span class="bnav-icon">🔍</span><span>Busca</span>
+    <a href="/"          class="bottom-nav-item {{ 'active' if page=='busca' }}">
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+      <span>Busca</span>
     </a>
-    <a href="/crm"       class="bottom-nav-item {{ 'active' if page=='crm'       }}">
-      <span class="bnav-icon">📋</span><span>CRM</span>
+    <a href="/crm"       class="bottom-nav-item {{ 'active' if page=='crm' }}">
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+      <span>CRM</span>
     </a>
     <a href="/dashboard" class="bottom-nav-item {{ 'active' if page=='dashboard' }}">
-      <span class="bnav-icon">📊</span><span>Board</span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span>
+      <span>Board</span>
     </a>
     <a href="/templates" class="bottom-nav-item {{ 'active' if page=='templates' }}">
-      <span class="bnav-icon">💬</span><span>Templates</span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+      <span>Templates</span>
     </a>
     <a href="/blacklist" class="bottom-nav-item {{ 'active' if page=='blacklist' }}">
-      <span class="bnav-icon">🚫</span><span>Blacklist</span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9.5" y1="9.5" x2="14.5" y2="14.5"/><line x1="14.5" y1="9.5" x2="9.5" y2="14.5"/></svg></span>
+      <span>Blacklist</span>
     </a>
-    <a href="/whatsapp" class="bottom-nav-item {{ 'active' if page=='whatsapp' }}">
-      <span class="bnav-icon">📱</span><span>WhatsApp</span>
+    <a href="/whatsapp"  class="bottom-nav-item {{ 'active' if page=='whatsapp' }}">
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg></span>
+      <span>WhatsApp</span>
     </a>
   </div>
 </nav>
