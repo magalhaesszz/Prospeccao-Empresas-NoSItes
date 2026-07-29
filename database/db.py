@@ -128,6 +128,22 @@ def inicializar_banco():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS agendamentos (
+            id              SERIAL PRIMARY KEY,
+            nome            TEXT    NOT NULL DEFAULT 'Agendamento',
+            hora_inicio     INTEGER NOT NULL DEFAULT 9,
+            hora_fim        INTEGER NOT NULL DEFAULT 18,
+            limite_dia      INTEGER NOT NULL DEFAULT 20,
+            dias_semana     TEXT    NOT NULL DEFAULT '1,2,3,4,5',
+            ativo           INTEGER DEFAULT 1,
+            mensagem_custom TEXT,
+            total_hoje      INTEGER DEFAULT 0,
+            ultima_execucao TIMESTAMP,
+            criado_em       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_telefone ON empresas(telefone)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_status   ON empresas(status)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_notas_empresa     ON notas(empresa_id)")
@@ -428,3 +444,120 @@ def contar_notas(empresa_id):
     row = c.fetchone()
     conn.close()
     return row[0] if row else 0
+
+
+# ── Webhook / respostas ───────────────────────────────────────────────────────
+
+def buscar_empresa_por_telefone(telefone):
+    conn = get_connection()
+    c = conn.cursor()
+    digitos = "".join(ch for ch in str(telefone or "") if ch.isdigit())
+    sufixo  = digitos[-10:] if len(digitos) >= 10 else digitos
+    c.execute("""
+        SELECT * FROM empresas
+        WHERE regexp_replace(telefone, '[^0-9]', '', 'g') LIKE %s
+        ORDER BY id DESC LIMIT 1
+    """, (f"%{sufixo}",))
+    row = _one(c)
+    conn.close()
+    return row
+
+
+def marcar_respondeu(empresa_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        UPDATE empresas
+        SET status='respondeu', ultimo_contato=CURRENT_TIMESTAMP
+        WHERE id=%s AND status NOT IN ('interessado', 'fechado')
+    """, (empresa_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Agendamentos ──────────────────────────────────────────────────────────────
+
+def criar_agendamento(nome, hora_inicio, hora_fim, limite_dia, dias_semana, mensagem_custom=None):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO agendamentos (nome, hora_inicio, hora_fim, limite_dia, dias_semana, mensagem_custom)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+    """, (nome, hora_inicio, hora_fim, limite_dia, dias_semana, mensagem_custom))
+    ag_id = c.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return ag_id
+
+
+def listar_agendamentos():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM agendamentos ORDER BY criado_em DESC")
+    rows = _all(c)
+    conn.close()
+    return rows
+
+
+def ativar_agendamento(ag_id, ativo):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE agendamentos SET ativo=%s WHERE id=%s", (1 if ativo else 0, ag_id))
+    conn.commit()
+    conn.close()
+
+
+def deletar_agendamento(ag_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM agendamentos WHERE id=%s", (ag_id,))
+    conn.commit()
+    conn.close()
+
+
+def atualizar_ultima_execucao(ag_id, total_hoje):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        UPDATE agendamentos
+        SET ultima_execucao=CURRENT_TIMESTAMP, total_hoje=%s
+        WHERE id=%s
+    """, (total_hoje, ag_id))
+    conn.commit()
+    conn.close()
+
+
+def contagem_enviadas_hoje():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT COUNT(*) FROM empresas
+        WHERE mensagem_enviada=1
+          AND ultimo_contato::date = CURRENT_DATE
+    """)
+    n = c.fetchone()[0] or 0
+    conn.close()
+    return n
+
+
+# ── Funil de conversão ────────────────────────────────────────────────────────
+
+def get_funil_conversao():
+    conn = get_connection()
+
+    def escalar(q):
+        c = conn.cursor()
+        c.execute(q)
+        row = c.fetchone()
+        return row[0] if row and row[0] is not None else 0
+
+    funil = {
+        "prospectadas": escalar("SELECT COUNT(*) FROM empresas"),
+        "sem_site":     escalar("SELECT COUNT(*) FROM empresas WHERE tem_site=0"),
+        "disparadas":   escalar("SELECT COUNT(*) FROM empresas WHERE mensagem_enviada=1"),
+        "responderam":  escalar("SELECT COUNT(*) FROM empresas WHERE status='respondeu'"),
+        "interessadas": escalar("SELECT COUNT(*) FROM empresas WHERE status='interessado'"),
+        "fechadas":     escalar("SELECT COUNT(*) FROM empresas WHERE status='fechado'"),
+    }
+    conn.close()
+    return funil

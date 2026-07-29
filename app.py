@@ -17,6 +17,10 @@ from database.db import (
     ativar_template, get_template_ativo, incrementar_enviados_template,
     listar_blacklist, adicionar_blacklist, remover_blacklist,
     listar_notas, adicionar_nota, deletar_nota,
+    buscar_empresa_por_telefone, marcar_respondeu,
+    criar_agendamento, listar_agendamentos, ativar_agendamento,
+    deletar_agendamento, atualizar_ultima_execucao, contagem_enviadas_hoje,
+    get_funil_conversao,
 )
 from crm.pipeline import kanban_por_status
 from dashboard.metrics import obter_stats
@@ -943,6 +947,127 @@ def api_wa_responder():
         return jsonify({"ok": False, "erro": str(e)})
 
 
+# ── Webhook Evolution API (rastreamento de respostas) ─────────────────────────
+@app.route("/api/whatsapp/webhook", methods=["GET", "POST"])
+def api_wa_webhook():
+    if request.method == "GET":
+        return jsonify({"ok": True, "webhook": "prospector"})
+
+    dados  = request.get_json(silent=True) or {}
+    evento = dados.get("event", "")
+
+    if evento in ("messages.upsert", "message.upsert"):
+        data = dados.get("data", {})
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        key     = data.get("key", {})
+        if key.get("fromMe"):
+            return jsonify({"ok": True})
+
+        jid     = key.get("remoteJid", "")
+        numero  = jid.split("@")[0] if "@" in jid else jid
+        empresa = buscar_empresa_por_telefone(numero)
+
+        if empresa and empresa.get("mensagem_enviada"):
+            marcar_respondeu(empresa["id"])
+            _broadcast({
+                "tipo":       "prospect_respondeu",
+                "empresa_id": empresa["id"],
+                "nome":       empresa.get("nome", ""),
+                "numero":     numero,
+            })
+            logger.info("[webhook] Resposta recebida de %s (%s)", empresa.get("nome"), numero)
+
+    return jsonify({"ok": True})
+
+
+# ── IA — Gerar mensagem personalizada ─────────────────────────────────────────
+@app.route("/api/whatsapp/gerar-mensagem", methods=["POST"])
+def api_wa_gerar_mensagem():
+    api_key = CONFIG.get("anthropic_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "ANTHROPIC_API_KEY não configurado no Railway."}), 400
+
+    dados     = request.get_json(silent=True) or {}
+    nome      = (dados.get("nome")      or "").strip()
+    categoria = (dados.get("categoria") or "").strip()
+    cidade    = (dados.get("cidade")    or "").strip()
+
+    if not nome:
+        return jsonify({"erro": "Nome da empresa é obrigatório."}), 400
+
+    try:
+        import anthropic as _anthropic
+        client  = _anthropic.Anthropic(api_key=api_key)
+        contexto = f"Empresa: {nome}"
+        if categoria: contexto += f" | Segmento: {categoria}"
+        if cidade:    contexto += f" | Cidade: {cidade}"
+
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Crie uma mensagem de WhatsApp profissional e personalizada para prospectar "
+                    f"a seguinte empresa: {contexto}.\n"
+                    "Regras:\n"
+                    "- Português brasileiro, tom amigável e direto\n"
+                    "- Mencione que a empresa não tem presença digital (site)\n"
+                    "- Ofereça criação de site profissional e automação de processos\n"
+                    "- Mencione que só cobra após entrega finalizada\n"
+                    "- Incentive o prospecto a responder\n"
+                    "- Use formatação WhatsApp (*negrito*)\n"
+                    "- Máximo 200 palavras\n"
+                    "Escreva APENAS a mensagem, sem comentários."
+                ),
+            }],
+        )
+        mensagem = resp.content[0].text.strip()
+        return jsonify({"mensagem": mensagem})
+    except Exception as e:
+        logger.error("[IA] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
+# ── Agendamentos de disparo ────────────────────────────────────────────────────
+@app.route("/api/agendamentos", methods=["GET"])
+def api_agendamentos_get():
+    return jsonify(listar_agendamentos())
+
+
+@app.route("/api/agendamentos", methods=["POST"])
+def api_agendamentos_post():
+    dados   = request.get_json(silent=True) or {}
+    nome    = (dados.get("nome") or "Agendamento").strip()
+    h_ini   = max(0, min(23, int(dados.get("hora_inicio", 9))))
+    h_fim   = max(0, min(23, int(dados.get("hora_fim",   18))))
+    limite  = max(1, int(dados.get("limite_dia", 20)))
+    dias    = (dados.get("dias_semana") or "1,2,3,4,5").strip()
+    custom  = (dados.get("mensagem_custom") or "").strip() or None
+    ag_id   = criar_agendamento(nome, h_ini, h_fim, limite, dias, custom)
+    return jsonify({"id": ag_id, "ok": True})
+
+
+@app.route("/api/agendamentos/<int:ag_id>", methods=["PUT"])
+def api_agendamentos_put(ag_id):
+    dados = request.get_json(silent=True) or {}
+    ativar_agendamento(ag_id, dados.get("ativo", True))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/agendamentos/<int:ag_id>", methods=["DELETE"])
+def api_agendamentos_delete(ag_id):
+    deletar_agendamento(ag_id)
+    return jsonify({"ok": True})
+
+
+# ── Funil de conversão ────────────────────────────────────────────────────────
+@app.route("/api/dashboard/funil")
+def api_dashboard_funil():
+    return jsonify(get_funil_conversao())
+
+
 # ── Blacklist ──────────────────────────────────────────────────────────────────
 @app.route("/api/blacklist", methods=["GET"])
 def api_blacklist_get():
@@ -964,6 +1089,90 @@ def api_blacklist_post():
 def api_blacklist_delete(bid):
     remover_blacklist(bid)
     return jsonify({"ok": True})
+
+
+# ── Threads de background ─────────────────────────────────────────────────────
+
+def _keepalive():
+    import time as _t, requests as _req
+    _t.sleep(30)  # aguarda app estabilizar
+    while True:
+        try:
+            base, instance, api_key = _wa_config()
+            if base and instance and api_key:
+                _req.get(
+                    f"{base}/instance/connectionState/{instance}",
+                    headers={"apikey": api_key},
+                    timeout=10,
+                )
+                logger.info("[keepalive] ping Evolution API OK")
+        except Exception as e:
+            logger.warning("[keepalive] %s", e)
+        _t.sleep(300)  # a cada 5 min
+
+
+def _verificar_agendamentos():
+    from datetime import datetime as _dt
+    from database.db import get_connection
+
+    agora      = _dt.now()
+    dia_semana = agora.weekday() + 1  # 1=Seg ... 7=Dom
+
+    enviados_hoje = contagem_enviadas_hoje()
+
+    for ag in listar_agendamentos():
+        if not ag.get("ativo"):
+            continue
+        if not (ag["hora_inicio"] <= agora.hour < ag["hora_fim"]):
+            continue
+        dias = [int(d.strip()) for d in str(ag.get("dias_semana", "1,2,3,4,5")).split(",")
+                if d.strip().isdigit()]
+        if dia_semana not in dias:
+            continue
+
+        with _lock:
+            if _estado["enviando"]:
+                continue
+
+        restantes = ag["limite_dia"] - enviados_hoje
+        if restantes <= 0:
+            continue
+
+        conn = get_connection()
+        c    = conn.cursor()
+        c.execute("""
+            SELECT * FROM empresas
+            WHERE mensagem_enviada=0 AND tem_site=0
+              AND telefone IS NOT NULL AND telefone != ''
+            ORDER BY score DESC, data_prospeccao DESC
+            LIMIT %s
+        """, (restantes,))
+        cols    = [d[0] for d in c.description]
+        empresas = [dict(zip(cols, r)) for r in c.fetchall()]
+        conn.close()
+
+        if not empresas:
+            continue
+
+        atualizar_ultima_execucao(ag["id"], enviados_hoje + len(empresas))
+        logger.info("[agendador] Agendamento '%s': %d empresas para disparar", ag["nome"], len(empresas))
+        threading.Thread(target=_executar_envio, args=(empresas,), daemon=True).start()
+        break  # uma rodada por minuto
+
+
+def _agendador():
+    import time as _t
+    _t.sleep(60)
+    while True:
+        try:
+            _verificar_agendamentos()
+        except Exception as e:
+            logger.error("[agendador] %s", e)
+        _t.sleep(60)
+
+
+threading.Thread(target=_keepalive, daemon=True).start()
+threading.Thread(target=_agendador, daemon=True).start()
 
 
 # ── Inicialização ─────────────────────────────────────────────────────────────

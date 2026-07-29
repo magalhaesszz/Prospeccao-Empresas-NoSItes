@@ -157,4 +157,42 @@ function esc(t) {
   return d.innerHTML;
 }
 
-document.addEventListener("DOMContentLoaded", carregarDashboard);
+async function carregarFunilConversao() {
+  const container = document.getElementById("funil-container");
+  if (!container) return;
+  try {
+    const funil = await fetch("/api/dashboard/funil").then(r => r.json());
+    const etapas = [
+      { label: "Prospectadas",  val: funil.prospectadas, cor: "#6366F1" },
+      { label: "Sem Site",      val: funil.sem_site,     cor: "#2563EB" },
+      { label: "Disparadas",    val: funil.disparadas,   cor: "#F59E0B" },
+      { label: "Responderam",   val: funil.responderam,  cor: "#8B5CF6" },
+      { label: "Interessadas",  val: funil.interessadas, cor: "#10B981" },
+      { label: "Fechadas",      val: funil.fechadas,     cor: "#E11D48" },
+    ];
+    const max = Math.max(...etapas.map(e => e.val), 1);
+    container.innerHTML = etapas.map((e, i) => {
+      const pct   = Math.max(4, Math.round((e.val / max) * 100));
+      const conv  = i > 0 && etapas[i-1].val > 0
+        ? ` <span style="font-size:.7rem;color:var(--muted)">(${Math.round(e.val/etapas[i-1].val*100)}% da etapa anterior)</span>`
+        : "";
+      return `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <span style="font-size:.82rem;font-weight:600;color:var(--text)">${e.label}${conv}</span>
+            <span style="font-size:.88rem;font-weight:700;color:${e.cor}">${e.val.toLocaleString("pt-BR")}</span>
+          </div>
+          <div style="background:var(--surface-2);border-radius:6px;overflow:hidden;height:10px">
+            <div style="width:${pct}%;height:100%;background:${e.cor};border-radius:6px;transition:width .4s"></div>
+          </div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    console.error("Funil:", e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  carregarDashboard();
+  carregarFunilConversao();
+});

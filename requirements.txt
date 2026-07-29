@@ -7,3 +7,4 @@ beautifulsoup4
 openpyxl
 phonenumbers
 psycopg2-binary
+anthropic

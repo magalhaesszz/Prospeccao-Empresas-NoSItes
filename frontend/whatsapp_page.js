@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   atualizarStatus();
   carregarStats();
   carregarPendentes();
-  // Poll status a cada 8s enquanto na página
+  carregarAgendamentos();
   _pollTimer = setInterval(() => atualizarStatus(true), 8000);
 });
 
@@ -661,4 +661,139 @@ function mostrarToast(msg, tipo = "info") {
   t.className   = "toast " + tipo;
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
+}
+
+// ── IA — Gerar mensagem ───────────────────────────────────────────────────────
+
+async function gerarMensagemIA() {
+  const nome      = (document.getElementById("ia-nome")?.value      || "").trim();
+  const categoria = (document.getElementById("ia-categoria")?.value || "").trim();
+  const cidade    = (document.getElementById("ia-cidade")?.value    || "").trim();
+  const btn       = document.getElementById("btn-ia-gerar");
+  const resultado = document.getElementById("ia-resultado");
+  const erroEl    = document.getElementById("ia-erro");
+
+  if (!nome) { mostrarToast("Informe o nome da empresa.", "error"); return; }
+
+  btn.disabled    = true;
+  btn.textContent = "Gerando...";
+  if (resultado) resultado.style.display = "none";
+  if (erroEl)    erroEl.style.display    = "none";
+
+  try {
+    const r = await fetch("/api/whatsapp/gerar-mensagem", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ nome, categoria, cidade }),
+    });
+    const d = await r.json();
+    if (d.erro) throw new Error(d.erro);
+
+    const ta = document.getElementById("ia-mensagem-gerada");
+    if (ta) ta.value = d.mensagem;
+    if (resultado) resultado.style.display = "block";
+    mostrarToast("Mensagem gerada!", "success");
+  } catch (e) {
+    if (erroEl) { erroEl.textContent = "Erro: " + e.message; erroEl.style.display = "block"; }
+    mostrarToast("Erro ao gerar mensagem.", "error");
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Gerar";
+  }
+}
+
+function copiarMensagemIA() {
+  const ta = document.getElementById("ia-mensagem-gerada");
+  if (!ta) return;
+  navigator.clipboard.writeText(ta.value).then(() => mostrarToast("Copiado!", "success"));
+}
+
+function usarMensagemIA() {
+  const ta  = document.getElementById("ia-mensagem-gerada");
+  const inp = document.getElementById("teste-mensagem");
+  if (!ta || !inp) return;
+  inp.value = ta.value;
+  inp.scrollIntoView({ behavior: "smooth", block: "center" });
+  mostrarToast("Mensagem copiada para o campo de teste.", "info");
+}
+
+// ── Agendamentos ──────────────────────────────────────────────────────────────
+
+async function carregarAgendamentos() {
+  const lista = document.getElementById("lista-agendamentos");
+  if (!lista) return;
+  try {
+    const r = await fetch("/api/agendamentos");
+    const dados = await r.json();
+    if (!dados.length) {
+      lista.innerHTML = '<p class="vazio" style="padding:12px 0">Nenhum agendamento criado.</p>';
+      return;
+    }
+    const DIAS = ["", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+    lista.innerHTML = dados.map(ag => {
+      const diasStr = String(ag.dias_semana || "1,2,3,4,5").split(",")
+        .map(d => DIAS[parseInt(d)] || d).join(", ");
+      const ultima  = ag.ultima_execucao
+        ? new Date(ag.ultima_execucao).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
+        : "Nunca";
+      const ativo   = ag.ativo === 1 || ag.ativo === true;
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+          <div style="flex:1;min-width:150px">
+            <strong style="font-size:.9rem">${esc(ag.nome)}</strong>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:2px">
+              ${ag.hora_inicio}h–${ag.hora_fim}h &bull; ${diasStr} &bull; até ${ag.limite_dia}/dia
+            </div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:1px">Última execução: ${ultima}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="badge" style="${ativo ? "background:#D1FAE5;color:#065F46" : "background:var(--surface-2);color:var(--muted)"}">${ativo ? "Ativo" : "Pausado"}</span>
+            <button class="btn btn-sm btn-secondary" onclick="toggleAgendamento(${ag.id}, ${!ativo})">
+              ${ativo ? "Pausar" : "Ativar"}
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="deletarAgendamento(${ag.id})">Excluir</button>
+          </div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    lista.innerHTML = `<p style="color:var(--brand)">Erro ao carregar: ${esc(e.message)}</p>`;
+  }
+}
+
+async function criarAgendamento() {
+  const nome   = (document.getElementById("ag-nome")?.value   || "").trim() || "Agendamento";
+  const hIni   = parseInt(document.getElementById("ag-h-ini")?.value  || "9");
+  const hFim   = parseInt(document.getElementById("ag-h-fim")?.value  || "18");
+  const limite = parseInt(document.getElementById("ag-limite")?.value || "20");
+  const dias   = (document.getElementById("ag-dias")?.value   || "1,2,3,4,5").trim();
+
+  try {
+    const r = await fetch("/api/agendamentos", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ nome, hora_inicio: hIni, hora_fim: hFim, limite_dia: limite, dias_semana: dias }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.erro || "Falha");
+    mostrarToast("Agendamento criado!", "success");
+    carregarAgendamentos();
+  } catch (e) {
+    mostrarToast("Erro: " + e.message, "error");
+  }
+}
+
+async function toggleAgendamento(id, ativo) {
+  await fetch(`/api/agendamentos/${id}`, {
+    method:  "PUT",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ ativo }),
+  });
+  carregarAgendamentos();
+}
+
+async function deletarAgendamento(id) {
+  if (!confirm("Excluir este agendamento?")) return;
+  await fetch(`/api/agendamentos/${id}`, { method: "DELETE" });
+  mostrarToast("Agendamento excluído.", "info");
+  carregarAgendamentos();
 }

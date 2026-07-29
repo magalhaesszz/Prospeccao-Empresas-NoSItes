@@ -26,6 +26,8 @@ CONFIG = {
     "webhook_whatsapp":   os.environ.get("WEBHOOK_WHATSAPP",   ""),
     "evolution_instance": os.environ.get("EVOLUTION_INSTANCE", "prospector"),
     "evolution_api_key":  os.environ.get("EVOLUTION_API_KEY",  ""),
+    # IA — Anthropic (opcional)
+    "anthropic_api_key":  os.environ.get("ANTHROPIC_API_KEY",  ""),
 
     # ── Score ────────────────────────────────────────────────────────────────
     "categorias_alto_valor": [
