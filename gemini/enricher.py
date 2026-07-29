@@ -8,7 +8,7 @@ import secrets, logging, re
 logger = logging.getLogger(__name__)
 
 
-def _model(api_key, name="gemini-2.5-flash-lite"):
+def _model(api_key, name="gemini-1.5-flash"):
     import google.generativeai as genai
     genai.configure(api_key=api_key)
     return genai.GenerativeModel(name)
