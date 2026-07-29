@@ -485,23 +485,38 @@ def api_wa_qrcode():
     if not (webhook and instance and api_key):
         return jsonify({"erro": "Evolution API não configurada."})
 
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    base_url = webhook.rstrip("/")
+
+    try:
+        # Garante que a instância existe
+        req.post(
+            f"{base_url}/instance/create",
+            headers=headers,
+            json={"instanceName": instance, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
+            timeout=15,
+        )
+    except Exception:
+        pass  # ignora erro caso já exista
+
     try:
         r = req.get(
-            f"{webhook.rstrip('/')}/instance/connect/{instance}",
+            f"{base_url}/instance/connect/{instance}",
             headers={"apikey": api_key},
             timeout=15,
         )
         data = r.json()
         # Já conectado
-        if data.get("instance", {}).get("state") in ("open", "connected"):
+        state = (data.get("instance", {}).get("state") or data.get("state") or "").lower()
+        if state in ("open", "connected"):
             return jsonify({"conectado": True})
         # Retorna base64
-        base64 = data.get("base64") or data.get("qrcode", {}).get("base64")
-        if base64:
-            if not base64.startswith("data:"):
-                base64 = "data:image/png;base64," + base64
-            return jsonify({"base64": base64})
-        return jsonify({"erro": "QR não disponível. Instância pode já estar conectada."})
+        b64 = data.get("base64") or data.get("qrcode", {}).get("base64") or data.get("code")
+        if b64:
+            if not b64.startswith("data:"):
+                b64 = "data:image/png;base64," + b64
+            return jsonify({"base64": b64})
+        return jsonify({"erro": f"QR não disponível. Resposta: {str(data)[:200]}"})
     except Exception as e:
         return jsonify({"erro": str(e)})
 
