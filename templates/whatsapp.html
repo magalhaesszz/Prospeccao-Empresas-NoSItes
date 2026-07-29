@@ -129,7 +129,9 @@
         <div class="wa-chat-conteudo hidden" id="chat-conteudo">
           <div class="wa-chat-cabecalho" id="chat-cabecalho"></div>
           <div class="wa-chat-mensagens" id="chat-mensagens"></div>
+          <div class="wa-emoji-picker hidden" id="emoji-picker"></div>
           <div class="wa-chat-input">
+            <button class="wa-emoji-btn" onclick="toggleEmoji()" title="Emoji">😊</button>
             <input type="text" id="chat-resposta" placeholder="Digite uma mensagem..." onkeydown="if(event.key==='Enter')responderConversa()"/>
             <button class="wa-chat-enviar" onclick="responderConversa()" title="Enviar">➤</button>
           </div>
@@ -165,5 +167,9 @@
 
 </div>
 {% endblock %}
+
+<div class="wa-lightbox hidden" id="wa-lightbox" onclick="fecharLightbox()">
+  <img id="wa-lightbox-img" src="" alt=""/>
+</div>
 
 {% block scripts %}<script src="/whatsapp_page.js"></script>{% endblock %}

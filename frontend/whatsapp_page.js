@@ -343,7 +343,7 @@ function renderConversas(convs) {
   }
   lista.innerHTML = convs.map((c, i) => `
     <div class="wa-chat-item ${_chatAtual && _chatAtual.jid === c.jid ? "ativo" : ""}" onclick="abrirConversaIdx(${i})">
-      <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}" onerror="this.parentNode.textContent='👤'"/>` : "👤"}</div>
+      <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}" onerror="this.parentNode.innerHTML=iniciais('${esc(c.nome)}')"/>` : iniciais(c.nome)}</div>
       <div class="wa-chat-item-info">
         <div class="wa-chat-item-linha1">
           <span class="wa-chat-item-nome">${esc(c.nome)}</span>
@@ -427,13 +427,101 @@ function renderMensagens(msgs) {
     html += `
       <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}">
         <div class="wa-msg-bolha">
-          ${esc(m.texto)}
+          ${renderConteudoMsg(m)}
           <span class="wa-msg-hora">${fmtHora(m.timestamp)}${m.de_mim ? " ✓✓" : ""}</span>
         </div>
       </div>`;
   });
   return html;
 }
+
+function renderConteudoMsg(m) {
+  const tipo = m.tipo || "texto";
+  const url  = m.url  || "";
+  const txt  = esc(m.texto || "");
+
+  if (tipo === "imagem" && url) {
+    return `<img class="wa-msg-img" src="${esc(url)}" loading="lazy"
+              onclick="abrirLightbox('${esc(url)}')" alt="Imagem"/>
+            ${txt ? `<div style="margin-top:4px">${txt}</div>` : ""}`;
+  }
+  if (tipo === "figurinha" && url) {
+    return `<img class="wa-msg-figurinha" src="${esc(url)}" loading="lazy" alt="Figurinha"/>`;
+  }
+  if (tipo === "audio" && url) {
+    return `<audio class="wa-msg-audio" controls src="${esc(url)}" preload="none"></audio>`;
+  }
+  if (tipo === "video" && url) {
+    return `<video class="wa-msg-video" controls src="${esc(url)}" preload="none"></video>`;
+  }
+  if (tipo === "documento" && url) {
+    return `<a class="wa-msg-doc" href="${esc(url)}" target="_blank" rel="noopener">
+              📄 ${txt || "Documento"}
+            </a>`;
+  }
+  if (tipo === "localizacao") {
+    return `<span>${txt}</span>`;
+  }
+  // texto e fallback
+  return txt || "[mensagem]";
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function abrirLightbox(url) {
+  document.getElementById("wa-lightbox-img").src = url;
+  document.getElementById("wa-lightbox").classList.remove("hidden");
+}
+function fecharLightbox() {
+  document.getElementById("wa-lightbox").classList.add("hidden");
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") fecharLightbox();
+});
+
+// ── Emoji picker ──────────────────────────────────────────────────────────────
+const EMOJIS = [
+  "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍",
+  "🥰","😘","😗","😙","😚","😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🥸",
+  "😏","😒","😞","😔","😟","😕","🙁","☹️","😣","😖","😫","😩","🥺","😢","😭",
+  "😤","😠","😡","🤬","🤯","😳","🥵","🥶","😱","😨","😰","😥","😓","🤗","🤔",
+  "🤭","🤫","🤥","😶","😑","😬","🙄","😯","😦","😧","😮","😲","🥱","😴","🤤",
+  "😪","😵","🤐","🥴","🤢","🤮","🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹",
+  "💀","☠️","💩","🤡","👻","👽","👾","🤖","😺","😸","😹","😻","😼","😽","🙀",
+  "👍","👎","👌","✌️","🤞","🤟","🤘","🤙","👋","🤚","🖐️","✋","🖖","👏","🙌",
+  "🤲","🤜","🤛","✊","👊","🤛","💪","🦾","🖕","☝️","👆","👇","👈","👉","🤳",
+  "❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗",
+  "💖","💘","💝","💟","♥️","🔥","✨","⭐","🌟","💫","❄️","🎉","🎊","🎈","🏆",
+  "🙏","💯","✅","❌","⚡","🚀","💡","💬","👀","🎯","💼","📱","💻","🌎","🏠",
+];
+
+function toggleEmoji() {
+  const picker = document.getElementById("emoji-picker");
+  if (picker.classList.contains("hidden")) {
+    if (!picker.innerHTML) {
+      picker.innerHTML = EMOJIS.map(e =>
+        `<span onclick="inserirEmoji('${e}')">${e}</span>`).join("");
+    }
+    picker.classList.remove("hidden");
+  } else {
+    picker.classList.add("hidden");
+  }
+}
+
+function inserirEmoji(e) {
+  const inp = document.getElementById("chat-resposta");
+  const pos = inp.selectionStart || inp.value.length;
+  inp.value = inp.value.slice(0, pos) + e + inp.value.slice(pos);
+  inp.focus();
+  inp.setSelectionRange(pos + e.length, pos + e.length);
+}
+
+// Fecha picker ao clicar fora
+document.addEventListener("click", e => {
+  const picker = document.getElementById("emoji-picker");
+  if (picker && !picker.contains(e.target) && !e.target.classList.contains("wa-emoji-btn")) {
+    picker.classList.add("hidden");
+  }
+});
 
 async function responderConversa() {
   if (!_chatAtual) return;
@@ -461,6 +549,11 @@ async function responderConversa() {
   } catch (e) {
     mostrarToast("Erro de rede.", "error");
   }
+}
+
+function iniciais(nome) {
+  const parts = (nome || "?").trim().split(/\s+/);
+  return (parts[0][0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
 }
 
 // Timestamp Evolution vem em segundos (unix) ou ms — normaliza

@@ -671,24 +671,47 @@ def _mapa_nomes_empresas():
     return mapa
 
 
-def _texto_da_msg(conteudo):
-    """Extrai texto legível de qualquer tipo de mensagem Evolution/Baileys."""
+def _parse_msg(conteudo):
+    """
+    Analisa o conteúdo de uma mensagem Evolution/Baileys.
+    Retorna dict: {tipo, texto, url, mimetype}
+    tipos: texto | imagem | audio | video | figurinha | documento | localizacao | contato
+    """
     if not isinstance(conteudo, dict):
-        return ""
+        return {"tipo": "texto", "texto": "", "url": "", "mimetype": ""}
+
     if conteudo.get("conversation"):
-        return conteudo["conversation"]
+        return {"tipo": "texto", "texto": conteudo["conversation"], "url": "", "mimetype": ""}
     if conteudo.get("extendedTextMessage", {}).get("text"):
-        return conteudo["extendedTextMessage"]["text"]
-    for tipo, rotulo in [
-        ("imageMessage", "🖼️ Imagem"), ("videoMessage", "🎥 Vídeo"),
-        ("audioMessage", "🎵 Áudio"), ("documentMessage", "📄 Documento"),
-        ("stickerMessage", "🌟 Figurinha"), ("locationMessage", "📍 Localização"),
-        ("contactMessage", "👤 Contato"),
-    ]:
-        if conteudo.get(tipo):
-            legenda = conteudo[tipo].get("caption") if isinstance(conteudo[tipo], dict) else ""
-            return f"{rotulo}" + (f": {legenda}" if legenda else "")
-    return "[mensagem]"
+        return {"tipo": "texto", "texto": conteudo["extendedTextMessage"]["text"], "url": "", "mimetype": ""}
+
+    mapa = {
+        "imageMessage":    "imagem",
+        "videoMessage":    "video",
+        "audioMessage":    "audio",
+        "pttMessage":      "audio",   # push-to-talk (áudio gravado)
+        "stickerMessage":  "figurinha",
+        "documentMessage": "documento",
+        "locationMessage": "localizacao",
+        "contactMessage":  "contato",
+    }
+    for chave, tipo in mapa.items():
+        sub = conteudo.get(chave)
+        if sub and isinstance(sub, dict):
+            url      = sub.get("url") or sub.get("mediaUrl") or sub.get("jpegThumbnail") or ""
+            texto    = sub.get("caption") or sub.get("fileName") or sub.get("name") or ""
+            mimetype = sub.get("mimetype") or ""
+            # Para localização
+            if tipo == "localizacao":
+                lat = sub.get("degreesLatitude", "")
+                lon = sub.get("degreesLongitude", "")
+                texto = f"📍 {sub.get('name','Localização')} ({lat},{lon})"
+            # Para contato
+            if tipo == "contato":
+                texto = sub.get("displayName") or "Contato"
+            return {"tipo": tipo, "texto": texto, "url": url, "mimetype": mimetype}
+
+    return {"tipo": "texto", "texto": "[mensagem não suportada]", "url": "", "mimetype": ""}
 
 
 @app.route("/api/whatsapp/conversas")
@@ -742,7 +765,8 @@ def api_wa_conversas():
             ultima = ""
             lm = ch.get("lastMessage")
             if isinstance(lm, dict):
-                ultima = _texto_da_msg(lm.get("message", {}))
+                p = _parse_msg(lm.get("message", {}))
+                ultima = p["texto"] or p["tipo"]
 
             conversas.append({
                 "jid":        jid,
@@ -796,10 +820,13 @@ def api_wa_mensagens():
         mensagens = []
         for m in msgs:
             key = m.get("key", {})
-            texto = _texto_da_msg(m.get("message", {}) or {})
+            p = _parse_msg(m.get("message", {}) or {})
             mensagens.append({
                 "de_mim":    bool(key.get("fromMe")),
-                "texto":     texto or "",
+                "tipo":      p["tipo"],
+                "texto":     p["texto"],
+                "url":       p["url"],
+                "mimetype":  p["mimetype"],
                 "timestamp": m.get("messageTimestamp") or 0,
                 "status":    m.get("status") or "",
             })
