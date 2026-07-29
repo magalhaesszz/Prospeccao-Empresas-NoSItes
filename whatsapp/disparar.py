@@ -52,7 +52,11 @@ def _enviar_via_webhook(numero, mensagem):
         numero_limpo = numero.lstrip("+").replace(" ", "").replace("-", "")
         url     = f"{base_url.rstrip('/')}/message/sendText/{instance}"
         headers = {"apikey": api_key, "Content-Type": "application/json"}
-        payload = {"number": numero_limpo, "text": mensagem}
+        payload = {
+            "number": numero_limpo,
+            "options": {"delay": 1200, "presence": "composing"},
+            "textMessage": {"text": mensagem},
+        }
     else:
         # Webhook genérico (Z-API ou customizado)
         url     = base_url
