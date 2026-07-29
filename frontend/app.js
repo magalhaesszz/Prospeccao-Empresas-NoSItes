@@ -55,8 +55,14 @@ function processarEvento(ev) {
       const reclass = ev.reclassificadas ? ` · ${ev.reclassificadas} tinham site falso` : "";
       setProgresso(`Concluído! ${ev.total} empresas (${ev.sem_site} sem site${reclass}).`, ev.total, ev.total, "", 100);
       carregarHistorico();
-      // Guarda os prontos pra auto-seleção após a tabela carregar
       APP._prontosDisparo = ev.prontos_disparo || [];
+      // Mostra botão Gemini se houver empresas
+      if (ev.total > 0) {
+        mostrar("secao-gemini-enriq");
+        document.getElementById("gemini-txt").textContent = `${ev.total} empresas prontas para enriquecimento com IA`;
+        document.getElementById("gemini-cnt").textContent = "";
+        document.getElementById("gemini-barra").style.width = "0%";
+      }
       // busca em lote: dispara próxima
       if (APP.filaBuscas.length > 0) {
         setTimeout(_executarProximaBuscaLote, 800);
@@ -69,6 +75,7 @@ function processarEvento(ev) {
       mostrar("secao-progresso");
       esconder("secao-resultados");
       esconder("secao-acoes");
+      esconder("secao-gemini-enriq");
       break;
 
     case "envio_inicio":
@@ -92,6 +99,23 @@ function processarEvento(ev) {
       mostrarToast("❌ Erro: " + ev.mensagem, "error");
       document.getElementById("btn-buscar").disabled = false;
       esconder("secao-progresso");
+      break;
+
+    case "enriquecimento_inicio":
+      mostrarProgressoGemini(0, ev.total, "Iniciando enriquecimento com Gemini...");
+      break;
+
+    case "enriquecimento_progresso":
+      mostrarProgressoGemini(ev.atual, ev.total, ev.empresa);
+      break;
+
+    case "enriquecimento_fim":
+      finalizarProgressoGemini(ev.total);
+      if (APP.buscaId) verBusca(APP.buscaId);
+      break;
+
+    case "prospect_respondeu":
+      mostrarToast(`Resposta recebida: ${ev.nome || ev.numero}`, "success");
       break;
   }
 
@@ -424,6 +448,59 @@ function mostrarToast(msg, tipo = "info") {
   t.className   = "toast " + tipo;
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
+}
+
+// ── Gemini Enrichment ─────────────────────────────────────────────────────────
+
+function mostrarProgressoGemini(atual, total, empresa) {
+  const secao = document.getElementById("secao-gemini-enriq");
+  if (!secao) return;
+  secao.classList.remove("hidden");
+  const pct = total > 0 ? Math.round((atual / total) * 100) : 0;
+  const el  = secao.querySelector("#gemini-barra");
+  const txt = secao.querySelector("#gemini-txt");
+  const cnt = secao.querySelector("#gemini-cnt");
+  if (el)  el.style.width = pct + "%";
+  if (txt) txt.textContent = empresa ? `Gerando para: ${empresa}` : "Processando...";
+  if (cnt) cnt.textContent = `${atual} / ${total}`;
+}
+
+function finalizarProgressoGemini(total) {
+  const secao = document.getElementById("secao-gemini-enriq");
+  const txt   = secao?.querySelector("#gemini-txt");
+  const barra = secao?.querySelector("#gemini-barra");
+  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com Gemini.`;
+  if (barra) barra.style.width = "100%";
+  mostrarToast(`Gemini: ${total} mensagens + sites gerados!`, "success");
+
+  // Atualiza botão
+  const btn = document.getElementById("btn-gemini-enriq");
+  if (btn) {
+    btn.disabled    = false;
+    btn.textContent = "Enriquecer com Gemini";
+  }
+}
+
+async function iniciarEnriquecimento() {
+  const btn = document.getElementById("btn-gemini-enriq");
+  if (btn) { btn.disabled = true; btn.textContent = "Processando..."; }
+
+  try {
+    const payload = {};
+    if (APP.buscaId) payload.busca_id = APP.buscaId;
+
+    const r = await fetch("/api/gemini/enriquecer", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok || d.erro) throw new Error(d.erro || "Erro desconhecido");
+    mostrarToast(`Gemini: processando ${d.total} empresa(s)...`, "info");
+  } catch (e) {
+    mostrarToast("Erro Gemini: " + e.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com Gemini"; }
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

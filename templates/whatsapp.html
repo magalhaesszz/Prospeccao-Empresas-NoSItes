@@ -113,44 +113,6 @@
     <p id="teste-resultado" style="margin-top:10px;font-size:.875rem"></p>
   </div>
 
-  <!-- IA — Gerar mensagem personalizada -->
-  <div class="card" id="card-ia">
-    <h2 class="card-title">
-      <svg class="icon-card" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="M12 6v6l4 2"/></svg>
-      Mensagem Personalizada com IA
-    </h2>
-    <p style="color:var(--muted);font-size:.875rem;margin-bottom:14px">
-      Gera uma mensagem única para cada empresa usando Claude AI. Requer <code>ANTHROPIC_API_KEY</code> no Railway.
-    </p>
-    <div class="form-row" style="flex-wrap:wrap;gap:10px;margin-bottom:12px">
-      <div class="form-group" style="flex:2;min-width:180px">
-        <label>Nome da empresa</label>
-        <input id="ia-nome" type="text" placeholder="Ex: Barbearia do João"/>
-      </div>
-      <div class="form-group" style="flex:1;min-width:140px">
-        <label>Segmento (opcional)</label>
-        <input id="ia-categoria" type="text" placeholder="Ex: Barbearia"/>
-      </div>
-      <div class="form-group" style="flex:1;min-width:120px">
-        <label>Cidade (opcional)</label>
-        <input id="ia-cidade" type="text" placeholder="Ex: Goiânia"/>
-      </div>
-      <button class="btn btn-primary" onclick="gerarMensagemIA()" id="btn-ia-gerar" style="align-self:flex-end">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-        Gerar
-      </button>
-    </div>
-    <div id="ia-resultado" style="display:none">
-      <label style="font-size:.8rem;color:var(--muted);margin-bottom:4px;display:block">Mensagem gerada:</label>
-      <textarea id="ia-mensagem-gerada" rows="7" class="textarea-lote" style="font-size:.875rem"></textarea>
-      <div style="margin-top:8px;display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="copiarMensagemIA()">Copiar</button>
-        <button class="btn btn-whatsapp btn-sm" onclick="usarMensagemIA()">Usar como teste</button>
-      </div>
-    </div>
-    <p id="ia-erro" style="color:var(--brand);font-size:.85rem;margin-top:8px;display:none"></p>
-  </div>
-
   <!-- Conversas — estilo WhatsApp Web -->
   <div class="card wa-chat-card" id="card-conversas">
     <div class="wa-chat">

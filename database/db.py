@@ -89,13 +89,18 @@ def inicializar_banco():
     """)
 
     for col, defn in [
-        ("email",            "TEXT"),
-        ("score",            "INTEGER DEFAULT 0"),
-        ("status",           "TEXT DEFAULT 'novo'"),
-        ("tentativas_envio", "INTEGER DEFAULT 0"),
-        ("erro_envio",       "TEXT"),
-        ("ultimo_contato",   "TIMESTAMP"),
-        ("template_usado",   "INTEGER"),
+        ("email",              "TEXT"),
+        ("score",              "INTEGER DEFAULT 0"),
+        ("status",             "TEXT DEFAULT 'novo'"),
+        ("tentativas_envio",   "INTEGER DEFAULT 0"),
+        ("erro_envio",         "TEXT"),
+        ("ultimo_contato",     "TIMESTAMP"),
+        ("template_usado",     "INTEGER"),
+        ("descricao_google",   "TEXT"),
+        ("nota",               "REAL"),
+        ("avaliacoes",         "INTEGER DEFAULT 0"),
+        ("gemini_mensagem",    "TEXT"),
+        ("gemini_pagina_slug", "TEXT"),
     ]:
         c.execute(f"ALTER TABLE empresas ADD COLUMN IF NOT EXISTS {col} {defn}")
 
@@ -217,8 +222,9 @@ def salvar_empresa(empresa, busca_id):
 
     c.execute("""
         INSERT INTO empresas
-            (busca_id, nome, telefone, endereco, email, tem_site, site_url, score, status)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo')
+            (busca_id, nome, telefone, endereco, email, tem_site, site_url, score, status,
+             descricao_google, nota, avaliacoes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo', %s, %s, %s)
         RETURNING id
     """, (
         busca_id,
@@ -229,6 +235,9 @@ def salvar_empresa(empresa, busca_id):
         1 if empresa.get("tem_site") else 0,
         empresa.get("site_url", ""),
         empresa.get("score", 0),
+        empresa.get("descricao_google"),
+        empresa.get("nota"),
+        empresa.get("avaliacoes") or 0,
     ))
     emp_id = c.fetchone()[0]
     conn.commit()

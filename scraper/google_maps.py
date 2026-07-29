@@ -262,13 +262,67 @@ def _extrair_item(driver, indice):
     except NoSuchElementException:
         pass
 
+    # Categoria/descrição do Google Maps
+    descricao_google = None
+    for sel in ["button.DkEaL", ".DkEaL", "button[jsaction*='category']", "span.mgr77e"]:
+        try:
+            el = driver.find_element(By.CSS_SELECTOR, sel)
+            txt = el.text.strip()
+            if txt:
+                descricao_google = txt
+                break
+        except Exception:
+            pass
+
+    # Nota (estrelas)
+    nota = None
+    try:
+        # aria-label="4,8 estrelas" ou "4.8 stars"
+        for sel in ['span[aria-label*="estrela"]', 'span[aria-label*="star"]',
+                    'div[aria-label*="estrela"]', 'span.MW4etd', 'span.ceNzKf']:
+            try:
+                el = driver.find_element(By.CSS_SELECTOR, sel)
+                label = el.get_attribute("aria-label") or el.text or ""
+                m = re.search(r'(\d)[,\.](\d)', label)
+                if m:
+                    nota = float(f"{m.group(1)}.{m.group(2)}")
+                    break
+                m2 = re.search(r'(\d+[,\.]\d+)', label)
+                if m2:
+                    nota = float(m2.group(1).replace(',', '.'))
+                    break
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Avaliações (número de reviews)
+    avaliacoes = None
+    try:
+        for sel in ['span[aria-label*="avalia"]', 'button[aria-label*="avalia"]',
+                    'span.UY7F9', 'span.e4rVHe']:
+            try:
+                el = driver.find_element(By.CSS_SELECTOR, sel)
+                label = el.get_attribute("aria-label") or el.text or ""
+                m = re.search(r'(\d[\d\.]+)', label.replace('.', ''))
+                if m:
+                    avaliacoes = int(m.group(1))
+                    break
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     return {
-        "nome":     nome,
-        "telefone": telefone,
-        "endereco": endereco or "",
-        "email":    email,
-        "tem_site": tem_site,
-        "site_url": site_url or "",
+        "nome":             nome,
+        "telefone":         telefone,
+        "endereco":         endereco or "",
+        "email":            email,
+        "tem_site":         tem_site,
+        "site_url":         site_url or "",
+        "descricao_google": descricao_google,
+        "nota":             nota,
+        "avaliacoes":       avaliacoes,
     }
 
 

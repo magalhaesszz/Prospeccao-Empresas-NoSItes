@@ -45,6 +45,32 @@
     <p id="txt-empresa" class="empresa-atual"></p>
   </section>
 
+  <!-- Enriquecimento Gemini -->
+  <section id="secao-gemini-enriq" class="card hidden" style="border:1px solid rgba(66,133,244,.3);background:linear-gradient(135deg,rgba(66,133,244,.05),rgba(52,168,83,.04))">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4285F4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <div>
+          <strong style="font-size:.9rem">Gemini AI</strong>
+          <span style="font-size:.65rem;background:linear-gradient(90deg,#4285F4,#34A853);color:#fff;padding:2px 5px;border-radius:4px;margin-left:5px">PRO</span>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:1px">Gera mensagem personalizada + site preview para cada empresa</div>
+        </div>
+      </div>
+      <button id="btn-gemini-enriq" class="btn btn-primary" onclick="iniciarEnriquecimento()"
+              style="background:linear-gradient(135deg,#4285F4,#34A853);border:none;box-shadow:0 2px 10px rgba(66,133,244,.3)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Enriquecer com Gemini
+      </button>
+    </div>
+    <div style="background:rgba(66,133,244,.08);border-radius:6px;height:8px;overflow:hidden;margin-bottom:8px">
+      <div id="gemini-barra" style="height:100%;width:0%;background:linear-gradient(90deg,#4285F4,#34A853);border-radius:6px;transition:width .3s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)">
+      <span id="gemini-txt">Aguardando...</span>
+      <span id="gemini-cnt"></span>
+    </div>
+  </section>
+
   <!-- Ações -->
   <section id="secao-acoes" class="card hidden">
     <div class="acoes-row">

@@ -98,9 +98,10 @@ def _enviar_via_pywhatkit(numero, mensagem):
     return True
 
 
-def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None):
+def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None, mensagem_custom=None):
     """
     Ponto de entrada para envio individual.
+    mensagem_custom: se fornecida (ex: Gemini), usa diretamente (ignora template).
     Retorna (sucesso: bool, template_id_usado: int|None)
     """
     if not _numero_valido(numero):
@@ -117,7 +118,11 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None)
         registrar_erro_envio(empresa_id, "Fora do horário comercial")
         return False, None
 
-    mensagem, tid_usado = obter_mensagem(nome_empresa, template_id)
+    if mensagem_custom:
+        mensagem  = mensagem_custom
+        tid_usado = None
+    else:
+        mensagem, tid_usado = obter_mensagem(nome_empresa, template_id)
 
     try:
         webhook = CONFIG.get("webhook_whatsapp", "").strip()
@@ -126,7 +131,8 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None)
         else:
             _enviar_via_pywhatkit(numero, mensagem)
 
-        logger.info("✓ Enviado para %s (%s)", nome_empresa, numero)
+        logger.info("✓ Enviado para %s (%s)%s", nome_empresa, numero,
+                    " [Gemini]" if mensagem_custom else "")
         return True, tid_usado
 
     except Exception as exc:
@@ -145,12 +151,13 @@ def disparar_lote(empresas, callback_progresso=None):
     total = len(empresas)
 
     for i, emp in enumerate(empresas):
-        nome     = emp.get("nome", "Empresa")
-        numero   = emp.get("telefone")
-        emp_id   = emp.get("id")
-        tmpl_id  = emp.get("template_id")
+        nome      = emp.get("nome", "Empresa")
+        numero    = emp.get("telefone")
+        emp_id    = emp.get("id")
+        tmpl_id   = emp.get("template_id")
+        msg_gemini = emp.get("gemini_mensagem")
 
-        sucesso, tid = enviar_mensagem_whatsapp(emp_id, numero, nome, tmpl_id)
+        sucesso, tid = enviar_mensagem_whatsapp(emp_id, numero, nome, tmpl_id, msg_gemini)
 
         resultados.append({"id": emp_id, "nome": nome, "sucesso": sucesso, "template_id": tid})
 

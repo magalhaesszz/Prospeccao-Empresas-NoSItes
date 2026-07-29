@@ -50,16 +50,19 @@ app.secret_key = CONFIG.get("secret_key", "prospector-secret-2024")
 
 # ── Estado global (thread-safe) ───────────────────────────────────────────────
 _estado = {
-    "scraping":        False,
-    "progresso":       0,
-    "total":           0,
-    "empresa_atual":   "",
-    "empresas":        [],
-    "erro":            None,
-    "busca_id":        None,
-    "enviando":        False,
-    "envio_progresso": 0,
-    "envio_total":     0,
+    "scraping":          False,
+    "progresso":         0,
+    "total":             0,
+    "empresa_atual":     "",
+    "empresas":          [],
+    "erro":              None,
+    "busca_id":          None,
+    "enviando":          False,
+    "envio_progresso":   0,
+    "envio_total":       0,
+    "enriquecendo":      False,
+    "enriq_progresso":   0,
+    "enriq_total":       0,
 }
 _lock = threading.Lock()
 
@@ -952,6 +955,121 @@ def api_wa_responder():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "erro": str(e)})
+
+
+# ── Enriquecimento Gemini — pipeline completo ─────────────────────────────────
+
+def _app_base_url_bg():
+    """App URL para uso fora do contexto de request (threads de background)."""
+    return CONFIG.get("app_url", "").strip().rstrip("/")
+
+
+def _executar_enriquecimento(empresas, api_key, criar_pagina):
+    from gemini.enricher import enriquecer
+    from database.db import get_connection
+
+    with _lock:
+        _estado.update({"enriquecendo": True, "enriq_progresso": 0, "enriq_total": len(empresas)})
+
+    _broadcast({"tipo": "enriquecimento_inicio", "total": len(empresas)})
+    app_url = _app_base_url_bg()
+
+    for i, emp in enumerate(empresas):
+        nome = emp.get("nome", "")
+        try:
+            resultado = enriquecer(emp, api_key, app_url, criar_pagina)
+
+            conn = get_connection()
+            c    = conn.cursor()
+
+            if resultado.get("slug") and resultado.get("html"):
+                criar_pagina_preview(emp["id"], nome, resultado["slug"], resultado["html"])
+                c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
+                          (resultado["slug"], emp["id"]))
+
+            if resultado.get("mensagem"):
+                c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
+                          (resultado["mensagem"], emp["id"]))
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            logger.error("[enriq] '%s': %s", nome, e)
+
+        with _lock:
+            _estado["enriq_progresso"] = i + 1
+
+        _broadcast({
+            "tipo":    "enriquecimento_progresso",
+            "atual":   i + 1,
+            "total":   len(empresas),
+            "empresa": nome,
+        })
+
+    with _lock:
+        _estado["enriquecendo"] = False
+
+    _broadcast({"tipo": "enriquecimento_fim", "total": len(empresas)})
+    logger.info("[enriq] Concluído: %d empresas processadas.", len(empresas))
+
+
+@app.route("/api/gemini/enriquecer", methods=["POST"])
+def api_gemini_enriquecer():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+
+    with _lock:
+        if _estado.get("enriquecendo"):
+            return jsonify({"erro": "Enriquecimento já em andamento."}), 400
+
+    dados        = request.get_json(silent=True) or {}
+    busca_id     = dados.get("busca_id")
+    criar_pagina = dados.get("criar_pagina", True)
+    limite       = min(int(dados.get("limite", 30)), 50)
+
+    from database.db import get_connection
+    conn = get_connection()
+    c    = conn.cursor()
+    query = """
+        SELECT e.*, b.cidade, b.categoria
+        FROM empresas e
+        LEFT JOIN buscas b ON e.busca_id = b.id
+        WHERE e.tem_site=0
+          AND e.telefone IS NOT NULL AND e.telefone != ''
+          AND e.gemini_mensagem IS NULL
+    """
+    params = []
+    if busca_id:
+        query += " AND e.busca_id=%s"
+        params.append(busca_id)
+    query += f" ORDER BY e.score DESC LIMIT {limite}"
+    c.execute(query, params)
+    cols     = [d[0] for d in c.description]
+    empresas = [dict(zip(cols, r)) for r in c.fetchall()]
+    conn.close()
+
+    if not empresas:
+        return jsonify({"erro": "Nenhuma empresa pendente de enriquecimento."}), 400
+
+    threading.Thread(
+        target=_executar_enriquecimento,
+        args=(empresas, api_key, criar_pagina),
+        daemon=True,
+    ).start()
+
+    return jsonify({"mensagem": f"Enriquecimento iniciado para {len(empresas)} empresa(s).", "total": len(empresas)})
+
+
+@app.route("/api/gemini/status-enriquecimento")
+def api_gemini_status_enriq():
+    with _lock:
+        return jsonify({
+            "enriquecendo":    _estado.get("enriquecendo", False),
+            "enriq_progresso": _estado.get("enriq_progresso", 0),
+            "enriq_total":     _estado.get("enriq_total", 0),
+        })
 
 
 # ── Preview de Landing Page (público — sem auth) ──────────────────────────────
