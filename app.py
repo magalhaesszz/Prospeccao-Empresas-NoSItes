@@ -1062,6 +1062,47 @@ def api_gemini_enriquecer():
     return jsonify({"mensagem": f"Enriquecimento iniciado para {len(empresas)} empresa(s).", "total": len(empresas)})
 
 
+@app.route("/api/gemini/enriquecer-empresa", methods=["POST"])
+def api_gemini_enriquecer_empresa():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+
+    dados      = request.get_json(silent=True) or {}
+    empresa_id = dados.get("empresa_id")
+    if not empresa_id:
+        return jsonify({"erro": "empresa_id obrigatório."}), 400
+
+    emp = buscar_empresa_por_id(empresa_id)
+    if not emp:
+        return jsonify({"erro": "Empresa não encontrada."}), 404
+
+    from gemini.enricher import enriquecer
+    from database.db import get_connection
+
+    app_url  = _app_base_url_bg()
+    resultado = enriquecer(emp, api_key, app_url, criar_pagina=True)
+
+    conn = get_connection()
+    c    = conn.cursor()
+    if resultado.get("slug") and resultado.get("html"):
+        criar_pagina_preview(emp["id"], emp.get("nome", ""), resultado["slug"], resultado["html"])
+        c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
+                  (resultado["slug"], emp["id"]))
+    if resultado.get("mensagem"):
+        c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
+                  (resultado["mensagem"], emp["id"]))
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "ok":          True,
+        "slug":        resultado.get("slug"),
+        "preview_url": resultado.get("preview_url"),
+        "mensagem":    resultado.get("mensagem"),
+    })
+
+
 @app.route("/api/gemini/status-enriquecimento")
 def api_gemini_status_enriq():
     with _lock:

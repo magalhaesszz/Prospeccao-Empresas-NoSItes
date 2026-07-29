@@ -101,6 +101,8 @@ def inicializar_banco():
         ("avaliacoes",         "INTEGER DEFAULT 0"),
         ("gemini_mensagem",    "TEXT"),
         ("gemini_pagina_slug", "TEXT"),
+        ("maps_url",           "TEXT"),
+        ("foto_url",           "TEXT"),
     ]:
         c.execute(f"ALTER TABLE empresas ADD COLUMN IF NOT EXISTS {col} {defn}")
 
@@ -223,8 +225,8 @@ def salvar_empresa(empresa, busca_id):
     c.execute("""
         INSERT INTO empresas
             (busca_id, nome, telefone, endereco, email, tem_site, site_url, score, status,
-             descricao_google, nota, avaliacoes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo', %s, %s, %s)
+             descricao_google, nota, avaliacoes, maps_url, foto_url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo', %s, %s, %s, %s, %s)
         RETURNING id
     """, (
         busca_id,
@@ -238,6 +240,8 @@ def salvar_empresa(empresa, busca_id):
         empresa.get("descricao_google"),
         empresa.get("nota"),
         empresa.get("avaliacoes") or 0,
+        empresa.get("maps_url", ""),
+        empresa.get("foto_url", ""),
     ))
     emp_id = c.fetchone()[0]
     conn.commit()

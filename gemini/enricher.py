@@ -128,8 +128,9 @@ def gerar_pagina(empresa, api_key):
     telefone  = empresa.get("telefone") or ""
     nota      = empresa.get("nota")
     avs       = empresa.get("avaliacoes")
+    foto_url  = empresa.get("foto_url") or ""
+    maps_url  = empresa.get("maps_url") or ""
 
-    # Build the real data section for the prompt
     dados_reais = f"Nome: {nome}"
     if categoria: dados_reais += f"\nSegmento: {categoria}"
     if cidade:    dados_reais += f"\nCidade: {cidade}"
@@ -137,12 +138,20 @@ def gerar_pagina(empresa, api_key):
     if telefone:  dados_reais += f"\nTelefone: {telefone}"
     if nota:      dados_reais += f"\nNota Google Maps: {nota:.1f} estrelas"
     if avs:       dados_reais += f"\nTotal de avaliações: {avs}"
+    if foto_url:  dados_reais += f"\nFoto real do estabelecimento (URL): {foto_url}"
+    if maps_url:  dados_reais += f"\nLink Google Maps: {maps_url}"
 
     badge_avaliacao = ""
     if nota and avs:
         badge_avaliacao = f"""
 6. Seção Badge de Reputação: destaque visual com {nota:.1f}⭐ estrelas e {avs} avaliações reais no Google.
-   Use CSS para criar um badge dourado elegante com as estrelas."""
+   Use CSS para criar um badge dourado elegante com as estrelas e link para o Maps: {maps_url or '#'}"""
+
+    foto_instrucao = ""
+    if foto_url:
+        foto_instrucao = f"""
+• FOTO REAL: use a URL da foto real do estabelecimento ({foto_url}) como <img> no hero ou seção "Sobre".
+  Adicione object-fit:cover, border-radius:12px, max-width:100%, loading="lazy"."""
 
     prompt = f"""Você é um desenvolvedor web sênior especialista em landing pages de alta conversão.
 Crie uma landing page HTML completa, profissional e visualmente impressionante.
@@ -152,10 +161,10 @@ DADOS REAIS DA EMPRESA (use TODOS na página):
 
 ━━ ESPECIFICAÇÕES TÉCNICAS (OBRIGATÓRIAS) ━━
 • HTML5 completo: <!DOCTYPE html> até </html>
-• CSS 100% inline em <style> — ZERO CDN, ZERO Google Fonts por URL, ZERO imagens externas
+• CSS 100% inline em <style> — ZERO CDN, ZERO Google Fonts por URL
 • Fontes: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif
 • Totalmente responsivo (mobile-first com @media queries)
-• JavaScript MÍNIMO inline apenas para menu mobile e scroll suave
+• JavaScript MÍNIMO inline apenas para menu mobile e scroll suave{foto_instrucao}
 
 ━━ ESTRUTURA DA PÁGINA (nesta ordem exata) ━━
 1. <head>: meta charset, viewport, title="{nome} | {cidade}", meta description SEO

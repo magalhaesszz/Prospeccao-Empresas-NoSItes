@@ -195,7 +195,7 @@ function setProgresso(texto, atual, total, empresa, pct) {
   document.getElementById("barra-fill").style.width    = (pct || 0) + "%";
 }
 
-// ── Tabela ────────────────────────────────────────────────────────────────────
+// ── Cards de resultado ────────────────────────────────────────────────────────
 
 function carregarResultados(empresas) {
   APP.empresas     = empresas;
@@ -214,13 +214,13 @@ function filtrarTabela() {
 function _aplicarFiltro() {
   const soSemSite = document.getElementById("chk-sem-site").checked;
   APP.filtradas = soSemSite ? APP.empresas.filter(e => !e.tem_site) : [...APP.empresas];
-  renderizarTabela();
+  renderizarCards();
   renderizarPaginacao();
   atualizarContador();
 }
 
-function renderizarTabela() {
-  const corpo  = document.getElementById("corpo-tabela");
+function renderizarCards() {
+  const corpo  = document.getElementById("corpo-cards");
   const inicio = (APP.pagina - 1) * APP.porPagina;
   const pag    = APP.filtradas.slice(inicio, inicio + APP.porPagina);
 
@@ -228,43 +228,140 @@ function renderizarTabela() {
   corpo.innerHTML = "";
 
   if (!pag.length) {
-    corpo.innerHTML = '<tr><td colspan="8" class="vazio">Nenhum resultado.</td></tr>';
+    corpo.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Nenhum resultado.</div>';
     return;
   }
 
   pag.forEach(emp => {
-    const temSite = Boolean(emp.tem_site);
-    const enviado = Boolean(emp.mensagem_enviada);
-    const podeSel = !temSite && !enviado && emp.telefone;
-    const sc      = emp.score || 0;
+    const temSite  = Boolean(emp.tem_site);
+    const enviado  = Boolean(emp.mensagem_enviada);
+    const podeSel  = !temSite && !enviado && emp.telefone;
+    const sc       = emp.score || 0;
     const scoreCls = sc >= 70 ? "score-alto" : sc >= 40 ? "score-medio" : "score-baixo";
+    const checked  = APP.selecionados.has(emp.id) ? "checked" : "";
+    const nota     = emp.nota;
+    const avs      = emp.avaliacoes;
+    const cat      = emp.descricao_google || "";
+    const mapsUrl  = emp.maps_url || "";
+    const fotoUrl  = emp.foto_url || "";
+    const slug     = emp.gemini_pagina_slug || "";
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><input type="checkbox" ${APP.selecionados.has(emp.id)?"checked":""} ${!podeSel?"disabled":""} onchange="toggleSel(${emp.id},this.checked)"/></td>
-      <td><span class="${scoreCls}">${sc}</span></td>
-      <td><strong>${esc(emp.nome)}</strong>${emp.email?`<br><small style="color:var(--muted)">${esc(emp.email)}</small>`:''}</td>
-      <td>${esc(emp.telefone||"—")}</td>
-      <td class="hide-mobile" style="font-size:.8rem;color:var(--muted);max-width:200px">${esc(emp.endereco||"—")}</td>
-      <td>${temSite?'<span class="badge badge-vermelho">Tem site</span>':'<span class="badge badge-verde">Sem site</span>'}</td>
-      <td>${_badgeStatus(emp.status, enviado)}</td>
-      <td>${podeSel?`<button class="btn btn-sm btn-whatsapp" onclick="enviarUm(${emp.id})">📱</button>`:""}</td>
-    `;
-    corpo.appendChild(tr);
+    const starsHtml = nota ? (() => {
+      const full  = Math.round(nota);
+      const stars = "★".repeat(full) + "☆".repeat(5 - full);
+      return `<div style="color:#f59e0b;font-size:.82rem;margin-top:4px">
+        ${stars}
+        <span style="color:var(--muted);font-size:.75rem;margin-left:4px">${nota.toFixed(1)} · ${avs || 0} avaliação${(avs||0)!==1?"ões":""}</span>
+      </div>`;
+    })() : "";
+
+    const card = document.createElement("div");
+    card.id        = `card-${emp.id}`;
+    card.className = "empresa-card";
+    card.innerHTML = `
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="padding-top:3px;flex-shrink:0">
+          <input type="checkbox" ${checked} ${!podeSel ? "disabled" : ""}
+            style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary)"
+            onchange="toggleSel(${emp.id},this.checked)"/>
+        </div>
+        ${fotoUrl ? `<img src="${esc(fotoUrl)}" alt="${esc(emp.nome)}"
+          style="width:60px;height:60px;object-fit:cover;border-radius:10px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">` : ""}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <strong style="font-size:.95rem">${esc(emp.nome)}</strong>
+            <span class="${scoreCls}" style="font-size:.68rem;padding:2px 7px;border-radius:10px">${sc}</span>
+            ${!temSite
+              ? '<span class="badge badge-verde" style="font-size:.68rem">Sem site</span>'
+              : '<span class="badge badge-vermelho" style="font-size:.68rem">Tem site</span>'}
+            ${_badgeStatus(emp.status, enviado)}
+          </div>
+          ${cat ? `<div style="margin-top:5px">
+            <span style="font-size:.73rem;background:rgba(66,133,244,.12);color:#4285F4;padding:2px 9px;border-radius:12px">${esc(cat)}</span>
+          </div>` : ""}
+          ${starsHtml}
+          <div style="margin-top:7px;font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:3px">
+            ${emp.telefone ? `<span>📞 ${esc(emp.telefone)}</span>` : ""}
+            ${emp.endereco ? `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:480px">📍 ${esc(emp.endereco)}</span>` : ""}
+            ${emp.email    ? `<span>✉ ${esc(emp.email)}</span>` : ""}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid var(--border)">
+        ${mapsUrl ? `<a href="${esc(mapsUrl)}" target="_blank" rel="noopener"
+            class="btn btn-sm btn-secondary" style="font-size:.73rem;text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Ver no Maps
+          </a>` : ""}
+        ${!temSite ? `<button id="btn-gerar-${emp.id}" class="btn btn-sm"
+            onclick="gerarSiteEmpresa(${emp.id})"
+            style="font-size:.73rem;background:linear-gradient(135deg,#4285F4,#34A853);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            ${slug ? "Regenerar Site" : "Gerar Site"}
+          </button>` : ""}
+        ${slug ? `<a href="/p/${slug}" target="_blank" rel="noopener"
+            class="btn btn-sm" style="font-size:.73rem;background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.3);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Ver Preview
+          </a>` : ""}
+        ${podeSel ? `<button class="btn btn-sm btn-whatsapp" style="font-size:.73rem;display:inline-flex;align-items:center;gap:4px"
+            onclick="enviarUm(${emp.id})">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+            WhatsApp
+          </button>` : ""}
+      </div>`;
+    corpo.appendChild(card);
   });
-
-  // Checkbox "selecionar todos"
-  const chkTodos = document.getElementById("chk-todos");
-  const selecionaveis = pag.filter(e => !e.tem_site && !e.mensagem_enviada && e.telefone);
-  chkTodos.checked = selecionaveis.length > 0 && selecionaveis.every(e => APP.selecionados.has(e.id));
 }
 
 function _badgeStatus(status, enviado) {
-  if (enviado || status === "contatado") return '<span class="badge badge-azul">Contatado</span>';
-  if (status === "interessado")          return '<span class="badge badge-roxo">Interessado</span>';
-  if (status === "fechado")             return '<span class="badge badge-verde">Fechado</span>';
-  if (status === "perdido")             return '<span class="badge badge-vermelho">Perdido</span>';
-  return '<span class="badge badge-cinza">Novo</span>';
+  if (enviado || status === "contatado") return '<span class="badge badge-azul" style="font-size:.68rem">Contatado</span>';
+  if (status === "interessado")          return '<span class="badge badge-roxo" style="font-size:.68rem">Interessado</span>';
+  if (status === "fechado")              return '<span class="badge badge-verde" style="font-size:.68rem">Fechado</span>';
+  if (status === "perdido")              return '<span class="badge badge-vermelho" style="font-size:.68rem">Perdido</span>';
+  return '<span class="badge badge-cinza" style="font-size:.68rem">Novo</span>';
+}
+
+async function gerarSiteEmpresa(empresaId) {
+  const btn = document.getElementById(`btn-gerar-${empresaId}`);
+  if (btn) {
+    btn.disabled   = true;
+    btn.innerHTML  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"
+      style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Gerando...`;
+  }
+  try {
+    const r = await fetch("/api/gemini/enriquecer-empresa", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ empresa_id: empresaId }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.erro) throw new Error(d.erro || "Erro desconhecido");
+
+    const emp = APP.empresas.find(e => e.id === empresaId);
+    if (emp) {
+      if (d.slug)     emp.gemini_pagina_slug = d.slug;
+      if (d.mensagem) emp.gemini_mensagem    = d.mensagem;
+    }
+
+    if (btn && d.preview_url) {
+      btn.outerHTML = `<a href="${d.preview_url}" target="_blank" rel="noopener"
+          class="btn btn-sm" style="font-size:.73rem;background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.3);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Ver Preview
+        </a>
+        <button class="btn btn-sm" onclick="gerarSiteEmpresa(${empresaId})"
+            style="font-size:.73rem;background:linear-gradient(135deg,#4285F4,#34A853);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
+          Regenerar
+        </button>`;
+    }
+    mostrarToast(`Site gerado: ${emp?.nome || "empresa"}!`, "success");
+  } catch (e) {
+    mostrarToast("Erro ao gerar site: " + e.message, "error");
+    if (btn) {
+      btn.disabled  = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site`;
+    }
+  }
 }
 
 function renderizarPaginacao() {
@@ -341,7 +438,7 @@ function toggleCheckboxTodos(chk) {
     if (!e.tem_site && !e.mensagem_enviada && e.telefone)
       chk.checked ? APP.selecionados.add(e.id) : APP.selecionados.delete(e.id);
   });
-  renderizarTabela();
+  renderizarCards();
   atualizarContador();
 }
 
@@ -349,7 +446,7 @@ function selecionarTodos() {
   APP.filtradas.forEach(e => {
     if (!e.tem_site && !e.mensagem_enviada && e.telefone) APP.selecionados.add(e.id);
   });
-  renderizarTabela();
+  renderizarCards();
   atualizarContador();
 }
 

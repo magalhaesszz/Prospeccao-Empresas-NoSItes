@@ -313,6 +313,33 @@ def _extrair_item(driver, indice):
     except Exception:
         pass
 
+    # URL do Google Maps (URL atual do painel de detalhes)
+    maps_url = ""
+    try:
+        maps_url = driver.current_url or ""
+    except Exception:
+        pass
+
+    # Foto principal do estabelecimento
+    foto_url = ""
+    try:
+        for sel in [
+            'img.aoRNLd',
+            'div.RZ66Rb img',
+            'button.aoRNLd',
+            'img[decoding="async"][src*="googleusercontent"]',
+        ]:
+            try:
+                el  = driver.find_element(By.CSS_SELECTOR, sel)
+                src = el.get_attribute("src") or el.get_attribute("data-src") or ""
+                if src and ("googleusercontent" in src or "ggpht" in src):
+                    foto_url = src
+                    break
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     return {
         "nome":             nome,
         "telefone":         telefone,
@@ -323,6 +350,8 @@ def _extrair_item(driver, indice):
         "descricao_google": descricao_google,
         "nota":             nota,
         "avaliacoes":       avaliacoes,
+        "maps_url":         maps_url,
+        "foto_url":         foto_url,
     }
 
 
