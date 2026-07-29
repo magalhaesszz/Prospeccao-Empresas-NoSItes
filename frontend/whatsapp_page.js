@@ -280,6 +280,22 @@ async function dispararPendentes() {
 let _chatAtual = null;
 let _conversas = [];
 
+function toggleTelaCheia() {
+  const card = document.getElementById("card-conversas");
+  const ativo = card.classList.toggle("fullscreen");
+  document.body.classList.toggle("chat-fullscreen", ativo);
+  const btn = document.getElementById("btn-fullscreen");
+  if (btn) btn.textContent = ativo ? "✕" : "⛶";
+  if (ativo) card.scrollIntoView({ behavior: "instant", block: "start" });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const card = document.getElementById("card-conversas");
+    if (card && card.classList.contains("fullscreen")) toggleTelaCheia();
+  }
+});
+
 async function carregarConversas() {
   const lista = document.getElementById("chat-lista");
   lista.innerHTML = '<p class="vazio" style="padding:24px">Carregando...</p>';
@@ -337,6 +353,10 @@ function abrirConversaIdx(i) {
   if (c) abrirConversa(c);
 }
 
+function voltarLista() {
+  document.getElementById("card-conversas").classList.remove("ver-conversa");
+}
+
 async function abrirConversa(c) {
   _chatAtual = c;
   renderConversas(_conversas.filter(x =>
@@ -344,9 +364,13 @@ async function abrirConversa(c) {
     JSON.stringify(x).toLowerCase().includes(document.getElementById("chat-busca").value.toLowerCase())
   ));
 
+  // Mobile em tela cheia: mostra painel, esconde lista
+  document.getElementById("card-conversas").classList.add("ver-conversa");
+
   document.getElementById("chat-vazio").classList.add("hidden");
   document.getElementById("chat-conteudo").classList.remove("hidden");
   document.getElementById("chat-cabecalho").innerHTML = `
+    <button class="wa-chat-voltar" onclick="voltarLista()" title="Voltar">‹</button>
     <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}" onerror="this.parentNode.textContent='👤'"/>` : "👤"}</div>
     <div>
       <div class="wa-chat-cab-nome">${esc(c.nome)} ${c.cliente ? '<span class="wa-chat-tag">🎯 Prospectado</span>' : ""}</div>

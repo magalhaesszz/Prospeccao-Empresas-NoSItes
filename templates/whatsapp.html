@@ -105,7 +105,10 @@
       <div class="wa-chat-side">
         <div class="wa-chat-side-topo">
           <span class="wa-chat-titulo">💬 Conversas <span id="chat-contador" class="wa-chat-count"></span></span>
-          <button class="wa-chat-refresh" onclick="carregarConversas()" title="Atualizar">↻</button>
+          <div style="display:flex;gap:4px">
+            <button class="wa-chat-refresh" onclick="carregarConversas()" title="Atualizar">↻</button>
+            <button class="wa-chat-refresh" id="btn-fullscreen" onclick="toggleTelaCheia()" title="Tela cheia">⛶</button>
+          </div>
         </div>
         <div class="wa-chat-busca">
           <input type="text" id="chat-busca" placeholder="🔍 Buscar conversa..." oninput="filtrarConversas()"/>
