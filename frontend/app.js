@@ -41,13 +41,27 @@ function processarEvento(ev) {
       setProgresso(`Extraindo ${ev.atual}/${ev.total}...`, ev.atual, ev.total, ev.empresa, pct);
       break;
 
+    case "validando_inicio":
+      setProgresso("Validando sites (verificação real)...", 0, ev.total, "", 0);
+      break;
+
+    case "validando_progresso":
+      const pv = ev.total > 0 ? Math.round((ev.atual / ev.total) * 100) : 0;
+      setProgresso(`Validando sites ${ev.atual}/${ev.total}...`, ev.atual, ev.total, ev.empresa, pv);
+      break;
+
     case "scraping_fim":
       document.getElementById("btn-buscar").disabled = false;
-      setProgresso(`Concluído! ${ev.total} empresas (${ev.sem_site} sem site).`, ev.total, ev.total, "", 100);
+      const reclass = ev.reclassificadas ? ` · ${ev.reclassificadas} tinham site falso` : "";
+      setProgresso(`Concluído! ${ev.total} empresas (${ev.sem_site} sem site${reclass}).`, ev.total, ev.total, "", 100);
       carregarHistorico();
+      // Guarda os prontos pra auto-seleção após a tabela carregar
+      APP._prontosDisparo = ev.prontos_disparo || [];
       // busca em lote: dispara próxima
       if (APP.filaBuscas.length > 0) {
         setTimeout(_executarProximaBuscaLote, 800);
+      } else if (APP._prontosDisparo.length > 0) {
+        setTimeout(prepararDisparoAutomatico, 400);
       }
       break;
 
@@ -244,6 +258,49 @@ function renderizarPaginacao() {
   if (APP.pagina > 1)     add("◀", APP.pagina - 1, false);
   for (let i = 1; i <= total; i++) add(i, i, i === APP.pagina);
   if (APP.pagina < total) add("▶", APP.pagina + 1, false);
+}
+
+// ── Disparo automático pós-busca ──────────────────────────────────────────────
+
+function prepararDisparoAutomatico() {
+  const prontos = APP._prontosDisparo || [];
+  if (!prontos.length) return;
+
+  // Ativa filtro "só sem site" e seleciona todos os prontos
+  const chk = document.getElementById("chk-sem-site");
+  if (chk) { chk.checked = true; filtrarTabela(); }
+
+  prontos.forEach(id => APP.selecionados.add(id));
+  renderizarTabela();
+  atualizarContador();
+
+  // Banner destacado de disparo rápido
+  mostrarBannerDisparo(prontos.length);
+  mostrarToast(`✅ ${prontos.length} número(s) sem site prontos pra disparar!`, "success");
+}
+
+function mostrarBannerDisparo(qtd) {
+  let banner = document.getElementById("banner-disparo");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "banner-disparo";
+    banner.className = "banner-disparo";
+    const acoes = document.getElementById("secao-acoes");
+    acoes.parentNode.insertBefore(banner, acoes);
+  }
+  banner.innerHTML = `
+    <div class="banner-disparo-txt">
+      <strong>🎯 ${qtd} empresa(s) sem site</strong> prontas para disparo imediato.
+    </div>
+    <button class="btn btn-whatsapp" onclick="enviarSelecionados()">📱 Disparar agora</button>
+    <button class="btn btn-secondary btn-sm" onclick="fecharBannerDisparo()">✕</button>
+  `;
+  banner.classList.remove("hidden");
+}
+
+function fecharBannerDisparo() {
+  const b = document.getElementById("banner-disparo");
+  if (b) b.classList.add("hidden");
 }
 
 // ── Seleção ───────────────────────────────────────────────────────────────────

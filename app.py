@@ -222,6 +222,25 @@ def _executar_busca(cidade, categoria):
 
         empresas = buscar_empresas(cidade, categoria, _cb)
 
+        # ── Validação real: confirma via HTTP quem tem/não tem site ──────────
+        from scraper.verificar_site import validar_flags_site
+        from scraper.google_maps import _calcular_score
+
+        with _lock:
+            _estado["empresa_atual"] = "Validando sites (verificação real)..."
+        _broadcast({"tipo": "validando_inicio", "total": len(empresas)})
+
+        def _cb_val(info):
+            with _lock:
+                _estado["empresa_atual"] = f"Validando site {info['atual']}/{info['total']}..."
+            _broadcast({"tipo": "validando_progresso", **info})
+
+        res_val = validar_flags_site(empresas, _cb_val)
+
+        # Recalcula score após correção do flag de site
+        for emp in empresas:
+            emp["score"] = _calcular_score(emp, categoria)
+
         sem_site = 0
         for emp in empresas:
             emp["id"] = salvar_empresa(emp, busca_id)
@@ -230,14 +249,29 @@ def _executar_busca(cidade, categoria):
 
         atualizar_contagem_busca(busca_id, len(empresas), sem_site)
 
+        # IDs prontos pra disparo: sem site + com telefone + ainda não enviados
+        prontos = [
+            emp["id"] for emp in empresas
+            if not emp.get("tem_site") and emp.get("telefone")
+        ]
+
         with _lock:
             _estado.update({
                 "empresas":      empresas,
                 "scraping":      False,
-                "empresa_atual": f"Concluído! {len(empresas)} empresas ({sem_site} sem site).",
+                "empresa_atual": f"Concluído! {len(empresas)} empresas ({sem_site} sem site, "
+                                 f"{res_val['reclassificadas']} reclassificadas).",
             })
 
-        _broadcast({"tipo": "scraping_fim", "total": len(empresas), "sem_site": sem_site})
+        _broadcast({
+            "tipo": "scraping_fim",
+            "total": len(empresas),
+            "sem_site": sem_site,
+            "reclassificadas": res_val["reclassificadas"],
+            "prontos_disparo": prontos,
+            "empresas": empresas,
+            "busca_id": busca_id,
+        })
         logger.info("Busca OK: %d empresas, %d sem site.", len(empresas), sem_site)
 
     except Exception as exc:
