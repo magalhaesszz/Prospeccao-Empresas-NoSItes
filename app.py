@@ -649,46 +649,127 @@ def _wa_config():
     )
 
 
+def _so_digitos(s):
+    return "".join(ch for ch in str(s or "") if ch.isdigit())
+
+
+def _mapa_nomes_empresas():
+    """Mapa sufixo-de-8-dígitos -> nome da empresa prospectada (do nosso banco)."""
+    from database.db import get_connection
+    mapa = {}
+    try:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT telefone, nome FROM empresas WHERE telefone IS NOT NULL AND telefone != ''")
+        for tel, nome in c.fetchall():
+            dig = _so_digitos(tel)
+            if len(dig) >= 8:
+                mapa[dig[-8:]] = nome
+        conn.close()
+    except Exception:
+        pass
+    return mapa
+
+
+def _texto_da_msg(conteudo):
+    """Extrai texto legível de qualquer tipo de mensagem Evolution/Baileys."""
+    if not isinstance(conteudo, dict):
+        return ""
+    if conteudo.get("conversation"):
+        return conteudo["conversation"]
+    if conteudo.get("extendedTextMessage", {}).get("text"):
+        return conteudo["extendedTextMessage"]["text"]
+    for tipo, rotulo in [
+        ("imageMessage", "🖼️ Imagem"), ("videoMessage", "🎥 Vídeo"),
+        ("audioMessage", "🎵 Áudio"), ("documentMessage", "📄 Documento"),
+        ("stickerMessage", "🌟 Figurinha"), ("locationMessage", "📍 Localização"),
+        ("contactMessage", "👤 Contato"),
+    ]:
+        if conteudo.get(tipo):
+            legenda = conteudo[tipo].get("caption") if isinstance(conteudo[tipo], dict) else ""
+            return f"{rotulo}" + (f": {legenda}" if legenda else "")
+    return "[mensagem]"
+
+
 @app.route("/api/whatsapp/conversas")
 def api_wa_conversas():
-    """Lista as conversas (chats) da instância conectada."""
+    """Lista as conversas com nomes resolvidos (contato > empresa do banco > número)."""
     import requests as req
     base, instance, api_key = _wa_config()
     if not (base and instance and api_key):
         return jsonify({"erro": "Evolution API não configurada.", "conversas": []})
 
     headers = {"apikey": api_key, "Content-Type": "application/json"}
+
+    # Mapa de contatos do WhatsApp (jid/numero -> pushName)
+    nomes_contato = {}
     try:
-        r = req.post(f"{base}/chat/findChats/{instance}", headers=headers, json={}, timeout=20)
+        rc = req.post(f"{base}/chat/findContacts/{instance}", headers=headers, json={}, timeout=20)
+        if rc.ok:
+            cont = rc.json()
+            cont = cont if isinstance(cont, list) else cont.get("contacts", cont.get("data", []))
+            for ct in cont:
+                cjid = ct.get("remoteJid") or ct.get("id") or ct.get("jid") or ""
+                nome = ct.get("pushName") or ct.get("name") or ct.get("verifiedName") or ""
+                if cjid and nome:
+                    nomes_contato[_so_digitos(cjid)[-8:]] = nome
+    except Exception:
+        pass
+
+    nomes_empresa = _mapa_nomes_empresas()
+
+    try:
+        r = req.post(f"{base}/chat/findChats/{instance}", headers=headers, json={}, timeout=25)
         if not r.ok:
-            return jsonify({"erro": f"HTTP {r.status_code}", "conversas": []})
+            return jsonify({"erro": f"HTTP {r.status_code}: {r.text[:200]}", "conversas": []})
         dados = r.json()
         chats = dados if isinstance(dados, list) else dados.get("chats", dados.get("data", []))
 
         conversas = []
         for ch in chats:
             jid = ch.get("remoteJid") or ch.get("id") or ch.get("jid") or ""
-            if not jid or jid.endswith("@g.us") or "status@broadcast" in jid:
-                continue  # pula grupos e status
+            if not jid or jid.endswith("@g.us") or "status@broadcast" in jid or "@lid" in jid:
+                continue  # pula grupos, status e listas
             numero = jid.split("@")[0]
+            suf = _so_digitos(numero)[-8:]
+
+            # Resolução de nome por prioridade
+            nome = (ch.get("pushName") or ch.get("name")
+                    or nomes_contato.get(suf)
+                    or nomes_empresa.get(suf)
+                    or ("+" + numero if numero.isdigit() else numero))
+
+            ultima = ""
+            lm = ch.get("lastMessage")
+            if isinstance(lm, dict):
+                ultima = _texto_da_msg(lm.get("message", {}))
+
             conversas.append({
                 "jid":        jid,
                 "numero":     numero,
-                "nome":       ch.get("pushName") or ch.get("name") or ch.get("profileName") or numero,
+                "nome":       nome,
+                "cliente":    suf in nomes_empresa,   # é empresa que prospectamos
                 "foto":       ch.get("profilePicUrl") or ch.get("profilePictureUrl") or "",
-                "ultima_msg": ch.get("lastMessage", {}).get("message", {}).get("conversation", "")
-                              if isinstance(ch.get("lastMessage"), dict) else "",
-                "timestamp":  ch.get("updatedAt") or ch.get("lastMsgTimestamp") or "",
+                "ultima_msg": ultima,
+                "timestamp":  ch.get("updatedAt") or ch.get("lastMsgTimestamp") or 0,
                 "nao_lidas":  ch.get("unreadCount") or ch.get("unreadMessages") or 0,
             })
-        return jsonify({"conversas": conversas})
+
+        # Ordena por atividade mais recente
+        def _ts(c):
+            t = c["timestamp"]
+            try: return float(t)
+            except Exception: return 0
+        conversas.sort(key=_ts, reverse=True)
+
+        return jsonify({"conversas": conversas, "total": len(conversas)})
     except Exception as e:
         return jsonify({"erro": str(e), "conversas": []})
 
 
 @app.route("/api/whatsapp/mensagens")
 def api_wa_mensagens():
-    """Mensagens de uma conversa específica (por jid)."""
+    """Mensagens de uma conversa. Retorna histórico completo ordenado."""
     import requests as req
     base, instance, api_key = _wa_config()
     jid = (request.args.get("jid") or "").strip()
@@ -698,42 +779,32 @@ def api_wa_mensagens():
         return jsonify({"erro": "jid obrigatório.", "mensagens": []})
 
     headers = {"apikey": api_key, "Content-Type": "application/json"}
+    # Pede histórico amplo — Evolution v2 aceita page/offset; tentamos limite alto
+    corpo = {"where": {"key": {"remoteJid": jid}}, "limit": 200}
     try:
-        r = req.post(
-            f"{base}/chat/findMessages/{instance}",
-            headers=headers,
-            json={"where": {"key": {"remoteJid": jid}}},
-            timeout=20,
-        )
+        r = req.post(f"{base}/chat/findMessages/{instance}", headers=headers, json=corpo, timeout=25)
         if not r.ok:
-            return jsonify({"erro": f"HTTP {r.status_code}", "mensagens": []})
+            return jsonify({"erro": f"HTTP {r.status_code}: {r.text[:200]}", "mensagens": []})
         dados = r.json()
-        # Evolution v2 pode aninhar em messages.records
         if isinstance(dados, dict):
             msgs = dados.get("messages", dados.get("data", []))
             if isinstance(msgs, dict):
-                msgs = msgs.get("records", [])
+                msgs = msgs.get("records", msgs.get("data", []))
         else:
             msgs = dados
 
         mensagens = []
         for m in msgs:
             key = m.get("key", {})
-            conteudo = m.get("message", {}) or {}
-            texto = (
-                conteudo.get("conversation")
-                or conteudo.get("extendedTextMessage", {}).get("text")
-                or conteudo.get("imageMessage", {}).get("caption")
-                or ("[mídia]" if conteudo else "")
-            )
+            texto = _texto_da_msg(m.get("message", {}) or {})
             mensagens.append({
                 "de_mim":    bool(key.get("fromMe")),
                 "texto":     texto or "",
                 "timestamp": m.get("messageTimestamp") or 0,
+                "status":    m.get("status") or "",
             })
-        # Ordena por timestamp crescente
         mensagens.sort(key=lambda x: x["timestamp"] or 0)
-        return jsonify({"mensagens": mensagens})
+        return jsonify({"mensagens": mensagens, "total": len(mensagens)})
     except Exception as e:
         return jsonify({"erro": str(e), "mensagens": []})
 

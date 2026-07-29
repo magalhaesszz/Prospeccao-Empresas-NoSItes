@@ -97,27 +97,42 @@
     <p id="teste-resultado" style="margin-top:10px;font-size:.875rem"></p>
   </div>
 
-  <!-- Conversas -->
-  <div class="card" id="card-conversas">
-    <div class="page-header" style="margin-bottom:12px">
-      <h2 class="card-title" style="margin:0">💬 Minhas Conversas</h2>
-      <button class="btn btn-secondary btn-sm" onclick="carregarConversas()">↻ Atualizar</button>
-    </div>
+  <!-- Conversas — estilo WhatsApp Web -->
+  <div class="card wa-chat-card" id="card-conversas">
     <div class="wa-chat">
-      <div class="wa-chat-lista" id="chat-lista">
-        <p class="vazio" style="padding:20px">Clique em ↻ para carregar as conversas.</p>
+
+      <!-- Coluna esquerda: lista -->
+      <div class="wa-chat-side">
+        <div class="wa-chat-side-topo">
+          <span class="wa-chat-titulo">💬 Conversas <span id="chat-contador" class="wa-chat-count"></span></span>
+          <button class="wa-chat-refresh" onclick="carregarConversas()" title="Atualizar">↻</button>
+        </div>
+        <div class="wa-chat-busca">
+          <input type="text" id="chat-busca" placeholder="🔍 Buscar conversa..." oninput="filtrarConversas()"/>
+        </div>
+        <div class="wa-chat-lista" id="chat-lista">
+          <p class="vazio" style="padding:24px">Clique em ↻ para carregar.</p>
+        </div>
       </div>
+
+      <!-- Coluna direita: painel de mensagens -->
       <div class="wa-chat-painel" id="chat-painel">
-        <div class="wa-chat-vazio" id="chat-vazio">Selecione uma conversa para ver as mensagens.</div>
+        <div class="wa-chat-vazio" id="chat-vazio">
+          <div style="text-align:center">
+            <div style="font-size:3rem;margin-bottom:8px">💬</div>
+            Selecione uma conversa para ver as mensagens.
+          </div>
+        </div>
         <div class="wa-chat-conteudo hidden" id="chat-conteudo">
           <div class="wa-chat-cabecalho" id="chat-cabecalho"></div>
           <div class="wa-chat-mensagens" id="chat-mensagens"></div>
           <div class="wa-chat-input">
-            <input type="text" id="chat-resposta" placeholder="Digite uma resposta..." onkeydown="if(event.key==='Enter')responderConversa()"/>
-            <button class="btn btn-whatsapp btn-sm" onclick="responderConversa()">➤</button>
+            <input type="text" id="chat-resposta" placeholder="Digite uma mensagem..." onkeydown="if(event.key==='Enter')responderConversa()"/>
+            <button class="wa-chat-enviar" onclick="responderConversa()" title="Enviar">➤</button>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 

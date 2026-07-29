@@ -275,63 +275,119 @@ async function dispararPendentes() {
   }
 }
 
-// ── Conversas ─────────────────────────────────────────────────────────────────
+// ── Conversas (WhatsApp Web) ──────────────────────────────────────────────────
 
 let _chatAtual = null;
+let _conversas = [];
 
 async function carregarConversas() {
   const lista = document.getElementById("chat-lista");
-  lista.innerHTML = '<p class="vazio" style="padding:20px">Carregando...</p>';
+  lista.innerHTML = '<p class="vazio" style="padding:24px">Carregando...</p>';
   try {
     const r = await fetch("/api/whatsapp/conversas");
     const d = await r.json();
     if (d.erro) {
-      lista.innerHTML = `<p class="vazio" style="padding:20px">${esc(d.erro)}</p>`;
+      lista.innerHTML = `<p class="vazio" style="padding:24px">${esc(d.erro)}</p>`;
       return;
     }
-    if (!d.conversas || !d.conversas.length) {
-      lista.innerHTML = '<p class="vazio" style="padding:20px">Nenhuma conversa ainda.</p>';
-      return;
-    }
-    lista.innerHTML = d.conversas.map(c => `
-      <div class="wa-chat-item" onclick='abrirConversa(${JSON.stringify(c).replace(/'/g, "&#39;")})'>
-        <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}"/>` : "👤"}</div>
-        <div class="wa-chat-item-info">
-          <div class="wa-chat-item-nome">${esc(c.nome)}</div>
-          <div class="wa-chat-item-prev">${esc(c.ultima_msg || c.numero)}</div>
-        </div>
-        ${c.nao_lidas ? `<span class="wa-chat-badge">${c.nao_lidas}</span>` : ""}
-      </div>`).join("");
+    _conversas = d.conversas || [];
+    document.getElementById("chat-contador").textContent = _conversas.length ? `(${_conversas.length})` : "";
+    renderConversas(_conversas);
   } catch (e) {
-    lista.innerHTML = '<p class="vazio" style="padding:20px">Erro ao carregar conversas.</p>';
+    lista.innerHTML = '<p class="vazio" style="padding:24px">Erro ao carregar conversas.</p>';
   }
+}
+
+function renderConversas(convs) {
+  const lista = document.getElementById("chat-lista");
+  if (!convs.length) {
+    lista.innerHTML = '<p class="vazio" style="padding:24px">Nenhuma conversa.</p>';
+    return;
+  }
+  lista.innerHTML = convs.map((c, i) => `
+    <div class="wa-chat-item ${_chatAtual && _chatAtual.jid === c.jid ? "ativo" : ""}" onclick="abrirConversaIdx(${i})">
+      <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}" onerror="this.parentNode.textContent='👤'"/>` : "👤"}</div>
+      <div class="wa-chat-item-info">
+        <div class="wa-chat-item-linha1">
+          <span class="wa-chat-item-nome">${esc(c.nome)}</span>
+          ${c.timestamp ? `<span class="wa-chat-item-hora">${fmtHora(c.timestamp)}</span>` : ""}
+        </div>
+        <div class="wa-chat-item-linha2">
+          <span class="wa-chat-item-prev">${esc(c.ultima_msg || "—")}</span>
+          ${c.nao_lidas ? `<span class="wa-chat-badge">${c.nao_lidas}</span>` : ""}
+        </div>
+        ${c.cliente ? '<span class="wa-chat-tag">🎯 Prospectado</span>' : ""}
+      </div>
+    </div>`).join("");
+}
+
+function filtrarConversas() {
+  const termo = (document.getElementById("chat-busca").value || "").toLowerCase().trim();
+  if (!termo) { renderConversas(_conversas); return; }
+  const filtradas = _conversas.filter(c =>
+    (c.nome || "").toLowerCase().includes(termo) ||
+    (c.numero || "").includes(termo) ||
+    (c.ultima_msg || "").toLowerCase().includes(termo)
+  );
+  renderConversas(filtradas);
+}
+
+function abrirConversaIdx(i) {
+  const c = _conversas[i];
+  if (c) abrirConversa(c);
 }
 
 async function abrirConversa(c) {
   _chatAtual = c;
+  renderConversas(_conversas.filter(x =>
+    !document.getElementById("chat-busca").value.trim() ||
+    JSON.stringify(x).toLowerCase().includes(document.getElementById("chat-busca").value.toLowerCase())
+  ));
+
   document.getElementById("chat-vazio").classList.add("hidden");
   document.getElementById("chat-conteudo").classList.remove("hidden");
-  document.getElementById("chat-cabecalho").innerHTML =
-    `<strong>${esc(c.nome)}</strong> <span style="color:var(--muted);font-size:.8rem">${esc(c.numero)}</span>`;
+  document.getElementById("chat-cabecalho").innerHTML = `
+    <div class="wa-chat-avatar">${c.foto ? `<img src="${esc(c.foto)}" onerror="this.parentNode.textContent='👤'"/>` : "👤"}</div>
+    <div>
+      <div class="wa-chat-cab-nome">${esc(c.nome)} ${c.cliente ? '<span class="wa-chat-tag">🎯 Prospectado</span>' : ""}</div>
+      <div class="wa-chat-cab-num">+${esc(c.numero)}</div>
+    </div>`;
 
   const cont = document.getElementById("chat-mensagens");
-  cont.innerHTML = '<p class="vazio">Carregando mensagens...</p>';
+  cont.innerHTML = '<p class="vazio" style="margin:auto">Carregando mensagens...</p>';
 
   try {
     const r = await fetch("/api/whatsapp/mensagens?jid=" + encodeURIComponent(c.jid));
     const d = await r.json();
     if (d.erro || !d.mensagens || !d.mensagens.length) {
-      cont.innerHTML = `<p class="vazio">${d.erro ? esc(d.erro) : "Sem mensagens."}</p>`;
+      cont.innerHTML = `<p class="vazio" style="margin:auto">${d.erro ? esc(d.erro) : "Nenhuma mensagem nesta conversa."}</p>`;
       return;
     }
-    cont.innerHTML = d.mensagens.map(m => `
-      <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}">
-        <div class="wa-msg-bolha">${esc(m.texto)}</div>
-      </div>`).join("");
-    cont.scrollTop = cont.scrollHeight;
+    cont.innerHTML = renderMensagens(d.mensagens);
+    cont.scrollTop = cont.scrollHeight;   // começa no fim; rola pra cima = histórico
   } catch (e) {
-    cont.innerHTML = '<p class="vazio">Erro ao carregar mensagens.</p>';
+    cont.innerHTML = '<p class="vazio" style="margin:auto">Erro ao carregar mensagens.</p>';
   }
+}
+
+function renderMensagens(msgs) {
+  let html = "";
+  let ultimaData = "";
+  msgs.forEach(m => {
+    const data = fmtDataSep(m.timestamp);
+    if (data && data !== ultimaData) {
+      html += `<div class="wa-msg-data"><span>${data}</span></div>`;
+      ultimaData = data;
+    }
+    html += `
+      <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}">
+        <div class="wa-msg-bolha">
+          ${esc(m.texto)}
+          <span class="wa-msg-hora">${fmtHora(m.timestamp)}${m.de_mim ? " ✓✓" : ""}</span>
+        </div>
+      </div>`;
+  });
+  return html;
 }
 
 async function responderConversa() {
@@ -342,8 +398,11 @@ async function responderConversa() {
   input.value = "";
 
   const cont = document.getElementById("chat-mensagens");
-  cont.insertAdjacentHTML("beforeend",
-    `<div class="wa-msg wa-msg-eu"><div class="wa-msg-bolha">${esc(texto)}</div></div>`);
+  const agora = Math.floor(Date.now() / 1000);
+  cont.insertAdjacentHTML("beforeend", `
+    <div class="wa-msg wa-msg-eu">
+      <div class="wa-msg-bolha">${esc(texto)}<span class="wa-msg-hora">${fmtHora(agora)} 🕓</span></div>
+    </div>`);
   cont.scrollTop = cont.scrollHeight;
 
   try {
@@ -357,6 +416,29 @@ async function responderConversa() {
   } catch (e) {
     mostrarToast("Erro de rede.", "error");
   }
+}
+
+// Timestamp Evolution vem em segundos (unix) ou ms — normaliza
+function _tsMs(ts) {
+  const n = Number(ts) || 0;
+  if (!n) return 0;
+  return n > 1e12 ? n : n * 1000;   // <1e12 => segundos
+}
+function fmtHora(ts) {
+  const ms = _tsMs(ts);
+  if (!ms) return "";
+  try { return new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+  catch (_) { return ""; }
+}
+function fmtDataSep(ts) {
+  const ms = _tsMs(ts);
+  if (!ms) return "";
+  const d = new Date(ms), hoje = new Date();
+  const ontem = new Date(); ontem.setDate(hoje.getDate() - 1);
+  if (d.toDateString() === hoje.toDateString()) return "Hoje";
+  if (d.toDateString() === ontem.toDateString()) return "Ontem";
+  try { return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }); }
+  catch (_) { return ""; }
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
