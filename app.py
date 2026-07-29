@@ -1125,7 +1125,7 @@ def preview_pagina(slug):
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
-_GEMINI_MODELO = "gemini-2.5-flash"
+_GEMINI_MODELO = "gemini-1.5-flash"
 
 def _gemini_gerar(prompt):
     from google import genai
