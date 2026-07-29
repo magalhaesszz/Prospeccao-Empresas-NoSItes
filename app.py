@@ -489,15 +489,18 @@ def api_wa_qrcode():
     base_url = webhook.rstrip("/")
 
     try:
-        # Garante que a instância existe
-        req.post(
+        cr = req.post(
             f"{base_url}/instance/create",
             headers=headers,
             json={"instanceName": instance, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
             timeout=15,
         )
-    except Exception:
-        pass  # ignora erro caso já exista
+        cr_data = cr.json()
+        # 409 = já existe, tudo bem. Outro erro = retorna pro usuário
+        if not cr.ok and cr.status_code != 409:
+            return jsonify({"erro": f"Erro ao criar instância: {str(cr_data)[:300]}"})
+    except Exception as e:
+        return jsonify({"erro": f"Não conseguiu conectar na Evolution API: {str(e)}"})
 
     try:
         r = req.get(
@@ -506,17 +509,15 @@ def api_wa_qrcode():
             timeout=15,
         )
         data = r.json()
-        # Já conectado
         state = (data.get("instance", {}).get("state") or data.get("state") or "").lower()
         if state in ("open", "connected"):
             return jsonify({"conectado": True})
-        # Retorna base64
         b64 = data.get("base64") or data.get("qrcode", {}).get("base64") or data.get("code")
         if b64:
             if not b64.startswith("data:"):
                 b64 = "data:image/png;base64," + b64
             return jsonify({"base64": b64})
-        return jsonify({"erro": f"QR não disponível. Resposta: {str(data)[:200]}"})
+        return jsonify({"erro": f"QR não disponível. Resposta: {str(data)[:300]}"})
     except Exception as e:
         return jsonify({"erro": str(e)})
 
