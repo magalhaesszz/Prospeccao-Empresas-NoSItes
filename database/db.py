@@ -144,6 +144,19 @@ def inicializar_banco():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS paginas_preview (
+            id           SERIAL PRIMARY KEY,
+            empresa_id   INTEGER REFERENCES empresas(id) ON DELETE SET NULL,
+            nome_empresa TEXT    NOT NULL,
+            slug         TEXT    UNIQUE NOT NULL,
+            html         TEXT    NOT NULL,
+            vistas       INTEGER DEFAULT 0,
+            criado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("CREATE INDEX IF NOT EXISTS idx_preview_slug ON paginas_preview(slug)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_telefone ON empresas(telefone)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_status   ON empresas(status)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_notas_empresa     ON notas(empresa_id)")
@@ -444,6 +457,55 @@ def contar_notas(empresa_id):
     row = c.fetchone()
     conn.close()
     return row[0] if row else 0
+
+
+# ── Landing Pages Preview ─────────────────────────────────────────────────────
+
+def criar_pagina_preview(empresa_id, nome_empresa, slug, html):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO paginas_preview (empresa_id, nome_empresa, slug, html)
+        VALUES (%s, %s, %s, %s) RETURNING id
+    """, (empresa_id, nome_empresa, slug, html))
+    pid = c.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return pid
+
+
+def buscar_pagina_por_slug(slug):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM paginas_preview WHERE slug=%s", (slug,))
+    row = _one(c)
+    conn.close()
+    return row
+
+
+def registrar_vista_pagina(slug):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE paginas_preview SET vistas=vistas+1 WHERE slug=%s", (slug,))
+    conn.commit()
+    conn.close()
+
+
+def listar_paginas_preview():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id,empresa_id,nome_empresa,slug,vistas,criado_em FROM paginas_preview ORDER BY criado_em DESC")
+    rows = _all(c)
+    conn.close()
+    return rows
+
+
+def deletar_pagina_preview(pid):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM paginas_preview WHERE id=%s", (pid,))
+    conn.commit()
+    conn.close()
 
 
 # ── Webhook / respostas ───────────────────────────────────────────────────────

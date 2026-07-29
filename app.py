@@ -21,6 +21,8 @@ from database.db import (
     criar_agendamento, listar_agendamentos, ativar_agendamento,
     deletar_agendamento, atualizar_ultima_execucao, contagem_enviadas_hoje,
     get_funil_conversao,
+    criar_pagina_preview, buscar_pagina_por_slug, registrar_vista_pagina,
+    listar_paginas_preview, deletar_pagina_preview,
 )
 from crm.pipeline import kanban_por_status
 from dashboard.metrics import obter_stats
@@ -86,7 +88,7 @@ def verificar_auth():
     senha = CONFIG.get("senha_painel", "").strip()
     if not senha:
         return  # sem senha = sem proteção
-    rotas_publicas = {"login_page", "api_login", "static"}
+    rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook"}
     if request.endpoint in rotas_publicas:
         return
     if not session.get("autenticado"):
@@ -142,6 +144,11 @@ def blacklist_page():
 @app.route("/whatsapp")
 def whatsapp_page():
     return render_template("whatsapp.html", page="whatsapp")
+
+
+@app.route("/gemini")
+def gemini_page():
+    return render_template("gemini.html", page="gemini")
 
 
 # ── SSE ───────────────────────────────────────────────────────────────────────
@@ -945,6 +952,173 @@ def api_wa_responder():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "erro": str(e)})
+
+
+# ── Preview de Landing Page (público — sem auth) ──────────────────────────────
+@app.route("/p/<slug>")
+def preview_pagina(slug):
+    pagina = buscar_pagina_por_slug(slug)
+    if not pagina:
+        return "<h1 style='font-family:sans-serif;text-align:center;margin-top:20%'>Página não encontrada.</h1>", 404
+    registrar_vista_pagina(slug)
+    return pagina["html"], 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+# ── Gemini AI Hub ──────────────────────────────────────────────────────────────
+
+def _gemini_model(model_name="gemini-2.5-flash"):
+    import google.generativeai as genai
+    api_key = CONFIG.get("gemini_api_key", "").strip()
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY não configurado.")
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(model_name)
+
+
+def _app_base_url():
+    app_url = CONFIG.get("app_url", "").strip().rstrip("/")
+    if app_url:
+        return app_url
+    return request.host_url.rstrip("/")
+
+
+@app.route("/api/gemini/status")
+def api_gemini_status():
+    configurado = bool(CONFIG.get("gemini_api_key", "").strip())
+    return jsonify({"configurado": configurado})
+
+
+@app.route("/api/gemini/gerar-pagina", methods=["POST"])
+def api_gemini_gerar_pagina():
+    import secrets as _sec
+    dados      = request.get_json(silent=True) or {}
+    nome       = (dados.get("nome")       or "").strip()
+    categoria  = (dados.get("categoria")  or "Negócio Local").strip()
+    cidade     = (dados.get("cidade")     or "Brasil").strip()
+    empresa_id = dados.get("empresa_id")
+
+    if not nome:
+        return jsonify({"erro": "Nome da empresa é obrigatório."}), 400
+
+    prompt = f"""Você é um desenvolvedor web expert em UI/UX e design moderno.
+Crie uma landing page HTML completa, profissional e visualmente impressionante para:
+
+EMPRESA: {nome}
+SEGMENTO: {categoria}
+CIDADE: {cidade}
+
+ESPECIFICAÇÕES TÉCNICAS OBRIGATÓRIAS:
+- HTML5 completo (<!DOCTYPE html> até </html>)
+- CSS 100% inline dentro de <style> — ZERO dependências externas (sem CDN, sem Google Fonts por URL, sem imagens externas)
+- Fontes: somente system fonts (-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif)
+- 100% responsivo com @media queries (mobile-first)
+- Sem JavaScript de terceiros
+
+ESTRUTURA (nesta ordem exata):
+1. <head> com meta charset, viewport, title e descrição SEO
+2. Navegação sticky no topo: logo/nome + links (Início, Serviços, Sobre, Contato)
+3. Hero: headline forte, subtítulo, 2 CTAs (WhatsApp + Ver Serviços) com gradiente de fundo
+4. Seção Serviços: 3-4 cards em grid com ícone SVG inline, título e descrição
+5. Seção Por que nos escolher: 3 diferenciais com ícone SVG e texto
+6. Seção Sobre: história da empresa, números (anos, clientes, projetos) em destaque visual
+7. Seção Depoimentos: 3 cards com texto, nome e cargo fictícios mas realistas
+8. Seção Contato: formulário (nome/email/telefone/mensagem) + endereço e telefone
+9. Botão WhatsApp flutuante fixo: canto inferior direito, verde #25D366, ícone SVG do WhatsApp
+10. Footer: copyright {nome} {cidade}
+
+DESIGN E QUALIDADE:
+- Paleta de cores profissional e moderna adequada ao segmento "{categoria}"
+- Use gradientes, sombras (box-shadow), border-radius, transições CSS suaves
+- Animações: hover effects nos cards e botões (transform: translateY, scale)
+- Aparência de site REAL de empresa estabelecida — não genérico
+- Textos em português brasileiro, criativos, persuasivos e realistas
+- Seções com padding generoso, espaçamento bem definido
+
+ATENÇÃO CRÍTICA: Retorne ÚNICA e EXCLUSIVAMENTE o código HTML. Nenhuma palavra antes ou depois. Sem blocos de código markdown (sem ```html ou ```). Nada além do HTML puro."""
+
+    try:
+        model    = _gemini_model("gemini-2.5-flash")
+        resp     = model.generate_content(prompt)
+        html_raw = resp.text.strip()
+
+        # Remove markdown code blocks se Gemini retornar com eles
+        if html_raw.startswith("```"):
+            lines = html_raw.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            html_raw = "\n".join(lines).strip()
+
+        slug = _sec.token_urlsafe(8)
+        pid  = criar_pagina_preview(empresa_id, nome, slug, html_raw)
+        url  = f"{_app_base_url()}/p/{slug}"
+
+        logger.info("[Gemini] Página gerada para '%s' → %s", nome, url)
+        return jsonify({"id": pid, "slug": slug, "url": url, "ok": True})
+
+    except Exception as e:
+        logger.error("[Gemini] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/api/gemini/gerar-mensagem", methods=["POST"])
+def api_gemini_gerar_mensagem():
+    dados      = request.get_json(silent=True) or {}
+    nome       = (dados.get("nome")       or "").strip()
+    categoria  = (dados.get("categoria")  or "").strip()
+    cidade     = (dados.get("cidade")     or "").strip()
+    link       = (dados.get("link")       or "").strip()
+
+    if not nome:
+        return jsonify({"erro": "Nome da empresa é obrigatório."}), 400
+
+    parte_link = (
+        f"\n- Link da prévia do site criado especialmente para eles: {link}"
+        if link else ""
+    )
+
+    prompt = f"""Você é especialista em vendas B2B via WhatsApp. Crie uma mensagem de prospecção profissional.
+
+DADOS:
+- Empresa: {nome}
+- Segmento: {categoria or 'não informado'}
+- Cidade: {cidade or 'não informada'}{parte_link}
+
+REGRAS:
+- Português brasileiro, tom amigável e profissional, direto ao ponto
+- Máximo 180 palavras
+- Mencione que identificou que a empresa não tem site/presença digital
+- Ofereça: criação de site profissional + automação de processos
+- Destaque: cobra apenas após entrega finalizada
+{"- Mencione o link da prévia do site que criou especificamente para eles (isso é diferencial poderoso)" if link else ""}
+- Formatação WhatsApp: *negrito* para pontos importantes
+- Máximo 2-3 emojis estratégicos
+- CTA claro pedindo resposta
+
+Retorne APENAS a mensagem, sem prefácio ou explicações."""
+
+    try:
+        model    = _gemini_model("gemini-2.5-flash")
+        resp     = model.generate_content(prompt)
+        mensagem = resp.text.strip()
+        return jsonify({"mensagem": mensagem})
+    except Exception as e:
+        logger.error("[Gemini msg] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/api/gemini/paginas", methods=["GET"])
+def api_gemini_paginas_get():
+    paginas = listar_paginas_preview()
+    base    = _app_base_url()
+    for p in paginas:
+        p["url"]      = f"{base}/p/{p['slug']}"
+        p["criado_em"] = str(p.get("criado_em") or "")
+    return jsonify(paginas)
+
+
+@app.route("/api/gemini/paginas/<int:pid>", methods=["DELETE"])
+def api_gemini_paginas_delete(pid):
+    deletar_pagina_preview(pid)
+    return jsonify({"ok": True})
 
 
 # ── Webhook Evolution API (rastreamento de respostas) ─────────────────────────

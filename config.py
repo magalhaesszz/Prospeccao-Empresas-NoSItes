@@ -28,6 +28,10 @@ CONFIG = {
     "evolution_api_key":  os.environ.get("EVOLUTION_API_KEY",  ""),
     # IA — Anthropic (opcional)
     "anthropic_api_key":  os.environ.get("ANTHROPIC_API_KEY",  ""),
+    # IA — Google Gemini
+    "gemini_api_key":     os.environ.get("GEMINI_API_KEY",     ""),
+    # URL pública do app (Railway) — usada nos links de preview
+    "app_url":            os.environ.get("APP_URL",            ""),
 
     # ── Score ────────────────────────────────────────────────────────────────
     "categorias_alto_valor": [
