@@ -280,13 +280,34 @@ async function dispararPendentes() {
 let _chatAtual = null;
 let _conversas = [];
 
+let _fsAncora = null;  // marcador do lugar original do card
+
 function toggleTelaCheia() {
   const card = document.getElementById("card-conversas");
-  const ativo = card.classList.toggle("fullscreen");
-  document.body.classList.toggle("chat-fullscreen", ativo);
-  const btn = document.getElementById("btn-fullscreen");
-  if (btn) btn.textContent = ativo ? "✕" : "⛶";
-  if (ativo) card.scrollIntoView({ behavior: "instant", block: "start" });
+  const btn  = document.getElementById("btn-fullscreen");
+  const entrando = !card.classList.contains("fullscreen");
+
+  if (entrando) {
+    // Move o card pra fora (direto no body) — evita que transform de ancestral
+    // quebre o position:fixed. Deixa um marcador pra restaurar depois.
+    _fsAncora = document.createComment("chat-anchor");
+    card.parentNode.insertBefore(_fsAncora, card);
+    document.body.appendChild(card);
+    card.classList.add("fullscreen");
+    document.body.classList.add("chat-fullscreen");
+    if (btn) btn.textContent = "✕";
+  } else {
+    card.classList.remove("fullscreen");
+    card.classList.remove("ver-conversa");
+    document.body.classList.remove("chat-fullscreen");
+    if (btn) btn.textContent = "⛶";
+    // Restaura pro lugar original
+    if (_fsAncora && _fsAncora.parentNode) {
+      _fsAncora.parentNode.insertBefore(card, _fsAncora);
+      _fsAncora.remove();
+      _fsAncora = null;
+    }
+  }
 }
 
 document.addEventListener("keydown", (e) => {
