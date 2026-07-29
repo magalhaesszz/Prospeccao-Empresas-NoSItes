@@ -1125,7 +1125,7 @@ def preview_pagina(slug):
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
-def _gemini_model(model_name="gemini-2.5-flash"):
+def _gemini_model(model_name="gemini-2.0-flash"):
     import google.generativeai as genai
     api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
@@ -1196,7 +1196,7 @@ DESIGN E QUALIDADE:
 ATENÇÃO CRÍTICA: Retorne ÚNICA e EXCLUSIVAMENTE o código HTML. Nenhuma palavra antes ou depois. Sem blocos de código markdown (sem ```html ou ```). Nada além do HTML puro."""
 
     try:
-        model    = _gemini_model("gemini-2.5-flash")
+        model    = _gemini_model("gemini-2.0-flash")
         resp     = model.generate_content(prompt)
         html_raw = resp.text.strip()
 
@@ -1255,7 +1255,7 @@ REGRAS:
 Retorne APENAS a mensagem, sem prefácio ou explicações."""
 
     try:
-        model    = _gemini_model("gemini-2.5-flash")
+        model    = _gemini_model("gemini-2.0-flash")
         resp     = model.generate_content(prompt)
         mensagem = resp.text.strip()
         return jsonify({"mensagem": mensagem})
