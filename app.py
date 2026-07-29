@@ -1125,13 +1125,16 @@ def preview_pagina(slug):
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
-def _gemini_model(model_name="gemini-1.5-flash"):
-    import google.generativeai as genai
+_GEMINI_MODELO = "gemini-2.5-flash"
+
+def _gemini_gerar(prompt):
+    from google import genai
     api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
         raise ValueError("GEMINI_API_KEY não configurado.")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(model_name)
+    client = genai.Client(api_key=api_key)
+    resp   = client.models.generate_content(model=_GEMINI_MODELO, contents=prompt)
+    return resp.text.strip()
 
 
 def _app_base_url():
@@ -1196,9 +1199,7 @@ DESIGN E QUALIDADE:
 ATENÇÃO CRÍTICA: Retorne ÚNICA e EXCLUSIVAMENTE o código HTML. Nenhuma palavra antes ou depois. Sem blocos de código markdown (sem ```html ou ```). Nada além do HTML puro."""
 
     try:
-        model    = _gemini_model("gemini-1.5-flash")
-        resp     = model.generate_content(prompt)
-        html_raw = resp.text.strip()
+        html_raw = _gemini_gerar(prompt)
 
         # Remove markdown code blocks se Gemini retornar com eles
         if html_raw.startswith("```"):
@@ -1255,9 +1256,7 @@ REGRAS:
 Retorne APENAS a mensagem, sem prefácio ou explicações."""
 
     try:
-        model    = _gemini_model("gemini-1.5-flash")
-        resp     = model.generate_content(prompt)
-        mensagem = resp.text.strip()
+        mensagem = _gemini_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
         logger.error("[Gemini msg] %s", e)

@@ -8,10 +8,13 @@ import secrets, logging, re
 logger = logging.getLogger(__name__)
 
 
-def _model(api_key, name="gemini-1.5-flash"):
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(name)
+_MODELO = "gemini-2.5-flash"
+
+def _gerar(prompt, api_key):
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    resp = client.models.generate_content(model=_MODELO, contents=prompt)
+    return resp.text.strip()
 
 
 def _strip_markdown(text):
@@ -109,9 +112,7 @@ REGRAS OBRIGATÓRIAS:
 
 Retorne APENAS a mensagem. Zero prefácio ou explicação."""
 
-    model = _model(api_key)
-    resp  = model.generate_content(prompt)
-    return resp.text.strip()
+    return _gerar(prompt, api_key)
 
 
 # ── Gerador de landing page ───────────────────────────────────────────────────
@@ -192,10 +193,8 @@ DADOS REAIS DA EMPRESA (use TODOS na página):
 
 RETORNE ÚNICA E EXCLUSIVAMENTE O CÓDIGO HTML. Sem markdown, sem ```, sem qualquer texto antes ou depois."""
 
-    model = _model(api_key)
-    resp  = model.generate_content(prompt)
-    html  = _strip_markdown(resp.text)
-    slug  = secrets.token_urlsafe(8)
+    html = _strip_markdown(_gerar(prompt, api_key))
+    slug = secrets.token_urlsafe(8)
     return slug, html
 
 
