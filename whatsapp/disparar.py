@@ -3,7 +3,7 @@ Disparo de mensagens WhatsApp.
 Suporta pywhatkit (padrão) ou webhook externo (Evolution API / Z-API).
 Respeita blacklist, horário comercial e intervalo anti-ban.
 """
-import os, sys, time, random, logging
+import os, re, sys, time, random, logging
 from datetime import datetime
 
 import requests as http_requests
@@ -48,12 +48,15 @@ def _enviar_via_webhook(numero, mensagem):
     instance = CONFIG.get("evolution_instance", "").strip()
 
     if api_key and instance:
-        # Evolution API v2 — número sem + (só dígitos)
-        numero_limpo = numero.lstrip("+").replace(" ", "").replace("-", "")
+        # Extrai só dígitos; garante código 55 (Brasil)
+        digitos = re.sub(r"\D", "", numero)
+        if not digitos.startswith("55"):
+            digitos = "55" + digitos
         url     = f"{base_url.rstrip('/')}/message/sendText/{instance}"
         headers = {"apikey": api_key, "Content-Type": "application/json"}
+        # Tenta payload v2 (textMessage); fallback p/ v1 (text) em caso de 400
         payload = {
-            "number": numero_limpo,
+            "number": digitos,
             "options": {"delay": 1200, "presence": "composing"},
             "textMessage": {"text": mensagem},
         }
@@ -64,7 +67,15 @@ def _enviar_via_webhook(numero, mensagem):
         payload = {"numero": numero, "mensagem": mensagem}
 
     resp = http_requests.post(url, json=payload, headers=headers, timeout=30)
-    resp.raise_for_status()
+
+    # Se v2 falhou com 400, tenta payload v1 simples
+    if resp.status_code == 400 and api_key and instance:
+        logger.warning("payload v2 retornou 400 (%s) — tentando payload v1", resp.text[:200])
+        payload_v1 = {"number": digitos, "text": mensagem}
+        resp = http_requests.post(url, json=payload_v1, headers=headers, timeout=30)
+
+    if not resp.ok:
+        raise Exception(f"{resp.status_code} {resp.reason} — {resp.text[:300]}")
     return True
 
 
