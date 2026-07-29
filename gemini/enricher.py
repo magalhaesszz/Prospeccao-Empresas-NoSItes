@@ -12,7 +12,11 @@ _MODELO = "gemini-1.5-flash"
 
 def _gerar(prompt, api_key):
     from google import genai
-    client = genai.Client(api_key=api_key)
+    from google.genai import types
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(api_version="v1"),
+    )
     resp = client.models.generate_content(model=_MODELO, contents=prompt)
     return resp.text.strip()
 

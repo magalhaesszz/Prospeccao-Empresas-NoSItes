@@ -1129,11 +1129,15 @@ _GEMINI_MODELO = "gemini-1.5-flash"
 
 def _gemini_gerar(prompt):
     from google import genai
+    from google.genai import types
     api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
         raise ValueError("GEMINI_API_KEY não configurado.")
-    client = genai.Client(api_key=api_key)
-    resp   = client.models.generate_content(model=_GEMINI_MODELO, contents=prompt)
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(api_version="v1"),
+    )
+    resp = client.models.generate_content(model=_GEMINI_MODELO, contents=prompt)
     return resp.text.strip()
 
 
