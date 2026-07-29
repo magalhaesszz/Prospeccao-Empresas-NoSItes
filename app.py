@@ -539,7 +539,17 @@ def api_wa_desconectar():
             headers={"apikey": api_key},
             timeout=10,
         )
-        return jsonify({"ok": r.ok})
+        if r.ok:
+            return jsonify({"ok": True})
+        # Instância já desconectada também é sucesso do ponto de vista do usuário
+        corpo = ""
+        try:
+            corpo = str(r.json())
+        except Exception:
+            corpo = r.text[:200]
+        if "not" in corpo.lower() and ("connect" in corpo.lower() or "logged" in corpo.lower()):
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {corpo[:200]}"})
     except Exception as e:
         return jsonify({"ok": False, "erro": str(e)})
 
