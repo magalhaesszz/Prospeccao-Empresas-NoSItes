@@ -44,11 +44,21 @@
     <button class="btn btn-primary btn-sm" onclick="adicionarNota()" style="width:100%;margin-top:6px">+ Adicionar Nota</button>
   </div>
 
-  <!-- WhatsApp rápido -->
+  <!-- WhatsApp rápido + IA Follow-up -->
   <div class="painel-wa" style="border-top:1px solid var(--border)">
-    <button id="btn-wa-painel" class="btn btn-whatsapp" style="width:100%" onclick="enviarWaPainel()">
+    <button id="btn-wa-painel" class="btn btn-whatsapp" style="width:100%;margin-bottom:8px" onclick="enviarWaPainel()">
       📱 Enviar WhatsApp
     </button>
+    <button id="btn-followup-ia" class="btn btn-sm" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:8px;font-size:.82rem" onclick="gerarFollowupIA()">
+      ⚡ Gerar Follow-up com IA
+    </button>
+    <div id="followup-resultado" style="display:none;margin-top:10px">
+      <textarea id="followup-texto" rows="6" style="width:100%;box-sizing:border-box;font-size:.8rem;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface-2);color:var(--text);font-family:inherit;resize:vertical"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn btn-sm btn-secondary" style="flex:1" onclick="copiarFollowup()">Copiar</button>
+        <button class="btn btn-sm btn-whatsapp" style="flex:1" onclick="enviarFollowupWa()">WhatsApp</button>
+      </div>
+    </div>
   </div>
 </div>
 <div id="overlay-painel" class="overlay-painel hidden" onclick="fecharPainel()"></div>

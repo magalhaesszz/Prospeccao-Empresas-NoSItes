@@ -130,6 +130,39 @@ function mostrarToast(msg, tipo = "info") {
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
 }
 
+// ── IA — Gerar template ───────────────────────────────────────────────────────
+
+async function gerarTemplateIA() {
+  const desc   = (document.getElementById("ia-desc-template")?.value || "").trim();
+  const status = document.getElementById("ia-template-status");
+  const btn    = document.getElementById("btn-gerar-template-ia");
+
+  if (!desc) { mostrarToast("Descreva o template que quer gerar.", "warning"); return; }
+
+  if (btn)    { btn.disabled = true; btn.textContent = "⏳"; }
+  if (status) { status.textContent = "Gerando com IA..."; status.style.display = "block"; }
+
+  try {
+    const r = await fetch("/api/groq/gerar-template", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ descricao: desc }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.erro) throw new Error(d.erro || "Erro");
+
+    const ta = document.getElementById("ed-mensagem");
+    if (ta) { ta.value = d.template; atualizarPreview(); }
+    if (status) { status.textContent = "✓ Pronto! Edite se necessário."; }
+    mostrarToast("Template gerado com IA!", "success");
+  } catch (e) {
+    if (status) { status.textContent = "Erro: " + e.message; }
+    mostrarToast("Erro IA: " + e.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Gerar"; }
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   carregarTemplates();

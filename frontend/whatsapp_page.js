@@ -663,6 +663,49 @@ function mostrarToast(msg, tipo = "info") {
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
 }
 
+// ── IA — Responder conversa ───────────────────────────────────────────────────
+
+async function iaResponderConversa() {
+  if (!_chatAtual) { mostrarToast("Abra uma conversa primeiro.", "warning"); return; }
+
+  const ultima = [..._msgAtual].reverse().find(m => !m.de_mim);
+  if (!ultima) { mostrarToast("Nenhuma mensagem do prospect encontrada.", "warning"); return; }
+
+  const hist = _msgAtual.slice(-8).map(m =>
+    `${m.de_mim ? "Eu" : _chatAtual.nome}: ${m.texto || "[mídia]"}`
+  ).join("\n");
+
+  const input = document.getElementById("chat-resposta");
+  const btn   = document.getElementById("btn-ia-chat");
+
+  if (btn) { btn.disabled = true; btn.textContent = "⏳"; }
+  input.value    = "Gerando resposta com IA...";
+  input.disabled = true;
+
+  try {
+    const r = await fetch("/api/groq/responder-conversa", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        nome:              _chatAtual.nome,
+        ultima_msg:        ultima.texto || "",
+        historico_resumo:  hist,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.erro) throw new Error(d.erro || "Erro");
+    input.value = d.mensagem;
+    input.focus();
+    mostrarToast("Resposta IA gerada!", "success");
+  } catch (e) {
+    input.value = "";
+    mostrarToast("Erro IA: " + e.message, "error");
+  } finally {
+    input.disabled = false;
+    if (btn) { btn.disabled = false; btn.textContent = "⚡ IA"; }
+  }
+}
+
 // ── IA — Gerar mensagem ───────────────────────────────────────────────────────
 
 async function gerarMensagemIA() {

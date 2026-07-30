@@ -226,6 +226,49 @@ async function deletarNota(notaId) {
   if (_empresaAbertaId) await carregarNotas(_empresaAbertaId);
 }
 
+// ── IA Follow-up ─────────────────────────────────────────────────────────────
+
+async function gerarFollowupIA() {
+  if (!_empresaAbertaId) return;
+  const btn = document.getElementById("btn-followup-ia");
+  const res = document.getElementById("followup-resultado");
+  const txt = document.getElementById("followup-texto");
+
+  btn.disabled     = true;
+  btn.textContent  = "⏳ Gerando...";
+  if (res) res.style.display = "none";
+
+  try {
+    const r = await fetch("/api/groq/crm-followup", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ empresa_id: _empresaAbertaId }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.erro) throw new Error(d.erro || "Erro");
+    if (txt) txt.value = d.mensagem;
+    if (res) res.style.display = "block";
+    mostrarToast("Follow-up gerado!", "success");
+  } catch (e) {
+    mostrarToast("Erro IA: " + e.message, "error");
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "⚡ Gerar Follow-up com IA";
+  }
+}
+
+function copiarFollowup() {
+  const txt = document.getElementById("followup-texto")?.value;
+  if (txt) navigator.clipboard.writeText(txt).then(() => mostrarToast("Copiado!", "success"));
+}
+
+function enviarFollowupWa() {
+  const txt = document.getElementById("followup-texto")?.value;
+  const tel = (_empresaAbertaObj?.telefone || "").replace(/\D/g, "");
+  if (!txt || !tel) { mostrarToast("Sem mensagem ou telefone.", "warning"); return; }
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(txt)}`, "_blank");
+}
+
 // ── WhatsApp rápido ───────────────────────────────────────────────────────────
 
 async function enviarWaPainel() {

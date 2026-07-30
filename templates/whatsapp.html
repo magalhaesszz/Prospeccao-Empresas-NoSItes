@@ -152,7 +152,9 @@
           <div class="wa-emoji-picker hidden" id="emoji-picker"></div>
           <div class="wa-chat-input">
             <button class="wa-emoji-btn" onclick="toggleEmoji()" title="Emoji">&#128512;</button>
-            <input type="text" id="chat-resposta" placeholder="Digite uma mensagem..." onkeydown="if(event.key==='Enter')responderConversa()"/>
+            <button onclick="iaResponderConversa()" id="btn-ia-chat" title="Gerar resposta com IA"
+              style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;cursor:pointer;white-space:nowrap;font-weight:600;flex-shrink:0">⚡ IA</button>
+            <input type="text" id="chat-resposta" placeholder="Digite ou use ⚡ IA para gerar resposta..." onkeydown="if(event.key==='Enter')responderConversa()"/>
             <button class="wa-chat-enviar" onclick="responderConversa()" title="Enviar">&#10148;</button>
           </div>
         </div>

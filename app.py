@@ -1103,6 +1103,135 @@ def api_gemini_enriquecer_empresa():
     })
 
 
+@app.route("/api/groq/responder-conversa", methods=["POST"])
+def api_groq_responder_conversa():
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    ultima_msg = (dados.get("ultima_msg") or "").strip()
+    if not ultima_msg:
+        return jsonify({"erro": "ultima_msg obrigatório."}), 400
+
+    nome      = dados.get("nome", "prospect")
+    historico = (dados.get("historico_resumo") or "").strip()
+    hist_part = f"\nHistórico recente:\n{historico}" if historico else ""
+
+    prompt = f"""Você é um assistente de vendas B2B especialista em fechar negócios pelo WhatsApp.
+Você vende: criação de site profissional + automação de processos para pequenas empresas.
+Política: cobra APENAS após a entrega finalizada.
+
+Cliente: {nome}{hist_part}
+
+Última mensagem recebida:
+"{ultima_msg}"
+
+Gere uma resposta profissional, empática e focada em avançar a venda.
+- Português brasileiro, tom natural e amigável
+- Máximo 120 palavras
+- Se perguntou sobre preço: reforce "só paga após a entrega", proponha ver uma prévia
+- Se demonstrou interesse: proponha próximo passo concreto
+- Se expressou dúvida: esclareça com tranquilidade
+- Use *negrito* com moderação
+- Máximo 1 emoji
+
+Retorne APENAS a mensagem de resposta."""
+
+    try:
+        return jsonify({"mensagem": _groq_gerar(prompt), "ok": True})
+    except Exception as e:
+        logger.error("[Groq conversa] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/api/groq/crm-followup", methods=["POST"])
+def api_groq_crm_followup():
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+
+    dados      = request.get_json(silent=True) or {}
+    empresa_id = dados.get("empresa_id")
+    if not empresa_id:
+        return jsonify({"erro": "empresa_id obrigatório."}), 400
+
+    emp = buscar_empresa_por_id(empresa_id)
+    if not emp:
+        return jsonify({"erro": "Empresa não encontrada."}), 404
+
+    notas = listar_notas(empresa_id)
+    notas_txt = "\n".join(f"- {n['texto']}" for n in notas) if notas else "Nenhuma nota registrada"
+
+    status_desc = {
+        "novo":        "empresa foi prospectada, ainda sem resposta",
+        "contatado":   "empresa foi contatada, aguardando retorno",
+        "interessado": "empresa demonstrou interesse no serviço",
+        "fechado":     "negócio fechado com sucesso",
+        "perdido":     "negócio não avançou",
+    }.get(emp.get("status", "novo"), "status desconhecido")
+
+    prompt = f"""Você é especialista em follow-up de vendas B2B via WhatsApp.
+Serviço: criação de site + automação (cobra após entrega).
+
+EMPRESA: {emp.get('nome', '')}
+SEGMENTO: {emp.get('descricao_google') or emp.get('categoria', '') or 'não informado'}
+CIDADE: {emp.get('cidade', '') or 'não informada'}
+STATUS CRM: {status_desc}
+NOTAS REGISTRADAS:
+{notas_txt}
+
+Crie uma mensagem de follow-up personalizada e contextualizada.
+- Português brasileiro, tom amigável
+- Máximo 150 palavras
+- Referencie o histórico de forma natural
+- CTA claro e simples
+- *Negrito* com moderação
+- Máximo 2 emojis
+
+Retorne APENAS a mensagem."""
+
+    try:
+        return jsonify({"mensagem": _groq_gerar(prompt), "ok": True})
+    except Exception as e:
+        logger.error("[Groq followup] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/api/groq/gerar-template", methods=["POST"])
+def api_groq_gerar_template():
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+
+    dados     = request.get_json(silent=True) or {}
+    descricao = (dados.get("descricao") or "").strip()
+    if not descricao:
+        return jsonify({"erro": "descricao obrigatório."}), 400
+
+    prompt = f"""Você é especialista em copywriting para prospecção B2B via WhatsApp.
+Crie um template de mensagem de prospecção profissional.
+
+DESCRIÇÃO DO TEMPLATE: {descricao}
+
+REGRAS OBRIGATÓRIAS:
+- Use {{NOME_DA_EMPRESA}} onde mencionar o nome da empresa (será substituído automaticamente)
+- Português brasileiro, tom amigável e direto
+- Máximo 200 palavras
+- Mencione: identificou que não têm presença digital, oferece site + automação, cobra após entrega
+- *Negrito* para pontos-chave
+- Máximo 3 emojis estratégicos
+- CTA claro no final
+
+Retorne APENAS a mensagem do template."""
+
+    try:
+        return jsonify({"template": _groq_gerar(prompt), "ok": True})
+    except Exception as e:
+        logger.error("[Groq template] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
 @app.route("/api/groq/gerar-mensagem-empresa", methods=["POST"])
 def api_groq_gerar_mensagem_empresa():
     api_key = CONFIG.get("groq_api_key", "").strip()

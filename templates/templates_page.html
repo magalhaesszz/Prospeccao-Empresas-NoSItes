@@ -26,6 +26,14 @@
     <button onclick="fecharEditor()" class="btn-fechar">✕</button>
   </div>
   <div class="modal-body">
+    <div style="margin-bottom:14px;padding:12px;background:rgba(99,102,241,.07);border-radius:10px;border:1px solid rgba(99,102,241,.2)">
+      <label style="font-size:.8rem;color:#6366f1;font-weight:700;display:block;margin-bottom:6px">⚡ Gerar mensagem com IA</label>
+      <div style="display:flex;gap:8px">
+        <input id="ia-desc-template" type="text" placeholder="Ex: Template para barbearias do interior" style="flex:1;font-size:.82rem"/>
+        <button onclick="gerarTemplateIA()" id="btn-gerar-template-ia" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;cursor:pointer;white-space:nowrap;font-weight:600">Gerar</button>
+      </div>
+      <p id="ia-template-status" style="font-size:.75rem;color:var(--muted);margin:6px 0 0;display:none"></p>
+    </div>
     <div class="form-group" style="margin-bottom:12px">
       <label>Nome do Template</label>
       <input id="ed-nome" type="text" placeholder="Ex: Proposta Site Profissional"/>
