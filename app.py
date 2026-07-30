@@ -263,10 +263,10 @@ def _executar_busca(cidade, categoria):
 
         atualizar_contagem_busca(busca_id, len(empresas), sem_site)
 
-        # IDs prontos pra disparo: sem site + com telefone + ainda não enviados
+        # IDs prontos pra disparo: sem site + com telefone + não enviados ainda
         prontos = [
             emp["id"] for emp in empresas
-            if not emp.get("tem_site") and emp.get("telefone")
+            if not emp.get("tem_site") and emp.get("telefone") and not emp.get("mensagem_enviada")
         ]
 
         with _lock:

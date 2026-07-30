@@ -122,12 +122,18 @@ def buscar_empresas(cidade, categoria, callback_progresso=None):
         total = _rolar_feed(driver, CONFIG["max_resultados"])
         logger.info("%d cards no feed.", total)
 
+        telefones_vistos = set()
         limite = min(total, CONFIG["max_resultados"])
         for i in range(limite):
             try:
                 emp = _extrair_com_retry(driver, i, tentativas=2)
                 if emp:
                     emp["score"] = _calcular_score(emp, categoria)
+                    tel = emp.get("telefone")
+                    if tel and tel in telefones_vistos:
+                        continue
+                    if tel:
+                        telefones_vistos.add(tel)
                     empresas.append(emp)
                     logger.info("[%d/%d] %s | Tel:%s Site:%s Score:%d",
                         i + 1, limite, emp["nome"],

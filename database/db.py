@@ -217,10 +217,16 @@ def salvar_empresa(empresa, busca_id):
     c = conn.cursor()
 
     if empresa.get("telefone"):
-        c.execute("SELECT id FROM empresas WHERE telefone=%s", (empresa["telefone"],))
+        c.execute(
+            "SELECT id, mensagem_enviada, status FROM empresas WHERE telefone=%s",
+            (empresa["telefone"],)
+        )
         row = c.fetchone()
         if row:
             conn.close()
+            empresa["_duplicado"]       = True
+            empresa["mensagem_enviada"] = row[1]
+            empresa["status"]           = row[2]
             return row[0]
 
     c.execute("""

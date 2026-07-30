@@ -233,9 +233,10 @@ function renderizarCards() {
   }
 
   pag.forEach(emp => {
-    const temSite  = Boolean(emp.tem_site);
-    const enviado  = Boolean(emp.mensagem_enviada);
-    const podeSel  = !temSite && !enviado && emp.telefone;
+    const temSite   = Boolean(emp.tem_site);
+    const enviado   = Boolean(emp.mensagem_enviada);
+    const duplicado = Boolean(emp._duplicado);
+    const podeSel   = !temSite && !enviado && emp.telefone;
     const sc       = emp.score || 0;
     const scoreCls = sc >= 70 ? "score-alto" : sc >= 40 ? "score-medio" : "score-baixo";
     const checked  = APP.selecionados.has(emp.id) ? "checked" : "";
@@ -274,7 +275,7 @@ function renderizarCards() {
             ${!temSite
               ? '<span class="badge badge-verde" style="font-size:.68rem">Sem site</span>'
               : '<span class="badge badge-vermelho" style="font-size:.68rem">Tem site</span>'}
-            ${_badgeStatus(emp.status, enviado)}
+            ${_badgeStatus(emp.status, enviado, duplicado)}
           </div>
           ${cat ? `<div style="margin-top:5px">
             <span style="font-size:.73rem;background:rgba(66,133,244,.12);color:#4285F4;padding:2px 9px;border-radius:12px">${esc(cat)}</span>
@@ -319,11 +320,12 @@ function renderizarCards() {
   });
 }
 
-function _badgeStatus(status, enviado) {
+function _badgeStatus(status, enviado, duplicado) {
   if (enviado || status === "contatado") return '<span class="badge badge-azul" style="font-size:.68rem">Contatado</span>';
   if (status === "interessado")          return '<span class="badge badge-roxo" style="font-size:.68rem">Interessado</span>';
   if (status === "fechado")              return '<span class="badge badge-verde" style="font-size:.68rem">Fechado</span>';
   if (status === "perdido")              return '<span class="badge badge-vermelho" style="font-size:.68rem">Perdido</span>';
+  if (duplicado) return '<span class="badge" style="font-size:.68rem;background:rgba(245,158,11,.15);color:#d97706;border:1px solid rgba(245,158,11,.3)">Já no BD</span>';
   return '<span class="badge badge-cinza" style="font-size:.68rem">Novo</span>';
 }
 
