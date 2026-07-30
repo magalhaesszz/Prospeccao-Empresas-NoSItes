@@ -8,4 +8,4 @@ openpyxl
 phonenumbers
 psycopg2-binary
 anthropic
-google-genai
+groq

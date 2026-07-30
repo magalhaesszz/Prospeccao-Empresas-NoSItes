@@ -21,10 +21,10 @@ async function verificarStatusGemini() {
     const txt = document.getElementById("gemini-status-txt");
     if (d.configurado) {
       dot.style.background = "#10B981";
-      txt.textContent      = "Gemini configurado";
+      txt.textContent      = "Groq configurado";
     } else {
       dot.style.background = "#EF4444";
-      txt.textContent      = "Configure GEMINI_API_KEY no Railway";
+      txt.textContent      = "Configure GROQ_API_KEY no Railway";
     }
   } catch (e) {
     console.error("Status Gemini:", e);

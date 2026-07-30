@@ -1016,9 +1016,9 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina):
 
 @app.route("/api/gemini/enriquecer", methods=["POST"])
 def api_gemini_enriquecer():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
 
     with _lock:
         if _estado.get("enriquecendo"):
@@ -1064,9 +1064,9 @@ def api_gemini_enriquecer():
 
 @app.route("/api/gemini/enriquecer-empresa", methods=["POST"])
 def api_gemini_enriquecer_empresa():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
 
     dados      = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1125,20 +1125,20 @@ def preview_pagina(slug):
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
-_GEMINI_MODELO = "gemini-1.5-flash"
+_GROQ_MODELO = "llama-3.3-70b-versatile"
 
-def _gemini_gerar(prompt):
-    from google import genai
-    from google.genai import types
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+def _groq_gerar(prompt):
+    from groq import Groq
+    api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:
-        raise ValueError("GEMINI_API_KEY não configurado.")
-    client = genai.Client(
-        api_key=api_key,
-        http_options=types.HttpOptions(api_version="v1"),
+        raise ValueError("GROQ_API_KEY não configurado.")
+    client = Groq(api_key=api_key)
+    resp = client.chat.completions.create(
+        model=_GROQ_MODELO,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=8192,
     )
-    resp = client.models.generate_content(model=_GEMINI_MODELO, contents=prompt)
-    return resp.text.strip()
+    return resp.choices[0].message.content.strip()
 
 
 def _app_base_url():
@@ -1150,12 +1150,12 @@ def _app_base_url():
 
 @app.route("/api/gemini/status")
 def api_gemini_status():
-    configurado = bool(CONFIG.get("gemini_api_key", "").strip())
+    configurado = bool(CONFIG.get("groq_api_key", "").strip())
     return jsonify({"configurado": configurado})
 
 
 @app.route("/api/gemini/gerar-pagina", methods=["POST"])
-def api_gemini_gerar_pagina():
+def api_groq_gerar_pagina():
     import secrets as _sec
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
@@ -1203,7 +1203,7 @@ DESIGN E QUALIDADE:
 ATENÇÃO CRÍTICA: Retorne ÚNICA e EXCLUSIVAMENTE o código HTML. Nenhuma palavra antes ou depois. Sem blocos de código markdown (sem ```html ou ```). Nada além do HTML puro."""
 
     try:
-        html_raw = _gemini_gerar(prompt)
+        html_raw = _groq_gerar(prompt)
 
         # Remove markdown code blocks se Gemini retornar com eles
         if html_raw.startswith("```"):
@@ -1215,16 +1215,16 @@ ATENÇÃO CRÍTICA: Retorne ÚNICA e EXCLUSIVAMENTE o código HTML. Nenhuma pala
         pid  = criar_pagina_preview(empresa_id, nome, slug, html_raw)
         url  = f"{_app_base_url()}/p/{slug}"
 
-        logger.info("[Gemini] Página gerada para '%s' → %s", nome, url)
+        logger.info("[Groq] Página gerada para '%s' → %s", nome, url)
         return jsonify({"id": pid, "slug": slug, "url": url, "ok": True})
 
     except Exception as e:
-        logger.error("[Gemini] %s", e)
+        logger.error("[Groq] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 
 @app.route("/api/gemini/gerar-mensagem", methods=["POST"])
-def api_gemini_gerar_mensagem():
+def api_groq_gerar_mensagem():
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
     categoria  = (dados.get("categoria")  or "").strip()
@@ -1260,10 +1260,10 @@ REGRAS:
 Retorne APENAS a mensagem, sem prefácio ou explicações."""
 
     try:
-        mensagem = _gemini_gerar(prompt)
+        mensagem = _groq_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
-        logger.error("[Gemini msg] %s", e)
+        logger.error("[Groq msg] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 

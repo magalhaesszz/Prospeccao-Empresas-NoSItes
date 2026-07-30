@@ -1,5 +1,5 @@
 """
-Gemini AI enrichment pipeline.
+Groq AI enrichment pipeline.
 Given a company dict (with scraped Google Maps data), generates:
   - Personalized WhatsApp message (unique per company, uses real data)
   - Landing page HTML (complete, self-contained, uses real data)
@@ -8,17 +8,17 @@ import secrets, logging, re
 logger = logging.getLogger(__name__)
 
 
-_MODELO = "gemini-2.0-flash-lite"
+_MODELO = "llama-3.3-70b-versatile"
 
 def _gerar(prompt, api_key):
-    from google import genai
-    from google.genai import types
-    client = genai.Client(
-        api_key=api_key,
-        http_options=types.HttpOptions(api_version="v1"),
+    from groq import Groq
+    client = Groq(api_key=api_key)
+    resp = client.chat.completions.create(
+        model=_MODELO,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=8192,
     )
-    resp = client.models.generate_content(model=_MODELO, contents=prompt)
-    return resp.text.strip()
+    return resp.choices[0].message.content.strip()
 
 
 def _strip_markdown(text):
@@ -220,16 +220,16 @@ def enriquecer(empresa, api_key, app_url="", criar_pagina=True):
             slug, html = gerar_pagina(empresa, api_key)
             if app_url:
                 preview_url = f"{app_url.rstrip('/')}/p/{slug}"
-            logger.info("[Gemini] Página gerada para '%s' → /p/%s", empresa.get("nome"), slug)
+            logger.info("[Groq] Página gerada para '%s' → /p/%s", empresa.get("nome"), slug)
         except Exception as e:
-            logger.error("[Gemini] Falha página '%s': %s", empresa.get("nome"), e)
+            logger.error("[Groq] Falha página '%s': %s", empresa.get("nome"), e)
 
     mensagem = None
     try:
         mensagem = gerar_mensagem(empresa, api_key, preview_url)
-        logger.info("[Gemini] Mensagem gerada para '%s'", empresa.get("nome"))
+        logger.info("[Groq] Mensagem gerada para '%s'", empresa.get("nome"))
     except Exception as e:
-        logger.error("[Gemini] Falha mensagem '%s': %s", empresa.get("nome"), e)
+        logger.error("[Groq] Falha mensagem '%s': %s", empresa.get("nome"), e)
 
     return {
         "empresa_id":  empresa.get("id"),
