@@ -215,10 +215,27 @@ def _extrair_item(driver, indice):
         return None
 
     card = cards[indice]
+
+    # Captura URL do lugar diretamente do <a> do card — mais confiável que current_url
+    maps_url_card = ""
+    try:
+        link_el = card.find_element(By.CSS_SELECTOR, "a[href]")
+        maps_url_card = link_el.get_attribute("href") or ""
+    except Exception:
+        pass
+
     driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'smooth'})", card)
     time.sleep(0.4)
+
+    url_antes = driver.current_url
     driver.execute_script("arguments[0].click()", card)
-    time.sleep(2.5)
+
+    # Espera a URL mudar (painel do lugar carregou) — evita ler dados do card anterior
+    try:
+        WebDriverWait(driver, 10).until(lambda d: d.current_url != url_antes)
+        time.sleep(1.5)  # painel visualmente renderiza após URL mudar
+    except TimeoutException:
+        time.sleep(3)
 
     try:
         WebDriverWait(driver, 8).until(
@@ -319,12 +336,13 @@ def _extrair_item(driver, indice):
     except Exception:
         pass
 
-    # URL do Google Maps (URL atual do painel de detalhes)
-    maps_url = ""
-    try:
-        maps_url = driver.current_url or ""
-    except Exception:
-        pass
+    # URL do Google Maps — prefere href do card (capturado antes do clique)
+    maps_url = maps_url_card
+    if not maps_url:
+        try:
+            maps_url = driver.current_url or ""
+        except Exception:
+            pass
 
     # Foto principal do estabelecimento
     foto_url = ""
