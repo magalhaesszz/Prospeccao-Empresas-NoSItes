@@ -1284,6 +1284,52 @@ def preview_pagina(slug):
     return pagina["html"], 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
+@app.route("/api/groq/analisar-prospects", methods=["POST"])
+def api_groq_analisar_prospects():
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+
+    dados    = request.get_json(silent=True) or {}
+    empresas = dados.get("empresas", [])
+    if not empresas:
+        return jsonify({"analise": "", "ok": True})
+
+    linhas = []
+    for i, emp in enumerate(empresas[:25]):
+        tel  = "✓ tel" if emp.get("telefone") else "✗ sem tel"
+        site = "tem site" if emp.get("tem_site") else "SEM SITE"
+        nota = f"{emp.get('nota','?')}★ ({emp.get('avaliacoes','?')} avaliações)"
+        sc   = emp.get("score", 0)
+        linhas.append(f"{i+1}. {emp.get('nome','')} [{site}] [{tel}] [score:{sc}] [{nota}]")
+
+    prompt = f"""Você é consultor especializado em prospecção B2B de sites e automação para negócios locais.
+
+Analise {len(empresas)} negócios locais e identifique os melhores prospects para vender criação de site/presença digital:
+
+{chr(10).join(linhas)}
+
+Critérios: SEM SITE = máxima prioridade | com telefone = contato direto | score alto = calculado pelo sistema | alta avaliação = negócio ativo.
+
+Responda EXATAMENTE neste formato (português brasileiro, direto):
+
+🎯 TOP 5 PROSPECTS:
+1. [Nome] — [motivo em 1 frase curta]
+2. [Nome] — [motivo em 1 frase curta]
+3. [Nome] — [motivo em 1 frase curta]
+4. [Nome] — [motivo em 1 frase curta]
+5. [Nome] — [motivo em 1 frase curta]
+
+💡 DICA: [1 frase com estratégia de abordagem para este nicho]"""
+
+    try:
+        analise = _groq_gerar(prompt)
+        return jsonify({"analise": analise, "ok": True})
+    except Exception as e:
+        logger.error("[Groq prospects] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
 _GROQ_MODELO = "llama-3.3-70b-versatile"

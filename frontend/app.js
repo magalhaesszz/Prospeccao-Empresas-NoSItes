@@ -56,12 +56,18 @@ function processarEvento(ev) {
       setProgresso(`Concluído! ${ev.total} empresas (${ev.sem_site} sem site${reclass}).`, ev.total, ev.total, "", 100);
       carregarHistorico();
       APP._prontosDisparo = ev.prontos_disparo || [];
-      // Mostra botão Groq se houver empresas
+      // Mostra painel IA e auto-inicia geração de mensagens + análise
       if (ev.total > 0) {
         mostrar("secao-gemini-enriq");
-        document.getElementById("gemini-txt").textContent = `${ev.total} empresas prontas para enriquecimento com IA`;
-        document.getElementById("gemini-cnt").textContent = "";
-        document.getElementById("gemini-barra").style.width = "0%";
+        const elTxt = document.getElementById("gemini-txt");
+        if (elTxt) elTxt.textContent = `${ev.total} empresas — clique "Gerar Sites" para enriquecer`;
+        const elCnt = document.getElementById("gemini-cnt");
+        if (elCnt) elCnt.textContent = "";
+        const elBar = document.getElementById("gemini-barra");
+        if (elBar) elBar.style.width = "0%";
+        // Auto-start: analisa prospects e gera mensagens em background
+        setTimeout(analisarProspects, 600);
+        setTimeout(gerarMensagensEmLote, 1800);
       }
       // busca em lote: dispara próxima
       if (APP.filaBuscas.length > 0) {
@@ -603,6 +609,9 @@ function finalizarProgressoGroq(total) {
 async function iniciarEnriquecimento() {
   const btn = document.getElementById("btn-gemini-enriq");
   if (btn) { btn.disabled = true; btn.textContent = "Processando..."; }
+  // Mostra sub-painel de progresso do enriquecimento
+  const sub = document.getElementById("gemini-enriq-sub");
+  if (sub) sub.style.display = "block";
 
   try {
     const payload = {};
@@ -686,6 +695,81 @@ document.addEventListener("click", (e) => {
   const modal = document.getElementById("modal-msg-ia");
   if (modal && e.target === modal) fecharModalMsg();
 });
+
+// ── IA em Lote — Geração automática de mensagens ─────────────────────────────
+
+async function gerarMensagensEmLote() {
+  const setStatus = t => { const e = document.getElementById("ia-lote-status"); if (e) e.textContent = t; };
+  const setTxt    = t => { const e = document.getElementById("ia-lote-txt");    if (e) e.textContent = t; };
+  const setBarra  = p => { const e = document.getElementById("ia-lote-barra");  if (e) e.style.width = p + "%"; };
+
+  const alvos = APP.empresas.filter(e => e.telefone && !e.gemini_mensagem);
+  if (!alvos.length) {
+    const prontas = APP.empresas.filter(e => e.gemini_mensagem).length;
+    setStatus(`✓ ${prontas} mensagens já prontas!`);
+    setTxt(`${prontas} de ${APP.empresas.length} empresas com mensagem IA`);
+    setBarra(100);
+    return;
+  }
+
+  const btn = document.getElementById("btn-lote-ia");
+  if (btn) btn.disabled = true;
+  setStatus(`Gerando ${alvos.length} mensagens em segundo plano...`);
+  setBarra(0);
+
+  let feitos = 0;
+  for (const emp of alvos) {
+    setTxt(`Gerando para "${emp.nome}"... (${feitos}/${alvos.length})`);
+    try {
+      const r = await fetch("/api/groq/gerar-mensagem-empresa", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ empresa_id: emp.id }),
+      });
+      const d = await r.json();
+      if (r.ok && d.mensagem) {
+        const local = APP.empresas.find(e => e.id === emp.id);
+        if (local) local.gemini_mensagem = d.mensagem;
+      }
+    } catch (_) {}
+    feitos++;
+    setBarra(Math.round((feitos / alvos.length) * 100));
+  }
+
+  const total_prontas = APP.empresas.filter(e => e.gemini_mensagem).length;
+  setStatus(`✓ ${feitos} mensagens geradas! Clique "Mensagem IA" em qualquer card — aparece instantâneo.`);
+  setTxt(`${total_prontas} de ${APP.empresas.length} empresas com mensagem IA`);
+  setBarra(100);
+  mostrarToast(`✓ ${feitos} mensagens IA prontas!`, "success");
+  if (btn) btn.disabled = false;
+}
+
+async function analisarProspects() {
+  if (!APP.empresas.length) return;
+  const box = document.getElementById("ia-analise-box");
+  const txt = document.getElementById("ia-analise-txt");
+  if (box) box.style.display = "block";
+  if (txt) txt.textContent = "🔍 Analisando os melhores prospects...";
+
+  try {
+    const top25 = [...APP.empresas]
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 25)
+      .map(e => ({ nome: e.nome, telefone: !!e.telefone, tem_site: !!e.tem_site, score: e.score || 0, nota: e.nota, avaliacoes: e.avaliacoes }));
+
+    const r = await fetch("/api/groq/analisar-prospects", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ empresas: top25 }),
+    });
+    const d = await r.json();
+    if (r.ok && d.analise) {
+      if (txt) txt.textContent = d.analise;
+    } else {
+      if (box) box.style.display = "none";
+    }
+  } catch (_) {
+    if (box) box.style.display = "none";
+  }
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

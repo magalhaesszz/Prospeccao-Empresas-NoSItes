@@ -64,30 +64,60 @@
     <p id="txt-empresa" class="empresa-atual"></p>
   </section>
 
-  <!-- Enriquecimento Groq -->
-  <section id="secao-gemini-enriq" class="card hidden" style="border:1px solid rgba(66,133,244,.3);background:linear-gradient(135deg,rgba(66,133,244,.05),rgba(52,168,83,.04))">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+  <!-- IA Prospecting Hub -->
+  <section id="secao-gemini-enriq" class="card hidden" style="border:1px solid rgba(99,102,241,.25);background:linear-gradient(135deg,rgba(99,102,241,.04),rgba(139,92,246,.03))">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:10px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#4285F4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <span style="font-size:1.3rem;line-height:1">⚡</span>
         <div>
-          <strong style="font-size:.9rem">Groq AI</strong>
-          <span style="font-size:.65rem;background:linear-gradient(90deg,#4285F4,#34A853);color:#fff;padding:2px 5px;border-radius:4px;margin-left:5px">PRO</span>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:1px">Gera mensagem personalizada + site preview para cada empresa</div>
+          <strong style="font-size:.92rem">IA Prospectando</strong>
+          <span style="font-size:.63rem;background:linear-gradient(90deg,#6366f1,#8b5cf6);color:#fff;padding:2px 6px;border-radius:4px;margin-left:5px">AUTO</span>
+          <div id="ia-lote-status" style="font-size:.76rem;color:#6366f1;font-weight:600;margin-top:2px">Aguardando busca...</div>
         </div>
       </div>
-      <button id="btn-gemini-enriq" class="btn btn-primary" onclick="iniciarEnriquecimento()"
-              style="background:linear-gradient(135deg,#4285F4,#34A853);border:none;box-shadow:0 2px 10px rgba(66,133,244,.3)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        Enriquecer com Groq
-      </button>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button onclick="gerarMensagensEmLote()" id="btn-lote-ia" class="btn btn-sm"
+          style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;font-size:.74rem">
+          ↺ Regenerar msgs
+        </button>
+        <button onclick="iniciarEnriquecimento()" id="btn-gemini-enriq" class="btn btn-sm btn-secondary"
+          style="font-size:.74rem" title="Gera mensagem + site demo para todas as empresas (processo mais lento)">
+          🌐 Gerar Sites
+        </button>
+      </div>
     </div>
-    <div style="background:rgba(66,133,244,.08);border-radius:6px;height:8px;overflow:hidden;margin-bottom:8px">
-      <div id="gemini-barra" style="height:100%;width:0%;background:linear-gradient(90deg,#4285F4,#34A853);border-radius:6px;transition:width .3s"></div>
+
+    <!-- Barra: geração de mensagens em lote -->
+    <div style="margin-bottom:10px">
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px" id="ia-lote-txt">Aguardando início...</div>
+      <div style="background:rgba(99,102,241,.1);border-radius:6px;height:7px;overflow:hidden">
+        <div id="ia-lote-barra" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:6px;transition:width .4s ease"></div>
+      </div>
     </div>
-    <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)">
-      <span id="gemini-txt">Aguardando...</span>
-      <span id="gemini-cnt"></span>
+
+    <!-- Ranking IA dos prospects -->
+    <div id="ia-analise-box" style="display:none;padding:11px;background:rgba(99,102,241,.06);border-radius:10px;border:1px solid rgba(99,102,241,.15);margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <strong style="font-size:.79rem;color:#6366f1">🎯 Top Prospects desta busca</strong>
+        <button onclick="document.getElementById('ia-analise-box').style.display='none'"
+          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:.85rem;padding:0;line-height:1">✕</button>
+      </div>
+      <pre id="ia-analise-txt" style="font-family:inherit;font-size:.76rem;white-space:pre-wrap;color:var(--text);margin:0;line-height:1.65"></pre>
     </div>
+
+    <!-- Sub-painel: enriquecimento Groq (site+msg) — ativado por iniciarEnriquecimento() -->
+    <div id="gemini-enriq-sub" style="display:none;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:.73rem;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between">
+        <span id="gemini-txt">Aguardando...</span>
+        <span id="gemini-cnt"></span>
+      </div>
+      <div style="background:rgba(66,133,244,.1);border-radius:6px;height:6px;overflow:hidden">
+        <div id="gemini-barra" style="height:100%;width:0%;background:linear-gradient(90deg,#4285F4,#34A853);border-radius:6px;transition:width .3s"></div>
+      </div>
+    </div>
+
   </section>
 
   <!-- Ações -->
