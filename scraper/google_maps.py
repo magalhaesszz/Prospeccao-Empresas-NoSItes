@@ -3,7 +3,7 @@ Scraping do Google Maps via Selenium / undetected-chromedriver.
 Extrai nome, telefone, endereço, site e calcula score de oportunidade.
 Inclui retry automático e múltiplos seletores CSS como fallback.
 """
-import os, sys, time, logging, re
+import os, sys, time, logging, re, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CONFIG
 
@@ -340,6 +340,24 @@ def _extrair_item(driver, indice):
     except Exception:
         pass
 
+    # Múltiplas fotos do painel
+    fotos_lista = []
+    try:
+        imgs = driver.find_elements(By.CSS_SELECTOR,
+            'img[src*="googleusercontent"], img[src*="ggpht"]')
+        seen = set()
+        if foto_url:
+            seen.add(foto_url)
+            fotos_lista.append(foto_url)
+        for el in imgs:
+            src = el.get_attribute("src") or ""
+            if src and src not in seen and len(fotos_lista) < 6:
+                seen.add(src)
+                fotos_lista.append(src)
+    except Exception:
+        if foto_url:
+            fotos_lista = [foto_url]
+
     return {
         "nome":             nome,
         "telefone":         telefone,
@@ -352,6 +370,7 @@ def _extrair_item(driver, indice):
         "avaliacoes":       avaliacoes,
         "maps_url":         maps_url,
         "foto_url":         foto_url,
+        "fotos_urls":       json.dumps(fotos_lista),
     }
 
 

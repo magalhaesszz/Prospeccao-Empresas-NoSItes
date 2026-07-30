@@ -1103,6 +1103,38 @@ def api_gemini_enriquecer_empresa():
     })
 
 
+@app.route("/api/groq/gerar-mensagem-empresa", methods=["POST"])
+def api_groq_gerar_mensagem_empresa():
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    empresa_id = dados.get("empresa_id")
+    if not empresa_id:
+        return jsonify({"erro": "empresa_id obrigatório."}), 400
+
+    emp = buscar_empresa_por_id(empresa_id)
+    if not emp:
+        return jsonify({"erro": "Empresa não encontrada."}), 404
+
+    from gemini.enricher import gerar_mensagem
+    try:
+        mensagem = gerar_mensagem(emp, api_key)
+    except Exception as e:
+        logger.error("[Groq msg empresa] %s", e)
+        return jsonify({"erro": str(e)}), 500
+
+    from database.db import get_connection
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s", (mensagem, empresa_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"mensagem": mensagem, "ok": True})
+
+
 @app.route("/api/gemini/status-enriquecimento")
 def api_gemini_status_enriq():
     with _lock:

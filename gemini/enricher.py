@@ -4,7 +4,7 @@ Given a company dict (with scraped Google Maps data), generates:
   - Personalized WhatsApp message (unique per company, uses real data)
   - Landing page HTML (complete, self-contained, uses real data)
 """
-import secrets, logging, re
+import secrets, logging, re, json
 logger = logging.getLogger(__name__)
 
 
@@ -152,11 +152,29 @@ def gerar_pagina(empresa, api_key):
 6. Seção Badge de Reputação: destaque visual com {nota:.1f}⭐ estrelas e {avs} avaliações reais no Google.
    Use CSS para criar um badge dourado elegante com as estrelas e link para o Maps: {maps_url or '#'}"""
 
+    fotos_raw = empresa.get("fotos_urls") or "[]"
+    try:
+        fotos_lista = json.loads(fotos_raw) if isinstance(fotos_raw, str) else []
+    except Exception:
+        fotos_lista = []
+    if foto_url and foto_url not in fotos_lista:
+        fotos_lista.insert(0, foto_url)
+    fotos_lista = [f for f in fotos_lista if f][:6]
+
     foto_instrucao = ""
-    if foto_url:
+    if len(fotos_lista) == 1:
         foto_instrucao = f"""
-• FOTO REAL: use a URL da foto real do estabelecimento ({foto_url}) como <img> no hero ou seção "Sobre".
+• FOTO REAL: use a URL ({fotos_lista[0]}) como <img> no hero e na seção "Sobre".
   Adicione object-fit:cover, border-radius:12px, max-width:100%, loading="lazy"."""
+    elif len(fotos_lista) > 1:
+        urls_str = "\n  ".join(f"- {f}" for f in fotos_lista)
+        foto_instrucao = f"""
+• FOTOS REAIS do estabelecimento — use TODAS na página:
+  {urls_str}
+  Use a primeira foto no hero (object-fit:cover, height:320px, width:100%).
+  Crie uma seção "Galeria de Fotos" logo após os Serviços: CSS grid 3 colunas (2 no mobile),
+  cada <img> com object-fit:cover, height:200px, width:100%, border-radius:10px, loading="lazy".
+  Não omita nenhuma foto."""
 
     prompt = f"""Você é um desenvolvedor web sênior especialista em landing pages de alta conversão.
 Crie uma landing page HTML completa, profissional e visualmente impressionante.
