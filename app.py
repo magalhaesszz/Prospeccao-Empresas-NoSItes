@@ -970,7 +970,7 @@ def _app_base_url_bg():
 
 
 def _executar_enriquecimento(empresas, api_key, criar_pagina):
-    from gemini.enricher import enriquecer
+    from groq.enricher import enriquecer
     from database.db import get_connection
 
     with _lock:
@@ -1082,7 +1082,7 @@ def api_gemini_enriquecer_empresa():
     if not emp:
         return jsonify({"erro": "Empresa não encontrada."}), 404
 
-    from gemini.enricher import enriquecer
+    from groq.enricher import enriquecer
     from database.db import get_connection
 
     app_url  = _app_base_url_bg()
@@ -1252,7 +1252,7 @@ def api_groq_gerar_mensagem_empresa():
     if not emp:
         return jsonify({"erro": "Empresa não encontrada."}), 404
 
-    from gemini.enricher import gerar_mensagem
+    from groq.enricher import gerar_mensagem
     try:
         mensagem = gerar_mensagem(emp, api_key)
     except Exception as e:
@@ -1380,7 +1380,7 @@ def api_gemini_status():
 @app.route("/api/gemini/gerar-pagina", methods=["POST"])
 def api_groq_gerar_pagina():
     """Inicia geração de página em background. Retorna job_id para polling."""
-    from gemini.enricher import gerar_pagina as _enr_gerar_pagina
+    from groq.enricher import gerar_pagina as _enr_gerar_pagina
 
     api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:

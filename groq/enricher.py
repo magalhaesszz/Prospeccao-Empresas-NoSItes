@@ -12,7 +12,7 @@ _MODELO = "llama-3.3-70b-versatile"
 
 def _gerar(prompt, api_key):
     from groq import Groq
-    client = Groq(api_key=api_key)
+    client = Groq(api_key=api_key, timeout=120.0)
     resp = client.chat.completions.create(
         model=_MODELO,
         messages=[{"role": "user", "content": prompt}],
