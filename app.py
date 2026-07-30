@@ -92,7 +92,7 @@ def verificar_auth():
     senha = CONFIG.get("senha_painel", "").strip()
     if not senha:
         return  # sem senha = sem proteção
-    rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook"}
+    rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook", "api_test_groq"}
     if request.endpoint in rotas_publicas:
         return
     if not session.get("autenticado"):
