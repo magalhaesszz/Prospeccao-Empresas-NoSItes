@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Gemini IA — Prospector{% endblock %}
+{% block title %}Groq IA — Prospector{% endblock %}
 
 {% block content %}
 <div class="container" style="max-width:960px">
@@ -7,7 +7,7 @@
   <div class="page-header">
     <div>
       <h1 class="page-title" style="display:flex;align-items:center;gap:10px">
-        <span style="background:linear-gradient(135deg,#4285F4,#34A853,#FBBC04,#EA4335);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Gemini AI</span>
+        <span style="background:linear-gradient(135deg,#4285F4,#34A853,#FBBC04,#EA4335);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Groq AI</span>
         <span style="font-size:.7rem;background:linear-gradient(90deg,#4285F4,#34A853);color:#fff;padding:3px 8px;border-radius:5px;-webkit-text-fill-color:#fff">PRO</span>
       </h1>
       <p style="color:var(--muted);font-size:.875rem;margin-top:2px">Gere landing pages profissionais e mensagens personalizadas com IA</p>
@@ -22,10 +22,10 @@
   <div class="card" id="card-gerador-pagina">
     <h2 class="card-title">
       <svg class="icon-card" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-      Gerar Landing Page com Gemini
+      Gerar Landing Page com Groq
     </h2>
     <p style="color:var(--muted);font-size:.875rem;margin-bottom:16px">
-      O Gemini cria um site completo e profissional para o prospect ver como vai ficar o site dele.
+      O Groq cria um site completo e profissional para o prospect ver como vai ficar o site dele.
       O link é único e você envia pelo WhatsApp.
     </p>
 
@@ -54,7 +54,7 @@
 
     <button class="btn btn-primary" id="btn-gerar-pagina" onclick="gerarPagina()" style="min-width:160px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-      Gerar Site com Gemini
+      Gerar Site com Groq
     </button>
 
     <!-- Resultado da geração -->
@@ -92,7 +92,7 @@
   <div class="card" id="card-gerador-msg">
     <h2 class="card-title">
       <svg class="icon-card" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      Gerar Mensagem WhatsApp com Gemini
+      Gerar Mensagem WhatsApp com Groq
     </h2>
     <p style="color:var(--muted);font-size:.875rem;margin-bottom:16px">
       Mensagem personalizada por empresa. Com o link do site gerado, a taxa de resposta é muito maior.
@@ -122,7 +122,7 @@
       <input id="gm-link" type="text" placeholder="Cole o link ou gere acima" style="margin-top:4px"/>
     </div>
 
-    <button class="btn btn-primary" id="btn-gerar-msg" onclick="gerarMensagemGemini()" style="min-width:160px">
+    <button class="btn btn-primary" id="btn-gerar-msg" onclick="gerarMensagemGroq()" style="min-width:160px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
       Gerar Mensagem
     </button>
@@ -131,8 +131,8 @@
       <label style="font-size:.8rem;color:var(--muted);margin-bottom:4px;display:block">Mensagem gerada:</label>
       <textarea id="gm-mensagem" rows="8" class="textarea-lote" style="font-size:.875rem"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="copiarMensagemGemini()">Copiar mensagem</button>
-        <button class="btn btn-whatsapp btn-sm" onclick="usarMensagemGeminiNoTeste()">Usar no teste WhatsApp</button>
+        <button class="btn btn-secondary btn-sm" onclick="copiarMensagemGroq()">Copiar mensagem</button>
+        <button class="btn btn-whatsapp btn-sm" onclick="usarMensagemGroqNoTeste()">Usar no teste WhatsApp</button>
       </div>
     </div>
     <p id="gm-erro" style="color:var(--brand);font-size:.85rem;margin-top:8px;display:none"></p>

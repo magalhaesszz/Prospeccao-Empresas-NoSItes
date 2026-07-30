@@ -1,4 +1,4 @@
-/* ===== Gemini AI Hub ===== */
+/* ===== Groq AI Hub ===== */
 
 let _paginaAtualUrl  = "";
 let _todasEmpresas   = [];
@@ -7,14 +7,14 @@ let _empresaSelecionada = null;
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
-  verificarStatusGemini();
+  verificarStatusGroq();
   carregarPaginas();
   carregarEmpresasDB();
 });
 
-// ── Status Gemini ─────────────────────────────────────────────────────────────
+// ── Status Groq ─────────────────────────────────────────────────────────────
 
-async function verificarStatusGemini() {
+async function verificarStatusGroq() {
   try {
     const d = await fetch("/api/gemini/status").then(r => r.json());
     const dot = document.getElementById("gemini-status-dot");
@@ -27,7 +27,7 @@ async function verificarStatusGemini() {
       txt.textContent      = "Configure GROQ_API_KEY no Railway";
     }
   } catch (e) {
-    console.error("Status Gemini:", e);
+    console.error("Status Groq:", e);
   }
 }
 
@@ -105,7 +105,7 @@ async function gerarPagina() {
   if (!nome) { mostrarToast("Informe o nome da empresa.", "error"); return; }
 
   btn.disabled    = true;
-  btn.innerHTML   = '<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span> Gerando site com Gemini...';
+  btn.innerHTML   = '<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span> Gerando site com Groq...';
   if (resultado) resultado.style.display = "none";
 
   try {
@@ -140,7 +140,7 @@ async function gerarPagina() {
     console.error(e);
   } finally {
     btn.disabled  = false;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site com Gemini`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site com Groq`;
   }
 }
 
@@ -178,7 +178,7 @@ function toggleLinkInput() {
   if (box) box.style.display = chk?.checked ? "block" : "none";
 }
 
-async function gerarMensagemGemini() {
+async function gerarMensagemGroq() {
   const nome      = (document.getElementById("gm-nome")?.value      || "").trim();
   const categoria = (document.getElementById("gm-categoria")?.value || "").trim();
   const cidade    = (document.getElementById("gm-cidade")?.value    || "").trim();
@@ -217,13 +217,13 @@ async function gerarMensagemGemini() {
   }
 }
 
-function copiarMensagemGemini() {
+function copiarMensagemGroq() {
   const ta = document.getElementById("gm-mensagem");
   if (!ta) return;
   navigator.clipboard.writeText(ta.value).then(() => mostrarToast("Mensagem copiada!", "success"));
 }
 
-function usarMensagemGeminiNoTeste() {
+function usarMensagemGroqNoTeste() {
   const ta  = document.getElementById("gm-mensagem");
   const msg = ta?.value || "";
   if (!msg) return;

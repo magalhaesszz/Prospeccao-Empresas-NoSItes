@@ -56,7 +56,7 @@ function processarEvento(ev) {
       setProgresso(`Concluído! ${ev.total} empresas (${ev.sem_site} sem site${reclass}).`, ev.total, ev.total, "", 100);
       carregarHistorico();
       APP._prontosDisparo = ev.prontos_disparo || [];
-      // Mostra botão Gemini se houver empresas
+      // Mostra botão Groq se houver empresas
       if (ev.total > 0) {
         mostrar("secao-gemini-enriq");
         document.getElementById("gemini-txt").textContent = `${ev.total} empresas prontas para enriquecimento com IA`;
@@ -102,15 +102,15 @@ function processarEvento(ev) {
       break;
 
     case "enriquecimento_inicio":
-      mostrarProgressoGemini(0, ev.total, "Iniciando enriquecimento com Gemini...");
+      mostrarProgressoGroq(0, ev.total, "Iniciando enriquecimento com Groq...");
       break;
 
     case "enriquecimento_progresso":
-      mostrarProgressoGemini(ev.atual, ev.total, ev.empresa);
+      mostrarProgressoGroq(ev.atual, ev.total, ev.empresa);
       break;
 
     case "enriquecimento_fim":
-      finalizarProgressoGemini(ev.total);
+      finalizarProgressoGroq(ev.total);
       if (APP.buscaId) verBusca(APP.buscaId);
       break;
 
@@ -547,9 +547,9 @@ function mostrarToast(msg, tipo = "info") {
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
 }
 
-// ── Gemini Enrichment ─────────────────────────────────────────────────────────
+// ── Groq Enrichment ─────────────────────────────────────────────────────────
 
-function mostrarProgressoGemini(atual, total, empresa) {
+function mostrarProgressoGroq(atual, total, empresa) {
   const secao = document.getElementById("secao-gemini-enriq");
   if (!secao) return;
   secao.classList.remove("hidden");
@@ -562,19 +562,19 @@ function mostrarProgressoGemini(atual, total, empresa) {
   if (cnt) cnt.textContent = `${atual} / ${total}`;
 }
 
-function finalizarProgressoGemini(total) {
+function finalizarProgressoGroq(total) {
   const secao = document.getElementById("secao-gemini-enriq");
   const txt   = secao?.querySelector("#gemini-txt");
   const barra = secao?.querySelector("#gemini-barra");
-  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com Gemini.`;
+  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com Groq.`;
   if (barra) barra.style.width = "100%";
-  mostrarToast(`Gemini: ${total} mensagens + sites gerados!`, "success");
+  mostrarToast(`Groq: ${total} mensagens + sites gerados!`, "success");
 
   // Atualiza botão
   const btn = document.getElementById("btn-gemini-enriq");
   if (btn) {
     btn.disabled    = false;
-    btn.textContent = "Enriquecer com Gemini";
+    btn.textContent = "Enriquecer com Groq";
   }
 }
 
@@ -593,10 +593,10 @@ async function iniciarEnriquecimento() {
     });
     const d = await r.json();
     if (!r.ok || d.erro) throw new Error(d.erro || "Erro desconhecido");
-    mostrarToast(`Gemini: processando ${d.total} empresa(s)...`, "info");
+    mostrarToast(`Groq: processando ${d.total} empresa(s)...`, "info");
   } catch (e) {
-    mostrarToast("Erro Gemini: " + e.message, "error");
-    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com Gemini"; }
+    mostrarToast("Erro Groq: " + e.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com Groq"; }
   }
 }
 
