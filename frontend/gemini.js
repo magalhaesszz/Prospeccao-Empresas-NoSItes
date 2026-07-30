@@ -129,7 +129,7 @@ async function gerarPagina() {
 
     const jobId = d0.job_id;
     let tentativas = 0;
-    const MAX_TENTATIVAS = 75; // 75 × 2s = 150s máximo
+    const MAX_TENTATIVAS = 120; // 120 × 2s = 240s máximo
 
     // 2. Polling até terminar ou dar erro
     while (tentativas < MAX_TENTATIVAS) {
@@ -137,7 +137,17 @@ async function gerarPagina() {
       tentativas++;
       _setSpinner(`Groq gerando o site... (${tentativas * 2}s)`);
 
-      const rs = await fetch(`/api/gemini/gerar-pagina/status/${jobId}`).then(r => r.json());
+      let rs;
+      try {
+        const resp = await fetch(`/api/gemini/gerar-pagina/status/${jobId}`);
+        rs = await resp.json();
+        // 404 = servidor reiniciou e perdeu o job em memória
+        if (resp.status === 404) throw new Error("Servidor reiniciou durante a geração. Tente novamente.");
+      } catch (fetchErr) {
+        // erro de rede temporário — continua polling
+        if (fetchErr.message.includes("reiniciou")) throw fetchErr;
+        continue;
+      }
 
       if (rs.status === "ok") {
         _paginaAtualUrl = rs.url;
@@ -145,10 +155,10 @@ async function gerarPagina() {
         const urlBar = document.getElementById("gp-url-bar");
         const iframe = document.getElementById("gp-iframe");
         const gmLink = document.getElementById("gm-link");
-        if (urlInp) urlInp.value    = rs.url;
+        if (urlInp) urlInp.value       = rs.url;
         if (urlBar) urlBar.textContent = rs.url;
-        if (iframe) iframe.src      = rs.url;
-        if (gmLink) gmLink.value    = rs.url;
+        if (iframe) iframe.src         = rs.url;
+        if (gmLink) gmLink.value       = rs.url;
         if (resultado) resultado.style.display = "block";
         mostrarToast("Site gerado com sucesso!", "success");
         carregarPaginas();
@@ -156,10 +166,10 @@ async function gerarPagina() {
       }
 
       if (rs.status === "erro") throw new Error(rs.erro || "Erro na geração.");
-      // status === "gerando" → continua polling
+      // rs.status === "gerando" → continua polling
     }
 
-    throw new Error("Tempo limite atingido. Groq demorou mais de 150s. Tente novamente.");
+    throw new Error("Tempo limite atingido (4 min). Groq não respondeu. Tente novamente.");
   } catch (e) {
     mostrarToast("Erro: " + e.message, "error");
     console.error(e);

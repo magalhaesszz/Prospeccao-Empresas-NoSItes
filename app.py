@@ -1350,11 +1350,11 @@ def _groq_gerar(prompt):
     api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:
         raise ValueError("GROQ_API_KEY não configurado.")
-    client = Groq(api_key=api_key, timeout=120.0)
+    client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
     resp = client.chat.completions.create(
         model=_GROQ_MODELO,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=8192,
+        max_tokens=4096,
     )
     return resp.choices[0].message.content.strip()
 
@@ -1369,6 +1369,29 @@ def _app_base_url():
     if app_url:
         return app_url
     return request.host_url.rstrip("/")
+
+
+@app.route("/api/gemini/test-groq")
+def api_test_groq():
+    """Testa conexão Groq com prompt mínimo. Retorna ok/erro e latência em ms."""
+    import time
+    from groq import Groq
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "erro": "GROQ_API_KEY não configurado."})
+    t0 = time.time()
+    try:
+        client = Groq(api_key=api_key, timeout=30.0, max_retries=0)
+        resp = client.chat.completions.create(
+            model=_GROQ_MODELO,
+            messages=[{"role": "user", "content": "Diga apenas: OK"}],
+            max_tokens=5,
+        )
+        ms = int((time.time() - t0) * 1000)
+        return jsonify({"ok": True, "resposta": resp.choices[0].message.content.strip(), "ms": ms})
+    except Exception as e:
+        ms = int((time.time() - t0) * 1000)
+        return jsonify({"ok": False, "erro": str(e), "ms": ms})
 
 
 @app.route("/api/gemini/status")

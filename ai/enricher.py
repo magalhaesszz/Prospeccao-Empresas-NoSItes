@@ -12,11 +12,13 @@ _MODELO = "llama-3.3-70b-versatile"
 
 def _gerar(prompt, api_key):
     from groq import Groq
-    client = Groq(api_key=api_key, timeout=120.0)
+    # max_retries=0: sem retry automático — timeout=90s é o único controle de espera.
+    # Retry automático (padrão=2) triplicaria o tempo e travaria o background thread.
+    client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
     resp = client.chat.completions.create(
         model=_MODELO,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=8192,
+        max_tokens=4096,
     )
     return resp.choices[0].message.content.strip()
 
