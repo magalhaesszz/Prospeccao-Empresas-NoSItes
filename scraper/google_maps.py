@@ -12,7 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import (
-    TimeoutException, NoSuchElementException, StaleElementReferenceException,
+    TimeoutException, NoSuchElementException,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,11 @@ def criar_driver():
 def buscar_empresas(cidade, categoria, callback_progresso=None):
     """
     Ponto de entrada público.
-    Retorna lista de dicts: nome, telefone, endereco, email, tem_site, site_url, score.
+    Usa estratégia em 2 fases:
+      Fase 1 — coleta URLs de todos os cards SEM clicar (lê atributos DOM)
+      Fase 2 — navega diretamente a cada URL com driver.get() e extrai dados reais
+    Isso evita o bug onde click no headless Railway não muda a URL e o scraper
+    lê dados genéricos ("Results") da página de busca.
     """
     driver = None
     empresas = []
@@ -108,8 +112,7 @@ def buscar_empresas(cidade, categoria, callback_progresso=None):
         driver = criar_driver()
 
         query = f"{categoria} em {cidade}"
-        url   = "https://www.google.com/maps/search/" + query.replace(" ", "+")
-        driver.get(url)
+        driver.get("https://www.google.com/maps/search/" + query.replace(" ", "+"))
         time.sleep(3)
 
         try:
@@ -119,14 +122,19 @@ def buscar_empresas(cidade, categoria, callback_progresso=None):
         except TimeoutException:
             logger.warning("Feed demorou — continuando.")
 
-        total = _rolar_feed(driver, CONFIG["max_resultados"])
-        logger.info("%d cards no feed.", total)
+        _rolar_feed(driver, CONFIG["max_resultados"])
 
+        # ── Fase 1: coleta URLs e nomes do feed sem clicar ────────────────────
+        itens_feed = _coletar_itens_feed(driver)
+        logger.info("Fase 1 concluída: %d places coletados.", len(itens_feed))
+
+        # ── Fase 2: navega direto a cada URL e extrai dados reais ─────────────
         telefones_vistos = set()
-        limite = min(total, CONFIG["max_resultados"])
-        for i in range(limite):
+        limite = min(len(itens_feed), CONFIG["max_resultados"])
+
+        for i, item in enumerate(itens_feed[:limite]):
             try:
-                emp = _extrair_com_retry(driver, i, tentativas=2)
+                emp = _extrair_de_url(driver, item["url"], item["nome_hint"])
                 if emp:
                     emp["score"] = _calcular_score(emp, categoria)
                     tel = emp.get("telefone")
@@ -143,7 +151,7 @@ def buscar_empresas(cidade, categoria, callback_progresso=None):
                     if callback_progresso:
                         callback_progresso({"atual": i + 1, "total": limite, "empresa": emp["nome"]})
             except Exception as exc:
-                logger.error("Erro item %d: %s", i, exc)
+                logger.error("Erro item %d (%s): %s", i, item.get("url", "?")[:60], exc)
 
     except Exception as exc:
         logger.error("Erro geral: %s", exc)
@@ -193,59 +201,53 @@ def _rolar_feed(driver, max_itens):
         return ultima
 
 
-def _extrair_com_retry(driver, indice, tentativas=2):
-    """Tenta extrair item N vezes antes de desistir."""
-    for t in range(tentativas):
-        try:
-            return _extrair_item(driver, indice)
-        except StaleElementReferenceException:
-            if t < tentativas - 1:
-                time.sleep(1)
-        except Exception as exc:
-            logger.debug("Tentativa %d falhou: %s", t + 1, exc)
-            if t < tentativas - 1:
-                time.sleep(1)
-    return None
-
-
-def _extrair_item(driver, indice):
-    feed  = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-    cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
-    if indice >= len(cards):
-        return None
-
-    card = cards[indice]
-
-    # Captura URL do lugar diretamente do <a> do card — mais confiável que current_url
-    maps_url_card = ""
+def _coletar_itens_feed(driver):
+    """
+    Fase 1 — lê o feed SEM clicar em nada.
+    Para cada card extrai {url, nome_hint} dos atributos DOM.
+    Filtra apenas links de /maps/place/ para evitar links genéricos.
+    """
+    itens = []
+    seen  = set()
     try:
-        link_el = card.find_element(By.CSS_SELECTOR, "a[href]")
-        maps_url_card = link_el.get_attribute("href") or ""
-    except Exception:
-        pass
+        feed  = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+        cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
+        for card in cards:
+            try:
+                link      = card.find_element(By.CSS_SELECTOR, "a[href]")
+                href      = link.get_attribute("href") or ""
+                nome_hint = (link.get_attribute("aria-label") or "").strip()
+                if href and "/maps/place/" in href and href not in seen:
+                    seen.add(href)
+                    itens.append({"url": href, "nome_hint": nome_hint})
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.error("Erro ao coletar feed: %s", exc)
+    return itens
 
-    driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'smooth'})", card)
-    time.sleep(0.4)
 
-    url_antes = driver.current_url
-    driver.execute_script("arguments[0].click()", card)
+_NOMES_INVALIDOS = {"results", "google maps", "google", ""}
 
-    # Espera a URL mudar (painel do lugar carregou) — evita ler dados do card anterior
+
+def _extrair_de_url(driver, maps_url, nome_hint=""):
+    """
+    Fase 2 — navega diretamente à URL do place com driver.get() e extrai dados.
+    Não depende de click → animação → mudança de URL (que falha no headless Railway).
+    """
+    driver.get(maps_url)
     try:
-        WebDriverWait(driver, 10).until(lambda d: d.current_url != url_antes)
-        time.sleep(1.5)  # painel visualmente renderiza após URL mudar
-    except TimeoutException:
-        time.sleep(3)
-
-    try:
-        WebDriverWait(driver, 8).until(
+        WebDriverWait(driver, 12).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "h1"))
         )
     except TimeoutException:
         pass
+    time.sleep(1.5)
 
-    # Nome
+    # Nome — valida para não aceitar título genérico da página
     nome = _primeiro_texto(driver, ["h1.DUwDvf", "h1[jsan]", "h1"])
+    if not nome or nome.strip().lower() in _NOMES_INVALIDOS:
+        nome = nome_hint
     if not nome:
         return None
 
@@ -257,16 +259,16 @@ def _extrair_item(driver, indice):
     except NoSuchElementException:
         pass
 
-    # Telefone (embutido no data-item-id: "phone:tel:+55...")
+    # Telefone
     telefone = None
     try:
         btn_tel = driver.find_element(By.CSS_SELECTOR, 'button[data-item-id^="phone:tel:"]')
-        raw = (btn_tel.get_attribute("data-item-id") or "").replace("phone:tel:", "").strip()
+        raw     = (btn_tel.get_attribute("data-item-id") or "").replace("phone:tel:", "").strip()
         telefone = _formatar_tel(raw)
     except NoSuchElementException:
         pass
 
-    # Email (aparece em alguns perfis do Google Business)
+    # Email
     email = None
     try:
         links = driver.find_elements(By.CSS_SELECTOR, 'a[href^="mailto:"]')
@@ -279,17 +281,17 @@ def _extrair_item(driver, indice):
     tem_site = False
     site_url  = None
     try:
-        link = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]')
-        site_url  = link.get_attribute("href") or None
-        tem_site  = bool(site_url)
+        link     = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]')
+        site_url = link.get_attribute("href") or None
+        tem_site = bool(site_url)
     except NoSuchElementException:
         pass
 
-    # Categoria/descrição do Google Maps
+    # Categoria
     descricao_google = None
     for sel in ["button.DkEaL", ".DkEaL", "button[jsaction*='category']", "span.mgr77e"]:
         try:
-            el = driver.find_element(By.CSS_SELECTOR, sel)
+            el  = driver.find_element(By.CSS_SELECTOR, sel)
             txt = el.text.strip()
             if txt:
                 descricao_google = txt
@@ -297,86 +299,64 @@ def _extrair_item(driver, indice):
         except Exception:
             pass
 
-    # Nota (estrelas)
+    # Nota
     nota = None
-    try:
-        # aria-label="4,8 estrelas" ou "4.8 stars"
-        for sel in ['span[aria-label*="estrela"]', 'span[aria-label*="star"]',
-                    'div[aria-label*="estrela"]', 'span.MW4etd', 'span.ceNzKf']:
-            try:
-                el = driver.find_element(By.CSS_SELECTOR, sel)
-                label = el.get_attribute("aria-label") or el.text or ""
-                m = re.search(r'(\d)[,\.](\d)', label)
-                if m:
-                    nota = float(f"{m.group(1)}.{m.group(2)}")
-                    break
-                m2 = re.search(r'(\d+[,\.]\d+)', label)
-                if m2:
-                    nota = float(m2.group(1).replace(',', '.'))
-                    break
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    # Avaliações (número de reviews)
-    avaliacoes = None
-    try:
-        for sel in ['span[aria-label*="avalia"]', 'button[aria-label*="avalia"]',
-                    'span.UY7F9', 'span.e4rVHe']:
-            try:
-                el = driver.find_element(By.CSS_SELECTOR, sel)
-                label = el.get_attribute("aria-label") or el.text or ""
-                m = re.search(r'(\d[\d\.]+)', label.replace('.', ''))
-                if m:
-                    avaliacoes = int(m.group(1))
-                    break
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    # URL do Google Maps — prefere href do card (capturado antes do clique)
-    maps_url = maps_url_card
-    if not maps_url:
+    for sel in ['span[aria-label*="estrela"]', 'span[aria-label*="star"]',
+                'div[aria-label*="estrela"]', 'span.MW4etd', 'span.ceNzKf']:
         try:
-            maps_url = driver.current_url or ""
+            el    = driver.find_element(By.CSS_SELECTOR, sel)
+            label = el.get_attribute("aria-label") or el.text or ""
+            m     = re.search(r'(\d)[,\.](\d)', label)
+            if m:
+                nota = float(f"{m.group(1)}.{m.group(2)}")
+                break
+            m2 = re.search(r'(\d+[,\.]\d+)', label)
+            if m2:
+                nota = float(m2.group(1).replace(',', '.'))
+                break
         except Exception:
             pass
 
-    # Foto principal do estabelecimento
-    foto_url = ""
-    try:
-        for sel in [
-            'img.aoRNLd',
-            'div.RZ66Rb img',
-            'button.aoRNLd',
-            'img[decoding="async"][src*="googleusercontent"]',
-        ]:
-            try:
-                el  = driver.find_element(By.CSS_SELECTOR, sel)
-                src = el.get_attribute("src") or el.get_attribute("data-src") or ""
-                if src and ("googleusercontent" in src or "ggpht" in src):
-                    foto_url = src
-                    break
-            except Exception:
-                pass
-    except Exception:
-        pass
+    # Avaliações
+    avaliacoes = None
+    for sel in ['span[aria-label*="avalia"]', 'button[aria-label*="avalia"]',
+                'span.UY7F9', 'span.e4rVHe']:
+        try:
+            el    = driver.find_element(By.CSS_SELECTOR, sel)
+            label = el.get_attribute("aria-label") or el.text or ""
+            m     = re.search(r'(\d[\d\.]+)', label.replace('.', ''))
+            if m:
+                avaliacoes = int(m.group(1))
+                break
+        except Exception:
+            pass
 
-    # Múltiplas fotos do painel
+    # Foto principal
+    foto_url = ""
+    for sel in ['img.aoRNLd', 'div.RZ66Rb img', 'button.aoRNLd',
+                'img[decoding="async"][src*="googleusercontent"]']:
+        try:
+            el  = driver.find_element(By.CSS_SELECTOR, sel)
+            src = el.get_attribute("src") or el.get_attribute("data-src") or ""
+            if src and ("googleusercontent" in src or "ggpht" in src):
+                foto_url = src
+                break
+        except Exception:
+            pass
+
+    # Múltiplas fotos
     fotos_lista = []
     try:
-        imgs = driver.find_elements(By.CSS_SELECTOR,
-            'img[src*="googleusercontent"], img[src*="ggpht"]')
-        seen = set()
+        imgs   = driver.find_elements(By.CSS_SELECTOR,
+                     'img[src*="googleusercontent"], img[src*="ggpht"]')
+        seen_f = set()
         if foto_url:
-            seen.add(foto_url)
+            seen_f.add(foto_url)
             fotos_lista.append(foto_url)
         for el in imgs:
             src = el.get_attribute("src") or ""
-            if src and src not in seen and len(fotos_lista) < 6:
-                seen.add(src)
+            if src and src not in seen_f and len(fotos_lista) < 6:
+                seen_f.add(src)
                 fotos_lista.append(src)
     except Exception:
         if foto_url:
@@ -392,7 +372,7 @@ def _extrair_item(driver, indice):
         "descricao_google": descricao_google,
         "nota":             nota,
         "avaliacoes":       avaliacoes,
-        "maps_url":         maps_url,
+        "maps_url":         driver.current_url or maps_url,
         "foto_url":         foto_url,
         "fotos_urls":       json.dumps(fotos_lista),
     }
