@@ -38,6 +38,16 @@
         <label>Categoria</label>
         <input id="categoria" type="text" placeholder="Ex: barbearias"/>
       </div>
+      <div class="form-group" style="max-width:130px">
+        <label>Quantidade</label>
+        <select id="quantidade" style="width:100%">
+          <option value="10">10 empresas</option>
+          <option value="20">20 empresas</option>
+          <option value="30">30 empresas</option>
+          <option value="50" selected>50 empresas</option>
+          <option value="100">100 empresas</option>
+        </select>
+      </div>
       <button id="btn-buscar" class="btn btn-primary" onclick="iniciarBusca()">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         Buscar

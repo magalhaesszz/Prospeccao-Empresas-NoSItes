@@ -135,13 +135,14 @@ function processarEvento(ev) {
 // ── Busca ─────────────────────────────────────────────────────────────────────
 
 async function iniciarBusca() {
-  const cidade    = document.getElementById("cidade").value.trim();
-  const categoria = document.getElementById("categoria").value.trim();
+  const cidade      = document.getElementById("cidade").value.trim();
+  const categoria   = document.getElementById("categoria").value.trim();
+  const quantidade  = parseInt(document.getElementById("quantidade")?.value || "50", 10);
   if (!cidade || !categoria) { mostrarToast("Preencha cidade e categoria.", "warning"); return; }
-  await _dispararBusca(cidade, categoria);
+  await _dispararBusca(cidade, categoria, quantidade);
 }
 
-async function _dispararBusca(cidade, categoria) {
+async function _dispararBusca(cidade, categoria, quantidade = 50) {
   document.getElementById("btn-buscar").disabled = true;
   setProgresso("Iniciando Chrome...", 0, 0, "", 0);
   mostrar("secao-progresso");
@@ -149,7 +150,7 @@ async function _dispararBusca(cidade, categoria) {
   try {
     const r = await fetch("/api/buscar", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ cidade, categoria }),
+      body: JSON.stringify({ cidade, categoria, quantidade }),
     });
     const d = await r.json();
     if (!r.ok) {

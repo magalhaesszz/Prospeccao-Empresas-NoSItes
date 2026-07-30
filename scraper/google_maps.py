@@ -95,7 +95,7 @@ def criar_driver():
 
 # ── Busca principal ───────────────────────────────────────────────────────────
 
-def buscar_empresas(cidade, categoria, callback_progresso=None):
+def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
     """
     Ponto de entrada público.
     Usa estratégia em 2 fases:
@@ -122,7 +122,8 @@ def buscar_empresas(cidade, categoria, callback_progresso=None):
         except TimeoutException:
             logger.warning("Feed demorou — continuando.")
 
-        _rolar_feed(driver, CONFIG["max_resultados"])
+        max_itens = limite or CONFIG["max_resultados"]
+        _rolar_feed(driver, max_itens)
 
         # ── Fase 1: coleta URLs e nomes do feed sem clicar ────────────────────
         itens_feed = _coletar_itens_feed(driver)
@@ -130,7 +131,7 @@ def buscar_empresas(cidade, categoria, callback_progresso=None):
 
         # ── Fase 2: navega direto a cada URL e extrai dados reais ─────────────
         telefones_vistos = set()
-        limite = min(len(itens_feed), CONFIG["max_resultados"])
+        limite = min(len(itens_feed), max_itens)
 
         for i, item in enumerate(itens_feed[:limite]):
             try:

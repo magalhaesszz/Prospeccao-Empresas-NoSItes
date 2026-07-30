@@ -202,18 +202,22 @@ def api_buscar():
         if _estado["scraping"]:
             return jsonify({"erro": "Busca já em andamento."}), 400
 
-    dados     = request.get_json(silent=True) or {}
-    cidade    = (dados.get("cidade")    or "").strip()
-    categoria = (dados.get("categoria") or "").strip()
+    dados      = request.get_json(silent=True) or {}
+    cidade     = (dados.get("cidade")    or "").strip()
+    categoria  = (dados.get("categoria") or "").strip()
+    quantidade = int(dados.get("quantidade") or CONFIG.get("max_resultados", 50))
+    quantidade = max(5, min(quantidade, 200))  # limita entre 5 e 200
 
     if not cidade or not categoria:
         return jsonify({"erro": "Cidade e categoria são obrigatórios."}), 400
 
-    threading.Thread(target=_executar_busca, args=(cidade, categoria), daemon=True).start()
-    return jsonify({"mensagem": f"Busca iniciada: {categoria} em {cidade}"})
+    threading.Thread(target=_executar_busca, args=(cidade, categoria, quantidade), daemon=True).start()
+    return jsonify({"mensagem": f"Busca iniciada: {categoria} em {cidade} ({quantidade} empresas)"})
 
 
-def _executar_busca(cidade, categoria):
+def _executar_busca(cidade, categoria, quantidade=None):
+    if quantidade is None:
+        quantidade = CONFIG.get("max_resultados", 50)
     with _lock:
         _estado.update({
             "scraping": True, "progresso": 0, "total": 0,
@@ -234,7 +238,7 @@ def _executar_busca(cidade, categoria):
                 _estado["empresa_atual"] = info["empresa"]
             _broadcast({"tipo": "progresso", **info})
 
-        empresas = buscar_empresas(cidade, categoria, _cb)
+        empresas = buscar_empresas(cidade, categoria, _cb, limite=quantidade)
 
         # ── Validação real: confirma via HTTP quem tem/não tem site ──────────
         from scraper.verificar_site import validar_flags_site
