@@ -230,6 +230,16 @@ def _coletar_itens_feed(driver):
 
 _NOMES_INVALIDOS = {"results", "google maps", "google", ""}
 
+# Domínios que NÃO são sites próprios — redes sociais / encurtadores
+_REDES_SOCIAIS = {
+    "instagram.com", "facebook.com", "fb.com",
+    "twitter.com", "x.com",
+    "tiktok.com", "linkedin.com",
+    "youtube.com", "youtu.be",
+    "wa.me", "whatsapp.com",
+    "linktr.ee", "linktree.com",
+}
+
 
 def _extrair_de_url(driver, maps_url, nome_hint=""):
     """
@@ -278,13 +288,15 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
     except Exception:
         pass
 
-    # Site
+    # Site — ignora redes sociais (Instagram, Facebook etc. não são site próprio)
     tem_site = False
     site_url  = None
     try:
         link     = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]')
-        site_url = link.get_attribute("href") or None
-        tem_site = bool(site_url)
+        raw_url  = link.get_attribute("href") or None
+        if raw_url and not any(rede in raw_url.lower() for rede in _REDES_SOCIAIS):
+            site_url = raw_url
+            tem_site = True
     except NoSuchElementException:
         pass
 
@@ -318,17 +330,60 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
         except Exception:
             pass
 
-    # Avaliações
+    # Avaliações — 4 estratégias para cobrir variações do Google Maps
     avaliacoes = None
+
+    # 1) aria-label com "avalia" ou "review"
     for sel in ['span[aria-label*="avalia"]', 'button[aria-label*="avalia"]',
-                'span.UY7F9', 'span.e4rVHe']:
+                'span[aria-label*="review"]', 'button[aria-label*="review"]']:
         try:
             el    = driver.find_element(By.CSS_SELECTOR, sel)
             label = el.get_attribute("aria-label") or el.text or ""
-            m     = re.search(r'(\d[\d\.]+)', label.replace('.', ''))
+            m     = re.search(r'(\d[\d\.,]*)', label)
             if m:
-                avaliacoes = int(m.group(1))
+                avaliacoes = int(m.group(1).replace('.', '').replace(',', ''))
                 break
+        except Exception:
+            pass
+
+    # 2) classes conhecidas — conteúdo textual direto
+    if avaliacoes is None:
+        for sel in ['span.UY7F9', 'span.e4rVHe']:
+            try:
+                el  = driver.find_element(By.CSS_SELECTOR, sel)
+                txt = re.sub(r'[^\d]', '', el.text or "")
+                if txt:
+                    avaliacoes = int(txt)
+                    break
+            except Exception:
+                pass
+
+    # 3) XPath — span com texto no formato "(47)"
+    if avaliacoes is None:
+        try:
+            els = driver.find_elements(
+                By.XPATH,
+                "//span[contains(text(),'(') and contains(text(),')')]"
+            )
+            for el in els:
+                txt = re.sub(r'[^\d]', '', el.text or "")
+                if txt:
+                    n = int(txt)
+                    if 1 <= n <= 999999:
+                        avaliacoes = n
+                        break
+        except Exception:
+            pass
+
+    # 4) regex no source HTML da área de rating
+    if avaliacoes is None:
+        try:
+            area = driver.find_element(By.CSS_SELECTOR,
+                'div.F7nice, div[jsaction*="rating"], div[aria-label*="avalia"]')
+            src = area.get_attribute("innerHTML") or ""
+            m = re.search(r'(\d[\d\.]*)\s*(?:avalia|review)', src, re.IGNORECASE)
+            if m:
+                avaliacoes = int(m.group(1).replace('.', ''))
         except Exception:
             pass
 
@@ -373,7 +428,7 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
         "descricao_google": descricao_google,
         "nota":             nota,
         "avaliacoes":       avaliacoes,
-        "maps_url":         driver.current_url or maps_url,
+        "maps_url":         maps_url,  # URL específica do card (Fase 1) — não usa current_url que pode redirecionar
         "foto_url":         foto_url,
         "fotos_urls":       json.dumps(fotos_lista),
     }

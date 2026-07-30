@@ -23,6 +23,7 @@ from database.db import (
     get_funil_conversao,
     criar_pagina_preview, buscar_pagina_por_slug, registrar_vista_pagina,
     listar_paginas_preview, deletar_pagina_preview,
+    limpar_empresas_invalidas,
 )
 from crm.pipeline import kanban_por_status
 from dashboard.metrics import obter_stats
@@ -1332,6 +1333,12 @@ Responda EXATAMENTE neste formato (português brasileiro, direto):
     except Exception as e:
         logger.error("[Groq prospects] %s", e)
         return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/api/admin/limpar-lixo", methods=["POST"])
+def api_admin_limpar_lixo():
+    deleted = limpar_empresas_invalidas()
+    return jsonify({"ok": True, "deletados": deleted})
 
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────

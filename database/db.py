@@ -170,9 +170,33 @@ def inicializar_banco():
     c.execute("CREATE INDEX IF NOT EXISTS idx_notas_empresa     ON notas(empresa_id)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_blacklist_tel     ON blacklist(telefone)")
 
+    # Limpa registros com dados sabidamente inválidos (resquícios de bug do scraper)
+    c.execute("""
+        DELETE FROM empresas
+        WHERE nome IS NULL
+           OR LOWER(TRIM(nome)) IN ('results', 'google maps', 'google', '')
+           OR (nome ~ '^Results' AND telefone IS NULL AND endereco = '')
+    """)
+
     conn.commit()
     conn.close()
     logger.info("Banco PostgreSQL (Supabase) inicializado.")
+
+
+def limpar_empresas_invalidas():
+    """Remove manualmente registros com dados inválidos do scraper."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        DELETE FROM empresas
+        WHERE nome IS NULL
+           OR LOWER(TRIM(nome)) IN ('results', 'google maps', 'google', '')
+           OR (nome ~ '^Results' AND telefone IS NULL AND endereco = '')
+    """)
+    deleted = c.rowcount
+    conn.commit()
+    conn.close()
+    return deleted
 
 
 # ── Buscas ────────────────────────────────────────────────────────────────────
