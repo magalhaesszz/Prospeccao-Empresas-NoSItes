@@ -104,43 +104,68 @@ async function gerarPagina() {
 
   if (!nome) { mostrarToast("Informe o nome da empresa.", "error"); return; }
 
-  btn.disabled    = true;
-  btn.innerHTML   = '<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span> Gerando site com Groq...';
+  btn.disabled  = true;
   if (resultado) resultado.style.display = "none";
+
+  const _btnOriginal = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site com Groq`;
+  const _setSpinner = (msg) => {
+    btn.innerHTML = `<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span> ${msg}`;
+  };
 
   try {
     const payload = { nome, categoria, cidade };
     if (_empresaSelecionada?.id) payload.empresa_id = _empresaSelecionada.id;
 
-    const r = await fetch("/api/gemini/gerar-pagina", {
+    _setSpinner("Iniciando geração...");
+
+    // 1. Dispara job em background
+    const r0 = await fetch("/api/gemini/gerar-pagina", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
     });
-    const d = await r.json();
-    if (d.erro) throw new Error(d.erro);
+    const d0 = await r0.json();
+    if (d0.erro) throw new Error(d0.erro);
 
-    _paginaAtualUrl = d.url;
+    const jobId = d0.job_id;
+    let tentativas = 0;
+    const MAX_TENTATIVAS = 75; // 75 × 2s = 150s máximo
 
-    const urlInp  = document.getElementById("gp-url");
-    const urlBar  = document.getElementById("gp-url-bar");
-    const iframe  = document.getElementById("gp-iframe");
-    const gmLink  = document.getElementById("gm-link");
+    // 2. Polling até terminar ou dar erro
+    while (tentativas < MAX_TENTATIVAS) {
+      await new Promise(res => setTimeout(res, 2000));
+      tentativas++;
+      _setSpinner(`Groq gerando o site... (${tentativas * 2}s)`);
 
-    if (urlInp)  urlInp.value = d.url;
-    if (urlBar)  urlBar.textContent = d.url;
-    if (iframe)  iframe.src = d.url;
-    if (gmLink)  gmLink.value = d.url;
-    if (resultado) resultado.style.display = "block";
+      const rs = await fetch(`/api/gemini/gerar-pagina/status/${jobId}`).then(r => r.json());
 
-    mostrarToast("Site gerado com sucesso!", "success");
-    carregarPaginas();
+      if (rs.status === "ok") {
+        _paginaAtualUrl = rs.url;
+        const urlInp = document.getElementById("gp-url");
+        const urlBar = document.getElementById("gp-url-bar");
+        const iframe = document.getElementById("gp-iframe");
+        const gmLink = document.getElementById("gm-link");
+        if (urlInp) urlInp.value    = rs.url;
+        if (urlBar) urlBar.textContent = rs.url;
+        if (iframe) iframe.src      = rs.url;
+        if (gmLink) gmLink.value    = rs.url;
+        if (resultado) resultado.style.display = "block";
+        mostrarToast("Site gerado com sucesso!", "success");
+        carregarPaginas();
+        return;
+      }
+
+      if (rs.status === "erro") throw new Error(rs.erro || "Erro na geração.");
+      // status === "gerando" → continua polling
+    }
+
+    throw new Error("Tempo limite atingido. Groq demorou mais de 150s. Tente novamente.");
   } catch (e) {
     mostrarToast("Erro: " + e.message, "error");
     console.error(e);
   } finally {
     btn.disabled  = false;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site com Groq`;
+    btn.innerHTML = _btnOriginal;
   }
 }
 

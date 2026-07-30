@@ -2,7 +2,7 @@
 Servidor Flask — Prospector de Empresas.
 Inclui: SSE em tempo real, CRM, Dashboard, Templates, Blacklist, Login.
 """
-import os, socket, json, logging, threading, queue
+import os, socket, json, logging, threading, queue, uuid
 from flask import (
     Flask, jsonify, request, send_file, render_template,
     session, redirect, url_for, Response, stream_with_context
@@ -1350,13 +1350,18 @@ def _groq_gerar(prompt):
     api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:
         raise ValueError("GROQ_API_KEY não configurado.")
-    client = Groq(api_key=api_key)
+    client = Groq(api_key=api_key, timeout=120.0)
     resp = client.chat.completions.create(
         model=_GROQ_MODELO,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=8192,
     )
     return resp.choices[0].message.content.strip()
+
+
+# Job store para geração assíncrona de páginas (in-memory, TTL simples por tamanho)
+_jobs_pagina: dict = {}
+_JOBS_MAX = 200  # descarta jobs mais antigos quando ultrapassar
 
 
 def _app_base_url():
@@ -1374,7 +1379,13 @@ def api_gemini_status():
 
 @app.route("/api/gemini/gerar-pagina", methods=["POST"])
 def api_groq_gerar_pagina():
-    import secrets as _sec
+    """Inicia geração de página em background. Retorna job_id para polling."""
+    from gemini.enricher import gerar_pagina as _enr_gerar_pagina
+
+    api_key = CONFIG.get("groq_api_key", "").strip()
+    if not api_key:
+        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
+
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
     categoria  = (dados.get("categoria")  or "Negócio Local").strip()
@@ -1384,61 +1395,51 @@ def api_groq_gerar_pagina():
     if not nome:
         return jsonify({"erro": "Nome da empresa é obrigatório."}), 400
 
-    prompt = f"""Você é um desenvolvedor web expert em UI/UX e design moderno.
-Crie uma landing page HTML completa, profissional e visualmente impressionante para:
+    job_id = uuid.uuid4().hex[:10]
+    _jobs_pagina[job_id] = {"status": "gerando"}
 
-EMPRESA: {nome}
-SEGMENTO: {categoria}
-CIDADE: {cidade}
+    # Descarta jobs antigos para não vazar memória
+    if len(_jobs_pagina) > _JOBS_MAX:
+        chave_mais_velha = next(iter(_jobs_pagina))
+        _jobs_pagina.pop(chave_mais_velha, None)
 
-ESPECIFICAÇÕES TÉCNICAS OBRIGATÓRIAS:
-- HTML5 completo (<!DOCTYPE html> até </html>)
-- CSS 100% inline dentro de <style> — ZERO dependências externas (sem CDN, sem Google Fonts por URL, sem imagens externas)
-- Fontes: somente system fonts (-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif)
-- 100% responsivo com @media queries (mobile-first)
-- Sem JavaScript de terceiros
+    base_url = _app_base_url()
 
-ESTRUTURA (nesta ordem exata):
-1. <head> com meta charset, viewport, title e descrição SEO
-2. Navegação sticky no topo: logo/nome + links (Início, Serviços, Sobre, Contato)
-3. Hero: headline forte, subtítulo, 2 CTAs (WhatsApp + Ver Serviços) com gradiente de fundo
-4. Seção Serviços: 3-4 cards em grid com ícone SVG inline, título e descrição
-5. Seção Por que nos escolher: 3 diferenciais com ícone SVG e texto
-6. Seção Sobre: história da empresa, números (anos, clientes, projetos) em destaque visual
-7. Seção Depoimentos: 3 cards com texto, nome e cargo fictícios mas realistas
-8. Seção Contato: formulário (nome/email/telefone/mensagem) + endereço e telefone
-9. Botão WhatsApp flutuante fixo: canto inferior direito, verde #25D366, ícone SVG do WhatsApp
-10. Footer: copyright {nome} {cidade}
+    def _bg():
+        try:
+            empresa = {
+                "nome":             nome,
+                "categoria":        categoria,
+                "descricao_google": categoria,
+                "cidade":           cidade,
+                "endereco":         "",
+                "telefone":         "",
+                "nota":             None,
+                "avaliacoes":       None,
+                "foto_url":         "",
+                "fotos_urls":       "[]",
+                "maps_url":         "",
+            }
+            slug, html = _enr_gerar_pagina(empresa, api_key)
+            pid  = criar_pagina_preview(empresa_id, nome, slug, html)
+            url  = f"{base_url}/p/{slug}"
+            logger.info("[Groq] Página gerada para '%s' → %s", nome, url)
+            _jobs_pagina[job_id] = {"status": "ok", "id": pid, "slug": slug, "url": url}
+        except Exception as e:
+            logger.error("[Groq gerar-pagina] %s", e)
+            _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}
 
-DESIGN E QUALIDADE:
-- Paleta de cores profissional e moderna adequada ao segmento "{categoria}"
-- Use gradientes, sombras (box-shadow), border-radius, transições CSS suaves
-- Animações: hover effects nos cards e botões (transform: translateY, scale)
-- Aparência de site REAL de empresa estabelecida — não genérico
-- Textos em português brasileiro, criativos, persuasivos e realistas
-- Seções com padding generoso, espaçamento bem definido
+    threading.Thread(target=_bg, daemon=True).start()
+    return jsonify({"job_id": job_id})
 
-ATENÇÃO CRÍTICA: Retorne ÚNICA e EXCLUSIVAMENTE o código HTML. Nenhuma palavra antes ou depois. Sem blocos de código markdown (sem ```html ou ```). Nada além do HTML puro."""
 
-    try:
-        html_raw = _groq_gerar(prompt)
-
-        # Remove markdown code blocks se Gemini retornar com eles
-        if html_raw.startswith("```"):
-            lines = html_raw.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            html_raw = "\n".join(lines).strip()
-
-        slug = _sec.token_urlsafe(8)
-        pid  = criar_pagina_preview(empresa_id, nome, slug, html_raw)
-        url  = f"{_app_base_url()}/p/{slug}"
-
-        logger.info("[Groq] Página gerada para '%s' → %s", nome, url)
-        return jsonify({"id": pid, "slug": slug, "url": url, "ok": True})
-
-    except Exception as e:
-        logger.error("[Groq] %s", e)
-        return jsonify({"erro": str(e)}), 500
+@app.route("/api/gemini/gerar-pagina/status/<job_id>")
+def api_groq_pagina_status(job_id):
+    """Polling de status do job de geração de página."""
+    job = _jobs_pagina.get(job_id)
+    if not job:
+        return jsonify({"erro": "Job não encontrado."}), 404
+    return jsonify(job)
 
 
 @app.route("/api/gemini/gerar-mensagem", methods=["POST"])
