@@ -121,6 +121,29 @@ Retorne APENAS a mensagem. Zero prefácio ou explicação."""
 
 # ── Gerador de landing page ───────────────────────────────────────────────────
 
+def _paleta_segmento(categoria):
+    """Retorna (cor_primaria, cor_acento) baseado no segmento da empresa."""
+    cat = (categoria or "").lower()
+    if any(x in cat for x in ["barbearia", "barber", "barbeir"]):
+        return "#1a1a2e", "#c8a96e"
+    if any(x in cat for x in ["salão", "salao", "beleza", "cabeler", "estética", "estetica", "manicure", "nail"]):
+        return "#2d1b4e", "#f8a5c2"
+    if any(x in cat for x in ["restaurante", "lanchonete", "pizzaria", "hamburger", "hamburguer", "açougue", "acougue", "padaria", "pastelaria", "sushi", "churrascaria", "comida", "boteco", "bar "]):
+        return "#1a0a00", "#e07b00"
+    if any(x in cat for x in ["academia", "fitness", "musculação", "musculacao", "crossfit", "pilates", "yoga"]):
+        return "#0a0a0a", "#00d4aa"
+    if any(x in cat for x in ["clínica", "clinica", "médico", "medico", "dentista", "odonto", "saúde", "saude", "farmácia", "farmacia", "hospital", "veterinár", "veterinar"]):
+        return "#f0f8ff", "#0066cc"
+    if any(x in cat for x in ["auto", "mecânic", "mecanica", "oficina", "car wash", "borracharia"]):
+        return "#1c1c1c", "#e63946"
+    if any(x in cat for x in ["hotel", "pousada", "hostel", "turismo"]):
+        return "#1b2a4a", "#d4af37"
+    if any(x in cat for x in ["advogad", "advocacia", "jurídic", "juridico", "contábil", "contabil", "contador"]):
+        return "#0d1b2a", "#1e88e5"
+    # fallback
+    return "#1a1a2a", "#e67e22"
+
+
 def gerar_pagina(empresa, api_key):
     """
     Generates a complete, self-contained HTML landing page using all real company data.
@@ -136,22 +159,15 @@ def gerar_pagina(empresa, api_key):
     foto_url  = empresa.get("foto_url") or ""
     maps_url  = empresa.get("maps_url") or ""
 
-    dados_reais = f"Nome: {nome}"
-    if categoria: dados_reais += f"\nSegmento: {categoria}"
-    if cidade:    dados_reais += f"\nCidade: {cidade}"
-    if endereco:  dados_reais += f"\nEndereço: {endereco}"
-    if telefone:  dados_reais += f"\nTelefone: {telefone}"
-    if nota:      dados_reais += f"\nNota Google Maps: {nota:.1f} estrelas"
-    if avs:       dados_reais += f"\nTotal de avaliações: {avs}"
-    if foto_url:  dados_reais += f"\nFoto real do estabelecimento (URL): {foto_url}"
-    if maps_url:  dados_reais += f"\nLink Google Maps: {maps_url}"
+    # Normaliza telefone para wa.me (só dígitos)
+    tel_digits = "".join(d for d in (telefone or "") if d.isdigit())
+    wa_number  = f"55{tel_digits}" if tel_digits and not tel_digits.startswith("55") else tel_digits
+    wa_link    = f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/"
+    tel_link   = f"tel:+55{tel_digits}" if tel_digits else "#"
 
-    badge_avaliacao = ""
-    if nota and avs:
-        badge_avaliacao = f"""
-6. Seção Badge de Reputação: destaque visual com {nota:.1f}⭐ estrelas e {avs} avaliações reais no Google.
-   Use CSS para criar um badge dourado elegante com as estrelas e link para o Maps: {maps_url or '#'}"""
+    cor_primaria, cor_acento = _paleta_segmento(categoria)
 
+    # Monta lista de fotos reais (até 6)
     fotos_raw = empresa.get("fotos_urls") or "[]"
     try:
         fotos_lista = json.loads(fotos_raw) if isinstance(fotos_raw, str) else []
@@ -161,59 +177,181 @@ def gerar_pagina(empresa, api_key):
         fotos_lista.insert(0, foto_url)
     fotos_lista = [f for f in fotos_lista if f][:6]
 
-    foto_instrucao = ""
-    if len(fotos_lista) == 1:
-        foto_instrucao = f"""
-• FOTO REAL: use a URL ({fotos_lista[0]}) como <img> no hero e na seção "Sobre".
-  Adicione object-fit:cover, border-radius:12px, max-width:100%, loading="lazy"."""
-    elif len(fotos_lista) > 1:
-        urls_str = "\n  ".join(f"- {f}" for f in fotos_lista)
-        foto_instrucao = f"""
-• FOTOS REAIS do estabelecimento — use TODAS na página:
-  {urls_str}
-  Use a primeira foto no hero (object-fit:cover, height:320px, width:100%).
-  Crie uma seção "Galeria de Fotos" logo após os Serviços: CSS grid 3 colunas (2 no mobile),
-  cada <img> com object-fit:cover, height:200px, width:100%, border-radius:10px, loading="lazy".
-  Não omita nenhuma foto."""
+    # Bloco hero: foto de fundo ou cor sólida
+    if fotos_lista:
+        hero_bg = f'background: linear-gradient(rgba(0,0,0,0.55),rgba(0,0,0,0.55)), url("{fotos_lista[0]}") center/cover no-repeat;'
+        hero_color = "#ffffff"
+    else:
+        hero_bg = f"background: linear-gradient(135deg, {cor_primaria} 0%, {cor_acento}33 100%);"
+        hero_color = "#ffffff"
 
-    prompt = f"""Você é um desenvolvedor web sênior especialista em landing pages de alta conversão.
-Crie uma landing page HTML completa, profissional e visualmente impressionante.
+    # Seção galeria
+    if len(fotos_lista) > 1:
+        imgs_html = "\n".join(
+            f'          <img src="{f}" alt="Foto {i+1} - {nome}" loading="lazy">'
+            for i, f in enumerate(fotos_lista)
+        )
+        galeria_instrucao = f"""
+━━ SEÇÃO GALERIA (inserir APÓS Serviços) ━━
+Título: "Nossa Galeria"
+CSS grid: 3 colunas desktop, 2 mobile (375px), gap 12px
+Cada <img>: object-fit:cover; height:220px; width:100%; border-radius:10px; display:block
+USAR EXATAMENTE ESSAS URLs (não inventar outras):
+{imgs_html}"""
+    elif fotos_lista:
+        galeria_instrucao = f"""
+━━ FOTO REAL (usar no hero e na seção Sobre) ━━
+URL: {fotos_lista[0]}
+No hero: background-image inline no elemento, não em <img>.
+Na seção Sobre: <img src="{fotos_lista[0]}" alt="{nome}" style="width:100%;max-width:480px;border-radius:12px;object-fit:cover;display:block;margin:0 auto">"""
+    else:
+        galeria_instrucao = "Não há fotos reais — NÃO use nenhuma imagem placeholder ou via picsum/unsplash/via.placeholder."
 
-DADOS REAIS DA EMPRESA (use TODOS na página):
-{dados_reais}
+    # Badge avaliações
+    if nota and avs:
+        badge_instrucao = f"""
+━━ SEÇÃO BADGE GOOGLE (inserir APÓS Diferenciais) ━━
+Fundo {cor_acento}15, borda {cor_acento}, border-radius 16px, padding 32px, text-align center
+Estrelas: mostrar {int(nota)} estrelas douradas ({cor_acento}) via CSS/Unicode ★
+Texto grande: "{nota:.1f} no Google Maps"
+Subtexto: "Baseado em {avs} avaliações reais de clientes"
+Link: <a href="{maps_url or '#'}" target="_blank" rel="noopener">Ver avaliações no Google</a>"""
+    else:
+        badge_instrucao = ""
 
-━━ ESPECIFICAÇÕES TÉCNICAS (OBRIGATÓRIAS) ━━
-• HTML5 completo: <!DOCTYPE html> até </html>
-• CSS 100% inline em <style> — ZERO CDN, ZERO Google Fonts por URL
-• Fontes: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif
-• Totalmente responsivo (mobile-first com @media queries)
-• JavaScript MÍNIMO inline apenas para menu mobile e scroll suave{foto_instrucao}
+    prompt = f"""Você é desenvolvedor web sênior especialista em landing pages de alta conversão para negócios locais brasileiros.
+Gere UMA landing page HTML completa e profissional para a empresa abaixo.
 
-━━ ESTRUTURA DA PÁGINA (nesta ordem exata) ━━
-1. <head>: meta charset, viewport, title="{nome} | {cidade}", meta description SEO
-2. Navegação sticky: logo texto com nome + links ancora (Início, Serviços, Sobre, Contato)
-3. Hero: headline forte e específica para o segmento "{categoria}", subtítulo persuasivo,
-   2 botões CTA: [Falar pelo WhatsApp] (verde #25D366) e [Ver Nossos Serviços]
-4. Serviços: grid 3-4 cards com SVG ícone INLINE (não img), título e descrição real do segmento
-5. Diferenciais: 3 razões específicas para escolher (baseadas no segmento real){badge_avaliacao}
-7. Sobre a empresa: parágrafo sobre a empresa em {cidade}, mencione o endereço real
-8. Depoimentos: 3 cards com texto, nome (nome brasileiro realista), "Cliente desde 202X"
-9. Contato: seção com endereço real ({endereco}), telefone real ({telefone}),
-   formulário visual (nome/email/telefone/mensagem) com estilo bonito
-10. Botão WhatsApp flutuante FIXO: canto inferior direito, background #25D366, SVG WhatsApp branco
-11. Footer: © 2025 {nome} • {cidade} • Todos os direitos reservados
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DADOS REAIS DA EMPRESA — USE TODOS, NÃO INVENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Nome:      {nome}
+Segmento:  {categoria}
+Cidade:    {cidade}
+Endereço:  {endereco}
+Telefone:  {telefone}
+Nota:      {f"{nota:.1f} ⭐" if nota else "não informada"}
+Avaliações:{f" {avs} avaliações no Google" if avs else " não informado"}
+Maps:      {maps_url or "não informado"}
 
-━━ DESIGN E QUALIDADE ━━
-• Paleta de cores profissional e moderna adequada ao segmento "{categoria}"
-• Use gradientes CSS sutis no hero e nas seções alternadas
-• Sombras suaves (box-shadow), border-radius 8-16px, hover transitions .3s
-• Ícones SVG inline (sem CDN) — simples, elegantes
-• Espaçamento generoso (padding 60-80px nas seções), tipografia bem hierarquizada
-• Aparência de site REAL e estabelecido, não de template
-• Animações CSS: fade-in suave nos cards via @keyframes + IntersectionObserver inline
-• Textos em português brasileiro, criativos, persuasivos e específicos ao segmento
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PALETA DE CORES OBRIGATÓRIA (não alterar)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primária:  {cor_primaria}
+Acento:    {cor_acento}
+Fundo seções alternadas: {cor_primaria}0d  (primária com 5% opacidade)
+Texto principal: #1a1a1a
+Texto sobre fundo escuro: #ffffff
 
-RETORNE ÚNICA E EXCLUSIVAMENTE O CÓDIGO HTML. Sem markdown, sem ```, sem qualquer texto antes ou depois."""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ESPECIFICAÇÕES TÉCNICAS (TODAS OBRIGATÓRIAS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• DOCTYPE html5, meta charset="UTF-8", meta name="viewport" content="width=device-width,initial-scale=1"
+• title: "{nome} | {categoria} em {cidade}"
+• meta description: frase única sobre o negócio (máx 155 chars)
+• Todo CSS em <style> no <head> — ZERO CDN, ZERO link externo
+• font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif
+• Mobile-first: layout base para 375px, depois @media(min-width:768px) para desktop
+• JavaScript: apenas menu hamburger mobile e smooth scroll — inline no </body>
+• ZERO Bootstrap, ZERO Tailwind, ZERO Font Awesome, ZERO Google Fonts URL
+• SVG ícones: sempre inline <svg> dentro do HTML — nunca src externo
+• HTML válido: todas as tags abertas devem ser fechadas corretamente
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ESTRUTURA OBRIGATÓRIA (nessa ordem exata, sem pular seções)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. NAV STICKY
+   position:sticky; top:0; z-index:1000; background:{cor_primaria}; color:#fff
+   Esquerda: nome "{nome}" em negrito (font-size:1.1rem)
+   Centro: links âncora (Início · Serviços · Sobre · Contato) — ocultos em mobile
+   Direita: <a href="{wa_link}" target="_blank"> botão "WhatsApp" background:{cor_acento}; color:#fff; border-radius:6px; padding:8px 16px
+   Hamburger (☰) visível só em mobile, abre menu vertical
+
+2. HERO
+   {hero_bg}
+   color:{hero_color}; min-height:85vh; display:flex; align-items:center; justify-content:center; text-align:center; padding:40px 20px
+   H1: nome do negócio em destaque (font-size clamp(2rem,5vw,3.5rem); font-weight:800)
+   P: categoria + cidade em subtítulo (font-size:1.1rem; opacity:.9)
+   2 botões lado a lado (flex-wrap:wrap; gap:16px; justify-content:center; margin-top:32px):
+     • "📱 Agendar pelo WhatsApp" — background:{cor_acento}; color:#fff; href="{wa_link}"; target="_blank"
+     • "↓ Nossos Serviços" — border:2px solid #fff; color:#fff; background:transparent; href="#servicos"
+   Botões: padding:14px 28px; border-radius:8px; font-size:1rem; font-weight:600; text-decoration:none; display:inline-block
+
+3. SERVIÇOS  id="servicos"
+   background:#fff; padding:80px 20px; text-align:center
+   Título seção: "Nossos Serviços" (font-size:2rem; color:{cor_primaria}; margin-bottom:48px)
+   Grid: display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:24px; max-width:1100px; margin:0 auto
+   MÍNIMO 4 cards — MÁXIMO 6 cards, específicos para "{categoria}"
+   Cada card: background:#fff; border:1px solid #e8e8e8; border-radius:12px; padding:32px 24px; box-shadow:0 2px 12px rgba(0,0,0,.07); transition:transform .3s
+   Card hover: transform:translateY(-4px); box-shadow:0 8px 24px rgba(0,0,0,.12)
+   Cada card: SVG ícone inline (48x48, fill:{cor_acento}), <h3> serviço (color:{cor_primaria}), <p> descrição real (color:#555)
+   Os serviços DEVEM ser reais e típicos de "{categoria}" — NÃO use serviços genéricos
+
+4. DIFERENCIAIS  id="diferenciais"
+   background:{cor_primaria}0d; padding:80px 20px; text-align:center
+   Título: "Por que nos escolher?" (font-size:2rem; color:{cor_primaria})
+   Flex: display:flex; flex-wrap:wrap; gap:32px; justify-content:center; max-width:900px; margin:32px auto 0
+   3 itens — cada um: SVG ícone inline (40x40 fill:{cor_acento}), <h3> título (color:{cor_primaria}), <p> texto (color:#444; max-width:260px)
+   Diferenciais específicos para o segmento "{categoria}" em {cidade}
+{badge_instrucao}
+{galeria_instrucao}
+
+5. SOBRE  id="sobre"
+   background:#fff; padding:80px 20px
+   Layout desktop 2 colunas (grid-template-columns:1fr 1fr; gap:48px; align-items:center); mobile 1 coluna
+   Coluna texto: título "Sobre {nome}" (color:{cor_primaria}), parágrafo humanizado (mín 80 palavras) sobre o negócio em {cidade}, mencione o endereço "{endereco}"
+   Coluna visual: (ver instruções de foto acima)
+
+6. DEPOIMENTOS  id="depoimentos"
+   background:{cor_primaria}0d; padding:80px 20px; text-align:center
+   Título: "O que nossos clientes dizem"
+   Grid: 3 cards; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; max-width:900px; margin:32px auto 0
+   Cada card: background:#fff; border-radius:12px; padding:28px; box-shadow:0 2px 8px rgba(0,0,0,.06)
+   Ícone aspas: " (font-size:3rem; color:{cor_acento}; line-height:1)
+   Texto do depoimento: específico para "{categoria}" (mín 30 palavras)
+   Nome: nome brasileiro realista; Período: "Cliente desde 202X"
+   Estrelas: ★★★★★ (color:{cor_acento})
+
+7. CONTATO  id="contato"
+   background:#fff; padding:80px 20px
+   Título: "Fale Conosco" (color:{cor_primaria})
+   Layout desktop 2 colunas; mobile 1 coluna
+   Coluna esquerda — informações:
+     • Endereço: 📍 {endereco}
+     • Telefone: 📞 <a href="{tel_link}" style="color:{cor_acento}">{telefone}</a>
+     • WhatsApp: 💬 <a href="{wa_link}" target="_blank" style="color:{cor_acento}">Chamar no WhatsApp</a>
+     • Maps: 🗺️ <a href="{maps_url or '#'}" target="_blank" style="color:{cor_acento}">Ver no Google Maps</a>
+   Coluna direita — formulário visual (SEM action, apenas visual):
+     Campos: Nome, E-mail, Telefone, Mensagem (textarea)
+     Botão submit: background:{cor_acento}; color:#fff; width:100%; padding:14px; border-radius:8px; border:none; font-size:1rem; cursor:pointer
+     Todos inputs: border:1px solid #ddd; border-radius:8px; padding:12px; width:100%; font-size:1rem; margin-bottom:12px
+
+8. WHATSAPP FLUTUANTE
+   position:fixed; bottom:24px; right:24px; z-index:9999
+   <a href="{wa_link}" target="_blank" rel="noopener" aria-label="WhatsApp">
+   Círculo: width:60px; height:60px; background:#25D366; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(37,211,102,.4); text-decoration:none
+   SVG WhatsApp branco inline (width:32; height:32; fill:#fff)
+
+9. FOOTER
+   background:{cor_primaria}; color:#fff; text-align:center; padding:32px 20px; font-size:.9rem
+   © 2025 {nome} — {categoria} em {cidade}. Todos os direitos reservados.
+   Linha: <a href="{wa_link}" style="color:{cor_acento}; text-decoration:none">💬 Falar pelo WhatsApp</a>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRAS ABSOLUTAS (violação = site inválido)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✗ PROIBIDO: Lorem ipsum, placeholder, "exemplo", "digite aqui"
+✗ PROIBIDO: qualquer URL externa de imagem que não seja das fotos reais acima
+✗ PROIBIDO: Bootstrap, Tailwind CDN, Font Awesome CDN, Google Fonts URL
+✗ PROIBIDO: <img> sem src real (não usar picsum, via.placeholder, unsplash etc)
+✗ PROIBIDO: inventar endereço, telefone ou qualquer dado que não foi fornecido
+✗ PROIBIDO: wrapper ```html``` ou qualquer texto antes/depois do HTML
+✓ TODO telefone clicável: href="{tel_link}"
+✓ TODO WhatsApp: href="{wa_link}"
+✓ Textos em português brasileiro, persuasivos, específicos ao segmento
+
+RETORNE APENAS O CÓDIGO HTML. Começa com <!DOCTYPE html> e termina com </html>. Nada mais."""
 
     html = _strip_markdown(_gerar(prompt, api_key))
     slug = secrets.token_urlsafe(8)
