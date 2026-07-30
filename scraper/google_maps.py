@@ -172,14 +172,24 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
 
 # ── Funções internas ──────────────────────────────────────────────────────────
 
+def _contar_cards(feed):
+    """Conta cards do feed tentando seletor principal e fallback de links."""
+    cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
+    if cards:
+        return len(cards), cards
+    links = feed.find_elements(By.XPATH, ".//a[contains(@href,'/maps/place/')]")
+    return len(links), links
+
+
 def _rolar_feed(driver, max_itens):
     sem_mudanca = 0
     ultima = 0
-    while sem_mudanca < 5:
+    # 15 tentativas × 3s = 45s máximo sem novos cards antes de desistir.
+    # Google Maps pode demorar >10s para lazy-load em servidores lentos (Railway).
+    while sem_mudanca < 15:
         try:
             feed  = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-            cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
-            n = len(cards)
+            n, elementos = _contar_cards(feed)
             if n >= max_itens:
                 break
             if n == ultima:
@@ -188,8 +198,13 @@ def _rolar_feed(driver, max_itens):
                 sem_mudanca = 0
                 ultima = n
                 logger.info("Feed: %d cards...", n)
+            # Scroll duplo: scrollHeight do feed + último elemento visível.
+            # O scrollIntoView no último card aciona o lazy-load do Maps
+            # que o scrollTop sozinho às vezes não dispara.
             driver.execute_script("arguments[0].scrollTop=arguments[0].scrollHeight", feed)
-            time.sleep(2)
+            if elementos:
+                driver.execute_script("arguments[0].scrollIntoView(false)", elementos[-1])
+            time.sleep(3)
         except NoSuchElementException:
             break
         except Exception as exc:
@@ -197,7 +212,8 @@ def _rolar_feed(driver, max_itens):
             sem_mudanca += 1
     try:
         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-        return len(feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK"))
+        n, _ = _contar_cards(feed)
+        return n
     except Exception:
         return ultima
 
@@ -205,19 +221,21 @@ def _rolar_feed(driver, max_itens):
 def _coletar_itens_feed(driver):
     """
     Fase 1 — lê o feed SEM clicar em nada.
-    Para cada card itera TODOS os <a href> e pega o que contém /maps/place/.
-    find_element pega o *primeiro* link, que pode ser "Ver rotas" ou "Salvar"
-    — por isso usamos find_elements e filtramos.
+    Estratégia principal: itera cards div.Nv2PK e pega link /maps/place/.
+    Estratégia fallback: varre todos os <a href*=/maps/place/> direto no feed.
     """
     itens = []
     seen  = set()
     try:
         feed  = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+
+        # Estratégia 1: cards div.Nv2PK (seletor clássico)
         cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
+        logger.info("Feed: %d cards (div.Nv2PK).", len(cards))
+
         for card in cards:
             try:
                 links = card.find_elements(By.CSS_SELECTOR, "a[href]")
-                # Coleta aria-labels de todos os links para fallback de nome
                 todos_labels = [
                     (link.get_attribute("aria-label") or "").strip()
                     for link in links
@@ -226,16 +244,29 @@ def _coletar_itens_feed(driver):
                     href = link.get_attribute("href") or ""
                     if "/maps/place/" in href and href not in seen:
                         nome_hint = todos_labels[idx]
-                        # Fallback: pega o primeiro aria-label não vazio do card
                         if not nome_hint:
                             nome_hint = next((l for l in todos_labels if l), "")
                         seen.add(href)
                         itens.append({"url": href, "nome_hint": nome_hint})
-                        break  # um por card — passa ao próximo
+                        break
             except Exception:
                 pass
+
+        # Estratégia 2 (fallback): se nenhum card encontrado, varre links do feed
+        if not itens:
+            logger.warning("div.Nv2PK sem resultado — fallback: varredura de links do feed.")
+            links = feed.find_elements(By.XPATH, ".//a[contains(@href,'/maps/place/')]")
+            for link in links:
+                href  = link.get_attribute("href") or ""
+                label = (link.get_attribute("aria-label") or "").strip()
+                if href and href not in seen:
+                    seen.add(href)
+                    itens.append({"url": href, "nome_hint": label})
+
     except Exception as exc:
         logger.error("Erro ao coletar feed: %s", exc)
+
+    logger.info("Fase 1: %d URLs coletadas.", len(itens))
     return itens
 
 
