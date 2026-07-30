@@ -205,8 +205,9 @@ def _rolar_feed(driver, max_itens):
 def _coletar_itens_feed(driver):
     """
     Fase 1 — lê o feed SEM clicar em nada.
-    Para cada card extrai {url, nome_hint} dos atributos DOM.
-    Filtra apenas links de /maps/place/ para evitar links genéricos.
+    Para cada card itera TODOS os <a href> e pega o que contém /maps/place/.
+    find_element pega o *primeiro* link, que pode ser "Ver rotas" ou "Salvar"
+    — por isso usamos find_elements e filtramos.
     """
     itens = []
     seen  = set()
@@ -215,12 +216,22 @@ def _coletar_itens_feed(driver):
         cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
         for card in cards:
             try:
-                link      = card.find_element(By.CSS_SELECTOR, "a[href]")
-                href      = link.get_attribute("href") or ""
-                nome_hint = (link.get_attribute("aria-label") or "").strip()
-                if href and "/maps/place/" in href and href not in seen:
-                    seen.add(href)
-                    itens.append({"url": href, "nome_hint": nome_hint})
+                links = card.find_elements(By.CSS_SELECTOR, "a[href]")
+                # Coleta aria-labels de todos os links para fallback de nome
+                todos_labels = [
+                    (link.get_attribute("aria-label") or "").strip()
+                    for link in links
+                ]
+                for idx, link in enumerate(links):
+                    href = link.get_attribute("href") or ""
+                    if "/maps/place/" in href and href not in seen:
+                        nome_hint = todos_labels[idx]
+                        # Fallback: pega o primeiro aria-label não vazio do card
+                        if not nome_hint:
+                            nome_hint = next((l for l in todos_labels if l), "")
+                        seen.add(href)
+                        itens.append({"url": href, "nome_hint": nome_hint})
+                        break  # um por card — passa ao próximo
             except Exception:
                 pass
     except Exception as exc:
