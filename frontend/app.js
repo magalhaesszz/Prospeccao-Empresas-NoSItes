@@ -288,33 +288,48 @@ function renderizarCards() {
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid var(--border)">
-        ${mapsUrl ? `<a href="${esc(mapsUrl)}" target="_blank" rel="noopener"
-            class="btn btn-sm btn-secondary" style="font-size:.73rem;text-decoration:none;display:inline-flex;align-items:center;gap:4px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            Ver no Maps
-          </a>` : ""}
-        ${emp.telefone ? `<button class="btn btn-sm" onclick="gerarMensagemEmpresa(${emp.id},'${esc(emp.telefone||'')}')"
-            style="font-size:.73rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
+      <div style="margin-top:13px;padding-top:11px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+
+        <!-- Linha 1: navegação -->
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          ${mapsUrl ? `<a href="${esc(mapsUrl)}" target="_blank" rel="noopener"
+              class="btn btn-sm btn-secondary" style="font-size:.73rem;text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Ver no Maps
+            </a>` : ""}
+          ${podeSel ? `<button class="btn btn-sm btn-whatsapp" style="font-size:.73rem;display:inline-flex;align-items:center;gap:4px"
+              onclick="enviarUm(${emp.id})">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+              WhatsApp
+            </button>` : ""}
+        </div>
+
+        <!-- Linha 2: ações IA independentes -->
+        <div style="display:flex;gap:7px;flex-wrap:wrap;padding:8px;background:rgba(99,102,241,.05);border-radius:8px;border:1px solid rgba(99,102,241,.12)">
+          <span style="font-size:.65rem;color:#6366f1;font-weight:700;width:100%;margin-bottom:2px">⚡ AÇÕES IA — escolha uma ou as duas independentemente</span>
+
+          <!-- Mensagem IA -->
+          <button class="btn btn-sm" ${!emp.telefone ? "disabled title='Sem telefone cadastrado'" : `onclick="gerarMensagemEmpresa(${emp.id},'${esc(emp.telefone||'')}')"`}
+              style="font-size:.73rem;background:${emp.telefone ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(99,102,241,.2)"};color:${emp.telefone ? "#fff" : "rgba(99,102,241,.5)"};border:none;display:inline-flex;align-items:center;gap:4px;cursor:${emp.telefone ? "pointer" : "not-allowed"}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            Mensagem IA
-          </button>` : ""}
-        ${!temSite ? `<button id="btn-gerar-${emp.id}" class="btn btn-sm"
-            onclick="gerarSiteEmpresa(${emp.id})"
-            style="font-size:.73rem;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
+            Mensagem IA${!emp.telefone ? " (sem tel)" : ""}
+          </button>
+
+          <!-- Site Demo -->
+          <button id="btn-gerar-${emp.id}" class="btn btn-sm"
+              onclick="gerarSiteEmpresa(${emp.id})"
+              style="font-size:.73rem;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
             ${slug ? "Regenerar Site Demo" : "Criar Site Demo"}
-          </button>` : ""}
-        ${slug ? `<a href="/p/${slug}" target="_blank" rel="noopener"
-            class="btn btn-sm" style="font-size:.73rem;background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.3);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            Ver Site Demo
-          </a>` : ""}
-        ${podeSel ? `<button class="btn btn-sm btn-whatsapp" style="font-size:.73rem;display:inline-flex;align-items:center;gap:4px"
-            onclick="enviarUm(${emp.id})">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
-            WhatsApp
-          </button>` : ""}
+          </button>
+
+          ${slug ? `<a href="/p/${slug}" target="_blank" rel="noopener"
+              class="btn btn-sm" style="font-size:.73rem;background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.3);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Ver Site Demo
+            </a>` : ""}
+        </div>
+
       </div>`;
     corpo.appendChild(card);
   });
