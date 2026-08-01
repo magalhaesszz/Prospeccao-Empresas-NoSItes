@@ -63,6 +63,17 @@ function renderizarStatus(d) {
     sub.textContent    = "Escaneie o QR Code para conectar";
     acoes.innerHTML    = `<button class="btn btn-primary" onclick="iniciarConexao()">Conectar</button>`;
     cardQr.classList.remove("hidden");
+    // Limpa conversas ao detectar desconexão (evita mostrar dados de sessão anterior)
+    if (_conversas.length) {
+      _conversas = [];
+      _chatAtual = null;
+      _msgAtual  = [];
+      const lista = document.getElementById("chat-lista");
+      if (lista) lista.innerHTML = '<p class="vazio" style="padding:24px">Nenhuma conversa.</p>';
+      document.getElementById("chat-conteudo")?.classList.add("hidden");
+      document.getElementById("chat-vazio")?.classList.remove("hidden");
+      document.getElementById("chat-contador").textContent = "";
+    }
     if (!document.getElementById("qr-img").src.startsWith("data:")) {
       buscarQR();
     }
@@ -169,7 +180,20 @@ async function desconectar() {
   try {
     const r = await fetch("/api/whatsapp/desconectar", { method: "POST" });
     const d = await r.json();
-    mostrarToast(d.ok ? "WhatsApp desconectado." : "Erro ao desconectar.", d.ok ? "info" : "error");
+    if (d.ok) {
+      // Limpa estado local para não mostrar dados da sessão anterior
+      _conversas = [];
+      _chatAtual = null;
+      _msgAtual  = [];
+      const lista = document.getElementById("chat-lista");
+      if (lista) lista.innerHTML = '<p class="vazio" style="padding:24px">Nenhuma conversa.</p>';
+      document.getElementById("chat-conteudo")?.classList.add("hidden");
+      document.getElementById("chat-vazio")?.classList.remove("hidden");
+      document.getElementById("chat-contador").textContent = "";
+      mostrarToast("WhatsApp desconectado.", "info");
+    } else {
+      mostrarToast("Erro ao desconectar: " + (d.erro || ""), "error");
+    }
     setTimeout(atualizarStatus, 1000);
   } catch (e) {
     mostrarToast("Erro de rede.", "error");

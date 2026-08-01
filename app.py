@@ -587,20 +587,27 @@ def api_wa_desconectar():
         return jsonify({"ok": False, "erro": "Não configurado."})
 
     try:
-        r = req.delete(
+        # Logout primeiro (ignora erros — instância pode já estar desconectada)
+        req.delete(
             f"{webhook.rstrip('/')}/instance/logout/{instance}",
+            headers={"apikey": api_key},
+            timeout=10,
+        )
+        # Deleta a instância para limpar histórico (evita dados de sessão anterior)
+        r = req.delete(
+            f"{webhook.rstrip('/')}/instance/delete/{instance}",
             headers={"apikey": api_key},
             timeout=10,
         )
         if r.ok:
             return jsonify({"ok": True})
-        # Instância já desconectada também é sucesso do ponto de vista do usuário
         corpo = ""
         try:
             corpo = str(r.json())
         except Exception:
             corpo = r.text[:200]
-        if "not" in corpo.lower() and ("connect" in corpo.lower() or "logged" in corpo.lower()):
+        # "not found" significa instância já não existe — sucesso
+        if "not" in corpo.lower() and ("found" in corpo.lower() or "exist" in corpo.lower()):
             return jsonify({"ok": True})
         return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {corpo[:200]}"})
     except Exception as e:
