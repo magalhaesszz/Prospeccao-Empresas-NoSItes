@@ -537,6 +537,12 @@ async function carregarHistorico() {
               <button class="btn btn-sm btn-excel"     onclick="exportarBusca(${h.id})">Excel</button>
             </div>
           </div>`).join("");
+
+    // Auto-carrega a busca mais recente se nenhuma empresa está na tela
+    // (acontece após redeploy — servidor perde estado em memória)
+    if (hist.length > 0 && APP.empresas.length === 0) {
+      await verBusca(hist[0].id);
+    }
   } catch (_) {}
 }
 
