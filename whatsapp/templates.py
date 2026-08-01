@@ -31,20 +31,14 @@ def obter_mensagem(nome_empresa, template_id=None):
         template = get_template_ativo()
 
     if template:
-        try:
-            mensagem = template["mensagem"].format(NOME_DA_EMPRESA=nome_empresa)
-            return mensagem, template["id"]
-        except KeyError:
-            pass
+        mensagem = template["mensagem"].replace("{NOME_DA_EMPRESA}", nome_empresa)
+        return mensagem, template["id"]
 
     # Fallback: mensagem do config
-    mensagem = CONFIG["mensagem_whatsapp"].format(NOME_DA_EMPRESA=nome_empresa)
+    mensagem = CONFIG["mensagem_whatsapp"].replace("{NOME_DA_EMPRESA}", nome_empresa)
     return mensagem, None
 
 
 def preview_template(mensagem_raw, nome_exemplo="Barbearia do João"):
     """Retorna preview formatado com nome de exemplo."""
-    try:
-        return mensagem_raw.format(NOME_DA_EMPRESA=nome_exemplo)
-    except Exception:
-        return mensagem_raw
+    return mensagem_raw.replace("{NOME_DA_EMPRESA}", nome_exemplo)

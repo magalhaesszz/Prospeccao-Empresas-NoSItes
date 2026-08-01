@@ -316,7 +316,7 @@ function renderizarCards() {
           <span style="font-size:.65rem;color:#6366f1;font-weight:700;width:100%;margin-bottom:2px">⚡ AÇÕES IA — escolha uma ou as duas independentemente</span>
 
           <!-- Mensagem IA -->
-          <button class="btn btn-sm" ${!emp.telefone ? "disabled title='Sem telefone cadastrado'" : `onclick="gerarMensagemEmpresa(${emp.id},'${esc(emp.telefone||'')}')"`}
+          <button class="btn btn-sm" ${!emp.telefone ? "disabled title='Sem telefone cadastrado'" : `data-empid="${emp.id}" data-tel="${esc(emp.telefone||'')}" onclick="gerarMensagemEmpresa(this.dataset.empid,this.dataset.tel)"`}
               style="font-size:.73rem;background:${emp.telefone ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(99,102,241,.2)"};color:${emp.telefone ? "#fff" : "rgba(99,102,241,.5)"};border:none;display:inline-flex;align-items:center;gap:4px;cursor:${emp.telefone ? "pointer" : "not-allowed"}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             Mensagem IA${!emp.telefone ? " (sem tel)" : ""}
@@ -635,6 +635,7 @@ async function iniciarEnriquecimento() {
 // ── Modal Mensagem IA ─────────────────────────────────────────────────────────
 
 async function gerarMensagemEmpresa(empresaId, telefone) {
+  empresaId = parseInt(empresaId, 10);
   const modal   = document.getElementById("modal-msg-ia");
   const txtArea = document.getElementById("modal-msg-texto");
   const nomePar = document.getElementById("modal-msg-nome");

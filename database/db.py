@@ -11,11 +11,20 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL não definida. Configure a variável de ambiente antes de iniciar."
+    )
+
 
 def _parse_url(url):
     """Parse DATABASE_URL com suporte a @ na senha."""
+    if "://" not in url:
+        raise ValueError(f"DATABASE_URL inválida (sem '://'): {url[:80]}")
     rest     = url.split("://", 1)[1]
-    at_idx   = rest.rfind("@")          # último @ separa credenciais do host
+    at_idx   = rest.rfind("@")
+    if at_idx == -1:
+        raise ValueError("DATABASE_URL inválida: '@' não encontrado nas credenciais.")
     creds    = rest[:at_idx]
     hostpart = rest[at_idx + 1:]
 
@@ -33,7 +42,10 @@ def _parse_url(url):
 
 
 def get_connection():
-    params = _parse_url(DATABASE_URL)
+    try:
+        params = _parse_url(DATABASE_URL)
+    except (ValueError, IndexError) as e:
+        raise RuntimeError(f"DATABASE_URL malformada: {e}") from e
     return psycopg2.connect(**params, sslmode="require")
 
 

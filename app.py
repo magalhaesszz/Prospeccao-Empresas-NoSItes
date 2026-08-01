@@ -48,7 +48,15 @@ app = Flask(
     static_folder="frontend",      # CSS, JS estáticos
     static_url_path="",            # servidos na raiz: /style.css, /app.js…
 )
-app.secret_key = CONFIG.get("secret_key", "prospector-secret-2024")
+_secret = CONFIG.get("secret_key", "")
+if not _secret or _secret == "prospector-secret-2024":
+    if not _secret:
+        raise RuntimeError("SECRET_KEY não definida. Configure a variável de ambiente.")
+    logger.warning("SECRET_KEY usa valor padrão inseguro. Defina SECRET_KEY no ambiente de produção.")
+app.secret_key = _secret
+
+if not CONFIG.get("app_url", "").strip():
+    logger.warning("APP_URL não definida. URLs de preview podem ficar incorretas em produção. Defina APP_URL=https://seu-dominio.com")
 
 # ── Estado global (thread-safe) ───────────────────────────────────────────────
 _estado = {
@@ -644,31 +652,32 @@ def api_wa_stats():
     """Stats de disparos WhatsApp."""
     from database.db import get_connection
     conn = get_connection()
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
 
-    c.execute("SELECT COUNT(*) FROM empresas WHERE mensagem_enviada=1")
-    total = c.fetchone()[0] or 0
+        c.execute("SELECT COUNT(*) FROM empresas WHERE mensagem_enviada=1")
+        total = c.fetchone()[0] or 0
 
-    c.execute("""
-        SELECT COUNT(*) FROM empresas
-        WHERE mensagem_enviada=1
-          AND ultimo_contato::date = CURRENT_DATE
-    """)
-    hoje = c.fetchone()[0] or 0
+        c.execute("""
+            SELECT COUNT(*) FROM empresas
+            WHERE mensagem_enviada=1
+              AND ultimo_contato::date = CURRENT_DATE
+        """)
+        hoje = c.fetchone()[0] or 0
 
-    c.execute("SELECT COUNT(*) FROM empresas WHERE erro_envio IS NOT NULL AND erro_envio != ''")
-    erros = c.fetchone()[0] or 0
+        c.execute("SELECT COUNT(*) FROM empresas WHERE erro_envio IS NOT NULL AND erro_envio != ''")
+        erros = c.fetchone()[0] or 0
 
-    c.execute("""
-        SELECT COUNT(*) FROM empresas
-        WHERE mensagem_enviada=0
-          AND tem_site=0
-          AND telefone IS NOT NULL
-          AND telefone != ''
-    """)
-    pendentes = c.fetchone()[0] or 0
-
-    conn.close()
+        c.execute("""
+            SELECT COUNT(*) FROM empresas
+            WHERE mensagem_enviada=0
+              AND tem_site=0
+              AND telefone IS NOT NULL
+              AND telefone != ''
+        """)
+        pendentes = c.fetchone()[0] or 0
+    finally:
+        conn.close()
     return jsonify({"total_enviadas": total, "enviadas_hoje": hoje, "com_erro": erros, "pendentes": pendentes})
 
 
@@ -692,13 +701,15 @@ def _mapa_nomes_empresas():
     mapa = {}
     try:
         conn = get_connection()
-        c = conn.cursor()
-        c.execute("SELECT telefone, nome FROM empresas WHERE telefone IS NOT NULL AND telefone != ''")
-        for tel, nome in c.fetchall():
-            dig = _so_digitos(tel)
-            if len(dig) >= 8:
-                mapa[dig[-8:]] = nome
-        conn.close()
+        try:
+            c = conn.cursor()
+            c.execute("SELECT telefone, nome FROM empresas WHERE telefone IS NOT NULL AND telefone != ''")
+            for tel, nome in c.fetchall():
+                dig = _so_digitos(tel)
+                if len(dig) >= 8:
+                    mapa[dig[-8:]] = nome
+        finally:
+            conn.close()
     except Exception:
         pass
     return mapa
@@ -916,14 +927,16 @@ def api_wa_pendentes():
     """Conta empresas prontas pra disparo: sem site, com telefone, não enviadas."""
     from database.db import get_connection
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("""
-        SELECT COUNT(*) FROM empresas
-        WHERE mensagem_enviada=0 AND tem_site=0
-          AND telefone IS NOT NULL AND telefone != ''
-    """)
-    n = c.fetchone()[0] or 0
-    conn.close()
+    try:
+        c = conn.cursor()
+        c.execute("""
+            SELECT COUNT(*) FROM empresas
+            WHERE mensagem_enviada=0 AND tem_site=0
+              AND telefone IS NOT NULL AND telefone != ''
+        """)
+        n = c.fetchone()[0] or 0
+    finally:
+        conn.close()
     return jsonify({"pendentes": n})
 
 
@@ -939,19 +952,21 @@ def api_wa_disparar_pendentes():
 
     from database.db import get_connection
     conn = get_connection()
-    c = conn.cursor()
-    query = """
-        SELECT * FROM empresas
-        WHERE mensagem_enviada=0 AND tem_site=0
-          AND telefone IS NOT NULL AND telefone != ''
-        ORDER BY score DESC, data_prospeccao DESC
-    """
-    if isinstance(limite, int) and limite > 0:
-        query += f" LIMIT {int(limite)}"
-    c.execute(query)
-    cols = [d[0] for d in c.description]
-    empresas = [dict(zip(cols, r)) for r in c.fetchall()]
-    conn.close()
+    try:
+        c = conn.cursor()
+        query = """
+            SELECT * FROM empresas
+            WHERE mensagem_enviada=0 AND tem_site=0
+              AND telefone IS NOT NULL AND telefone != ''
+            ORDER BY score DESC, data_prospeccao DESC
+        """
+        if isinstance(limite, int) and limite > 0:
+            query += f" LIMIT {int(limite)}"
+        c.execute(query)
+        cols = [d[0] for d in c.description]
+        empresas = [dict(zip(cols, r)) for r in c.fetchall()]
+    finally:
+        conn.close()
 
     if not empresas:
         return jsonify({"erro": "Nenhuma empresa pendente."}), 400
@@ -994,27 +1009,28 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
     if not app_url:
         app_url = _app_base_url_bg()  # fallback para env APP_URL
 
+    falhas = 0
     for i, emp in enumerate(empresas):
         nome = emp.get("nome", "")
         try:
             resultado = enriquecer(emp, api_key, app_url, criar_pagina)
 
             conn = get_connection()
-            c    = conn.cursor()
-
-            if resultado.get("slug") and resultado.get("html"):
-                criar_pagina_preview(emp["id"], nome, resultado["slug"], resultado["html"])
-                c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
-                          (resultado["slug"], emp["id"]))
-
-            if resultado.get("mensagem"):
-                c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
-                          (resultado["mensagem"], emp["id"]))
-
-            conn.commit()
-            conn.close()
+            try:
+                c = conn.cursor()
+                if resultado.get("slug") and resultado.get("html"):
+                    criar_pagina_preview(emp["id"], nome, resultado["slug"], resultado["html"])
+                    c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
+                              (resultado["slug"], emp["id"]))
+                if resultado.get("mensagem"):
+                    c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
+                              (resultado["mensagem"], emp["id"]))
+                conn.commit()
+            finally:
+                conn.close()
 
         except Exception as e:
+            falhas += 1
             logger.error("[enriq] '%s': %s", nome, e)
 
         with _lock:
@@ -1030,8 +1046,8 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
     with _lock:
         _estado["enriquecendo"] = False
 
-    _broadcast({"tipo": "enriquecimento_fim", "total": len(empresas)})
-    logger.info("[enriq] Concluído: %d empresas processadas.", len(empresas))
+    _broadcast({"tipo": "enriquecimento_fim", "total": len(empresas), "falhas": falhas})
+    logger.info("[enriq] Concluído: %d empresas processadas, %d falhas.", len(empresas), falhas)
 
 
 @app.route("/api/gemini/enriquecer", methods=["POST"])
