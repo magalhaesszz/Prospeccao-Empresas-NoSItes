@@ -976,7 +976,7 @@ def _app_base_url_bg():
     return CONFIG.get("app_url", "").strip().rstrip("/")
 
 
-def _executar_enriquecimento(empresas, api_key, criar_pagina):
+def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
     from ai.enricher import enriquecer
     from database.db import get_connection
 
@@ -984,7 +984,8 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina):
         _estado.update({"enriquecendo": True, "enriq_progresso": 0, "enriq_total": len(empresas)})
 
     _broadcast({"tipo": "enriquecimento_inicio", "total": len(empresas)})
-    app_url = _app_base_url_bg()
+    if not app_url:
+        app_url = _app_base_url_bg()  # fallback para env APP_URL
 
     for i, emp in enumerate(empresas):
         nome = emp.get("nome", "")
@@ -1065,9 +1066,13 @@ def api_gemini_enriquecer():
     if not empresas:
         return jsonify({"erro": "Nenhuma empresa pendente de enriquecimento."}), 400
 
+    # Captura URL aqui (contexto de request) antes de spawnar thread background.
+    # _executar_enriquecimento roda sem contexto Flask e não pode usar request.host_url.
+    app_url_capturado = _app_base_url()
+
     threading.Thread(
         target=_executar_enriquecimento,
-        args=(empresas, api_key, criar_pagina),
+        args=(empresas, api_key, criar_pagina, app_url_capturado),
         daemon=True,
     ).start()
 
@@ -1092,7 +1097,7 @@ def api_gemini_enriquecer_empresa():
     from ai.enricher import enriquecer
     from database.db import get_connection
 
-    app_url  = _app_base_url_bg()
+    app_url  = _app_base_url()  # em request context — usa fallback correto
     resultado = enriquecer(emp, api_key, app_url, criar_pagina=True)
 
     conn = get_connection()

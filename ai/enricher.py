@@ -10,15 +10,15 @@ logger = logging.getLogger(__name__)
 
 _MODELO = "llama-3.3-70b-versatile"
 
-def _gerar(prompt, api_key):
+def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
     from groq import Groq
-    # max_retries=0: sem retry automático — timeout=90s é o único controle de espera.
+    # max_retries=0: sem retry automático — timeout é o único controle de espera.
     # Retry automático (padrão=2) triplicaria o tempo e travaria o background thread.
-    client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
+    client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
     resp = client.chat.completions.create(
         model=_MODELO,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=4096,
+        max_tokens=max_tokens,
     )
     return resp.choices[0].message.content.strip()
 
@@ -355,7 +355,9 @@ REGRAS ABSOLUTAS (violação = site inválido)
 
 RETORNE APENAS O CÓDIGO HTML. Começa com <!DOCTYPE html> e termina com </html>. Nada mais."""
 
-    html = _strip_markdown(_gerar(prompt, api_key))
+    # Página HTML completa precisa de muito mais tokens que uma mensagem.
+    # 8192 cobre até as páginas mais longas sem truncar o HTML.
+    html = _strip_markdown(_gerar(prompt, api_key, max_tokens=8192, timeout=120.0))
     slug = secrets.token_urlsafe(8)
     return slug, html
 
