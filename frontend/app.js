@@ -402,7 +402,7 @@ function renderizarPaginacao() {
     const btn = document.createElement("button");
     btn.className = "btn-pag" + (ativo ? " ativa" : "");
     btn.textContent = label;
-    btn.onclick = () => { APP.pagina = p; renderizarTabela(); renderizarPaginacao(); };
+    btn.onclick = () => { APP.pagina = p; renderizarCards(); renderizarPaginacao(); };
     pag.appendChild(btn);
   };
   if (APP.pagina > 1)     add("◀", APP.pagina - 1, false);
@@ -421,7 +421,7 @@ function prepararDisparoAutomatico() {
   if (chk) { chk.checked = true; filtrarTabela(); }
 
   prontos.forEach(id => APP.selecionados.add(id));
-  renderizarTabela();
+  renderizarCards();
   atualizarContador();
 
   // Banner destacado de disparo rápido

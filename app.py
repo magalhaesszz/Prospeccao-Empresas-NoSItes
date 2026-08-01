@@ -1599,9 +1599,9 @@ def api_wa_webhook():
 # ── IA — Gerar mensagem personalizada ─────────────────────────────────────────
 @app.route("/api/whatsapp/gerar-mensagem", methods=["POST"])
 def api_wa_gerar_mensagem():
-    api_key = CONFIG.get("anthropic_api_key", "").strip()
+    api_key = CONFIG.get("groq_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "ANTHROPIC_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
 
     dados     = request.get_json(silent=True) or {}
     nome      = (dados.get("nome")      or "").strip()
@@ -1611,34 +1611,26 @@ def api_wa_gerar_mensagem():
     if not nome:
         return jsonify({"erro": "Nome da empresa é obrigatório."}), 400
 
-    try:
-        import anthropic as _anthropic
-        client  = _anthropic.Anthropic(api_key=api_key)
-        contexto = f"Empresa: {nome}"
-        if categoria: contexto += f" | Segmento: {categoria}"
-        if cidade:    contexto += f" | Cidade: {cidade}"
+    contexto = f"Empresa: {nome}"
+    if categoria: contexto += f" | Segmento: {categoria}"
+    if cidade:    contexto += f" | Cidade: {cidade}"
 
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=600,
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Crie uma mensagem de WhatsApp profissional e personalizada para prospectar "
-                    f"a seguinte empresa: {contexto}.\n"
-                    "Regras:\n"
-                    "- Português brasileiro, tom amigável e direto\n"
-                    "- Mencione que a empresa não tem presença digital (site)\n"
-                    "- Ofereça criação de site profissional e automação de processos\n"
-                    "- Mencione que só cobra após entrega finalizada\n"
-                    "- Incentive o prospecto a responder\n"
-                    "- Use formatação WhatsApp (*negrito*)\n"
-                    "- Máximo 200 palavras\n"
-                    "Escreva APENAS a mensagem, sem comentários."
-                ),
-            }],
-        )
-        mensagem = resp.content[0].text.strip()
+    prompt = (
+        f"Crie uma mensagem de WhatsApp profissional e personalizada para prospectar "
+        f"a seguinte empresa: {contexto}.\n"
+        "Regras:\n"
+        "- Português brasileiro, tom amigável e direto\n"
+        "- Mencione que a empresa não tem presença digital (site)\n"
+        "- Ofereça criação de site profissional e automação de processos\n"
+        "- Mencione que só cobra após entrega finalizada\n"
+        "- Incentive o prospecto a responder\n"
+        "- Use formatação WhatsApp (*negrito*)\n"
+        "- Máximo 200 palavras\n"
+        "Escreva APENAS a mensagem, sem comentários."
+    )
+
+    try:
+        mensagem = _groq_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
         logger.error("[IA] %s", e)
