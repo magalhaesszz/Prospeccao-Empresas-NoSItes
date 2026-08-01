@@ -19,10 +19,13 @@ def obter_mensagem(nome_empresa, template_id=None):
     if template_id:
         from database.db import get_connection
         conn = get_connection()
-        row = conn.execute("SELECT * FROM templates WHERE id=?", (template_id,)).fetchone()
+        c = conn.cursor()
+        c.execute("SELECT * FROM templates WHERE id=%s", (template_id,))
+        cols = [d[0] for d in c.description]
+        row  = c.fetchone()
         conn.close()
         if row:
-            template = dict(row)
+            template = dict(zip(cols, row))
 
     if not template:
         template = get_template_ativo()
