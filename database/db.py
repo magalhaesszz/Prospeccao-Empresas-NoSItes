@@ -164,6 +164,17 @@ def inicializar_banco():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS jobs_geracao (
+            id        TEXT PRIMARY KEY,
+            status    TEXT NOT NULL DEFAULT 'gerando',
+            slug      TEXT,
+            url       TEXT,
+            erro      TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     c.execute("CREATE INDEX IF NOT EXISTS idx_preview_slug ON paginas_preview(slug)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_telefone ON empresas(telefone)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_status   ON empresas(status)")
@@ -549,6 +560,49 @@ def deletar_pagina_preview(pid):
     conn = get_connection()
     c = conn.cursor()
     c.execute("DELETE FROM paginas_preview WHERE id=%s", (pid,))
+    conn.commit()
+    conn.close()
+
+
+# ── Jobs de geração de página ─────────────────────────────────────────────────
+
+def criar_job(job_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("INSERT INTO jobs_geracao (id, status) VALUES (%s, 'gerando') ON CONFLICT (id) DO NOTHING", (job_id,))
+    conn.commit()
+    conn.close()
+
+
+def atualizar_job_ok(job_id, slug, url):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE jobs_geracao SET status='ok', slug=%s, url=%s WHERE id=%s", (slug, url, job_id))
+    conn.commit()
+    conn.close()
+
+
+def atualizar_job_erro(job_id, erro):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE jobs_geracao SET status='erro', erro=%s WHERE id=%s", (erro[:500], job_id))
+    conn.commit()
+    conn.close()
+
+
+def buscar_job(job_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM jobs_geracao WHERE id=%s", (job_id,))
+    row = _one(c)
+    conn.close()
+    return row
+
+
+def limpar_jobs_antigos():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM jobs_geracao WHERE criado_em < NOW() - INTERVAL '24 hours'")
     conn.commit()
     conn.close()
 

@@ -11,16 +11,26 @@ logger = logging.getLogger(__name__)
 _MODELO = "llama-3.3-70b-versatile"
 
 def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
+    import time
     from groq import Groq
-    # max_retries=0: sem retry automático — timeout é o único controle de espera.
-    # Retry automático (padrão=2) triplicaria o tempo e travaria o background thread.
     client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
-    resp = client.chat.completions.create(
-        model=_MODELO,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-    )
-    return resp.choices[0].message.content.strip()
+    for tentativa in range(3):
+        try:
+            resp = client.chat.completions.create(
+                model=_MODELO,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            err = str(e).lower()
+            if ("429" in err or "rate_limit" in err or "rate limit" in err) and tentativa < 2:
+                espera = (tentativa + 1) * 35  # 35s, 70s
+                logger.warning("[Groq] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
+                time.sleep(espera)
+                continue
+            raise
+    raise Exception("Rate limit Groq após 3 tentativas — tente novamente em alguns minutos")
 
 
 def _strip_markdown(text):
@@ -358,6 +368,19 @@ RETORNE APENAS O CÓDIGO HTML. Começa com <!DOCTYPE html> e termina com </html>
     # Página HTML completa precisa de muito mais tokens que uma mensagem.
     # 8192 cobre até as páginas mais longas sem truncar o HTML.
     html = _strip_markdown(_gerar(prompt, api_key, max_tokens=8192, timeout=120.0))
+
+    # Valida que o HTML está completo
+    html_lower = html.strip().lower()
+    if not html_lower.startswith("<!doctype"):
+        raise Exception("HTML gerado inválido — modelo não retornou DOCTYPE. Tente novamente.")
+    if not html_lower.endswith("</html>"):
+        # Fecha tags abertas de forma defensiva
+        if "</body>" not in html_lower:
+            html = html.rstrip() + "\n</body>\n</html>"
+        else:
+            html = html.rstrip() + "\n</html>"
+        logger.warning("[Groq] HTML truncado para '%s' — fechado automaticamente", nome)
+
     slug = secrets.token_urlsafe(8)
     return slug, html
 

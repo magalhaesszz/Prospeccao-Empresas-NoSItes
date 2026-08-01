@@ -24,6 +24,7 @@ from database.db import (
     criar_pagina_preview, buscar_pagina_por_slug, registrar_vista_pagina,
     listar_paginas_preview, deletar_pagina_preview,
     limpar_empresas_invalidas,
+    criar_job, atualizar_job_ok, atualizar_job_erro, buscar_job, limpar_jobs_antigos,
 )
 from crm.pipeline import kanban_por_status
 from dashboard.metrics import obter_stats
@@ -375,6 +376,12 @@ def api_exportar():
         empresas = buscar_todas_empresas(busca_id=busca_id, apenas_sem_mensagem=apenas_sem_msg)
         if not empresas:
             return jsonify({"erro": "Nenhuma empresa para exportar."}), 404
+
+        # Adiciona preview_url em cada empresa que tiver slug gerado
+        base = _app_base_url()
+        for emp in empresas:
+            slug = emp.get("gemini_pagina_slug")
+            emp["preview_url"] = f"{base}/p/{slug}" if slug else ""
 
         if fmt == "csv":
             caminho = exportar_csv(empresas)
@@ -972,8 +979,8 @@ def api_wa_responder():
 # ── Enriquecimento Gemini — pipeline completo ─────────────────────────────────
 
 def _app_base_url_bg():
-    """App URL para uso fora do contexto de request (threads de background)."""
-    return CONFIG.get("app_url", "").strip().rstrip("/")
+    """App URL para threads de background (sem contexto de request)."""
+    return (CONFIG.get("app_url") or CONFIG.get("_detected_app_url") or "").strip().rstrip("/")
 
 
 def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
@@ -1045,13 +1052,16 @@ def api_gemini_enriquecer():
     from database.db import get_connection
     conn = get_connection()
     c    = conn.cursor()
-    query = """
+    # Quando criar_pagina=True: inclui empresas sem página mesmo que já tenham mensagem.
+    # Evita que empresas com mensagem mas sem site gerado sejam ignoradas.
+    cond_ia = "(e.gemini_mensagem IS NULL OR e.gemini_pagina_slug IS NULL)" if criar_pagina else "e.gemini_mensagem IS NULL"
+    query = f"""
         SELECT e.*, b.cidade, b.categoria
         FROM empresas e
         LEFT JOIN buscas b ON e.busca_id = b.id
         WHERE e.tem_site=0
           AND e.telefone IS NOT NULL AND e.telefone != ''
-          AND e.gemini_mensagem IS NULL
+          AND {cond_ia}
     """
     params = []
     if busca_id:
@@ -1380,7 +1390,11 @@ def _app_base_url():
     app_url = CONFIG.get("app_url", "").strip().rstrip("/")
     if app_url:
         return app_url
-    return request.host_url.rstrip("/")
+    detected = request.host_url.rstrip("/")
+    # Armazena para threads de background usarem via _app_base_url_bg()
+    if detected and "localhost" not in detected:
+        CONFIG["_detected_app_url"] = detected
+    return detected
 
 
 @app.route("/api/gemini/test-groq")
@@ -1432,6 +1446,7 @@ def api_groq_gerar_pagina():
 
     job_id = uuid.uuid4().hex[:10]
     _jobs_pagina[job_id] = {"status": "gerando"}
+    criar_job(job_id)
 
     # Descarta jobs antigos para não vazar memória
     if len(_jobs_pagina) > _JOBS_MAX:
@@ -1459,10 +1474,14 @@ def api_groq_gerar_pagina():
             pid  = criar_pagina_preview(empresa_id, nome, slug, html)
             url  = f"{base_url}/p/{slug}"
             logger.info("[Groq] Página gerada para '%s' → %s", nome, url)
-            _jobs_pagina[job_id] = {"status": "ok", "id": pid, "slug": slug, "url": url}
+            resultado = {"status": "ok", "id": pid, "slug": slug, "url": url}
+            _jobs_pagina[job_id] = resultado
+            atualizar_job_ok(job_id, slug, url)
         except Exception as e:
             logger.error("[Groq gerar-pagina] %s", e)
-            _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}
+            resultado = {"status": "erro", "erro": str(e)}
+            _jobs_pagina[job_id] = resultado
+            atualizar_job_erro(job_id, str(e))
 
     threading.Thread(target=_bg, daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -1473,7 +1492,13 @@ def api_groq_pagina_status(job_id):
     """Polling de status do job de geração de página."""
     job = _jobs_pagina.get(job_id)
     if not job:
-        return jsonify({"erro": "Job não encontrado."}), 404
+        # Servidor pode ter reiniciado — busca no DB
+        db_job = buscar_job(job_id)
+        if not db_job:
+            return jsonify({"erro": "Job não encontrado."}), 404
+        job = {"status": db_job["status"], "slug": db_job.get("slug"), "url": db_job.get("url"), "erro": db_job.get("erro")}
+        if job["status"] == "ok":
+            _jobs_pagina[job_id] = job  # restaura em memória
     return jsonify(job)
 
 
@@ -1761,8 +1786,20 @@ def _agendador():
         _t.sleep(60)
 
 
-threading.Thread(target=_keepalive, daemon=True).start()
-threading.Thread(target=_agendador, daemon=True).start()
+def _limpeza_periodica():
+    import time as _t
+    _t.sleep(3600)  # primeira limpeza após 1h
+    while True:
+        try:
+            limpar_jobs_antigos()
+        except Exception as e:
+            logger.warning("[limpeza] %s", e)
+        _t.sleep(3600)
+
+
+threading.Thread(target=_keepalive,        daemon=True).start()
+threading.Thread(target=_agendador,        daemon=True).start()
+threading.Thread(target=_limpeza_periodica, daemon=True).start()
 
 
 # ── Inicialização ─────────────────────────────────────────────────────────────
