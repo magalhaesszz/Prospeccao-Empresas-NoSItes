@@ -131,26 +131,32 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
 
         # ── Fase 2: navega direto a cada URL e extrai dados reais ─────────────
         telefones_vistos = set()
-        limite = min(len(itens_feed), max_itens)
+        total_urls = len(itens_feed)
+        logger.info("Fase 2: processando até %d URLs para obter %d empresas.", total_urls, max_itens)
 
-        for i, item in enumerate(itens_feed[:limite]):
+        for i, item in enumerate(itens_feed):
+            if len(empresas) >= max_itens:
+                break
             try:
                 emp = _extrair_de_url(driver, item["url"], item["nome_hint"])
-                if emp:
-                    emp["score"] = _calcular_score(emp, categoria)
-                    tel = emp.get("telefone")
-                    if tel and tel in telefones_vistos:
-                        continue
-                    if tel:
-                        telefones_vistos.add(tel)
-                    empresas.append(emp)
-                    logger.info("[%d/%d] %s | Tel:%s Site:%s Score:%d",
-                        i + 1, limite, emp["nome"],
-                        emp["telefone"] or "—",
-                        "S" if emp["tem_site"] else "N",
-                        emp["score"])
-                    if callback_progresso:
-                        callback_progresso({"atual": i + 1, "total": limite, "empresa": emp["nome"]})
+                if not emp:
+                    logger.warning("[%d/%d] extração retornou None — URL ignorada.", i + 1, total_urls)
+                    continue
+                emp["score"] = _calcular_score(emp, categoria)
+                tel = emp.get("telefone")
+                if tel and tel in telefones_vistos:
+                    logger.info("[%d/%d] %s — telefone duplicado, ignorada.", i + 1, total_urls, emp["nome"])
+                    continue
+                if tel:
+                    telefones_vistos.add(tel)
+                empresas.append(emp)
+                logger.info("[%d/%d] %s | Tel:%s Site:%s Score:%d",
+                    len(empresas), max_itens, emp["nome"],
+                    emp["telefone"] or "—",
+                    "S" if emp["tem_site"] else "N",
+                    emp["score"])
+                if callback_progresso:
+                    callback_progresso({"atual": len(empresas), "total": max_itens, "empresa": emp["nome"]})
             except Exception as exc:
                 logger.error("Erro item %d (%s): %s", i, item.get("url", "?")[:60], exc)
 
@@ -172,25 +178,64 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
 
 # ── Funções internas ──────────────────────────────────────────────────────────
 
+_FIM_LISTA_SELETORES = [
+    'div.lXJj5c', 'p.qjESne', 'div.HlvSq',
+    'span.HlvSq', 'div[class*="noResults"]',
+]
+_FIM_LISTA_TEXTOS = [
+    "fim dos resultados", "end of results",
+    "você chegou ao fim", "you've reached the end",
+    "didn't find what you're looking for",
+    "não encontrou o que procurava",
+]
+
+
+def _fim_de_lista(driver):
+    """Retorna True se Google Maps sinalizou que não há mais resultados."""
+    try:
+        for sel in _FIM_LISTA_SELETORES:
+            els = driver.find_elements(By.CSS_SELECTOR, sel)
+            for el in els:
+                txt = (el.text or "").lower()
+                if txt:
+                    return True
+    except Exception:
+        pass
+    try:
+        body = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+        txt = (body.text or "").lower()
+        for marcador in _FIM_LISTA_TEXTOS:
+            if marcador in txt:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _contar_cards(feed):
     """Conta cards do feed tentando seletor principal e fallback de links."""
-    cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
-    if cards:
-        return len(cards), cards
+    # Testa múltiplos seletores de card pois Google Maps muda classes com frequência
+    for sel in ("div.Nv2PK", "div[role='article']", "div.UaQhfb"):
+        cards = feed.find_elements(By.CSS_SELECTOR, sel)
+        if cards:
+            return len(cards), cards
     links = feed.find_elements(By.XPATH, ".//a[contains(@href,'/maps/place/')]")
     return len(links), links
 
 
 def _rolar_feed(driver, max_itens):
+    # 30 tentativas × 4s = 120s máximo sem novos cards — necessário em Railway (rede lenta).
     sem_mudanca = 0
     ultima = 0
-    # 15 tentativas × 3s = 45s máximo sem novos cards antes de desistir.
-    # Google Maps pode demorar >10s para lazy-load em servidores lentos (Railway).
-    while sem_mudanca < 15:
+    while sem_mudanca < 30:
         try:
-            feed  = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+            feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
             n, elementos = _contar_cards(feed)
             if n >= max_itens:
+                logger.info("Feed: atingiu %d/%d cards — parando scroll.", n, max_itens)
+                break
+            if _fim_de_lista(driver):
+                logger.info("Feed: Google Maps sinalizou fim de lista com %d cards.", n)
                 break
             if n == ultima:
                 sem_mudanca += 1
@@ -198,13 +243,15 @@ def _rolar_feed(driver, max_itens):
                 sem_mudanca = 0
                 ultima = n
                 logger.info("Feed: %d cards...", n)
-            # Scroll duplo: scrollHeight do feed + último elemento visível.
-            # O scrollIntoView no último card aciona o lazy-load do Maps
-            # que o scrollTop sozinho às vezes não dispara.
+            # Scroll triplo: scrollTop + scrollIntoView do último card
+            # + JS dispara evento scroll manual para forçar lazy-load do Maps.
             driver.execute_script("arguments[0].scrollTop=arguments[0].scrollHeight", feed)
             if elementos:
                 driver.execute_script("arguments[0].scrollIntoView(false)", elementos[-1])
-            time.sleep(3)
+            driver.execute_script(
+                "arguments[0].dispatchEvent(new Event('scroll', {bubbles:true}))", feed
+            )
+            time.sleep(4)
         except NoSuchElementException:
             break
         except Exception as exc:
@@ -213,6 +260,7 @@ def _rolar_feed(driver, max_itens):
     try:
         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
         n, _ = _contar_cards(feed)
+        logger.info("Feed final: %d cards após rolagem.", n)
         return n
     except Exception:
         return ultima
@@ -221,19 +269,30 @@ def _rolar_feed(driver, max_itens):
 def _coletar_itens_feed(driver):
     """
     Fase 1 — lê o feed SEM clicar em nada.
-    Estratégia principal: itera cards div.Nv2PK e pega link /maps/place/.
-    Estratégia fallback: varre todos os <a href*=/maps/place/> direto no feed.
+    Estratégia 1: itera cards (múltiplos seletores) e pega link /maps/place/.
+    Estratégia 2: varre todos os <a href*=/maps/place/> direto no feed (sempre roda, merge).
     """
     itens = []
     seen  = set()
+
+    _CARD_SELETORES = ["div.Nv2PK", "div[role='article']", "div.UaQhfb"]
+
     try:
-        feed  = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+        feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
 
-        # Estratégia 1: cards div.Nv2PK (seletor clássico)
-        cards = feed.find_elements(By.CSS_SELECTOR, "div.Nv2PK")
-        logger.info("Feed: %d cards (div.Nv2PK).", len(cards))
+        # Estratégia 1: itera cards por seletores conhecidos
+        cards_encontrados = []
+        for sel in _CARD_SELETORES:
+            cards = feed.find_elements(By.CSS_SELECTOR, sel)
+            if cards:
+                logger.info("Feed: %d cards (%s).", len(cards), sel)
+                cards_encontrados = cards
+                break
 
-        for card in cards:
+        if not cards_encontrados:
+            logger.warning("Nenhum seletor de card encontrou resultados — usando só xpath.")
+
+        for card in cards_encontrados:
             try:
                 links = card.find_elements(By.CSS_SELECTOR, "a[href]")
                 todos_labels = [
@@ -252,16 +311,21 @@ def _coletar_itens_feed(driver):
             except Exception:
                 pass
 
-        # Estratégia 2 (fallback): se nenhum card encontrado, varre links do feed
-        if not itens:
-            logger.warning("div.Nv2PK sem resultado — fallback: varredura de links do feed.")
-            links = feed.find_elements(By.XPATH, ".//a[contains(@href,'/maps/place/')]")
-            for link in links:
+        # Estratégia 2: sempre roda e complementa (merge via seen)
+        links_xpath = feed.find_elements(By.XPATH, ".//a[contains(@href,'/maps/place/')]")
+        adicionados = 0
+        for link in links_xpath:
+            try:
                 href  = link.get_attribute("href") or ""
                 label = (link.get_attribute("aria-label") or "").strip()
                 if href and href not in seen:
                     seen.add(href)
                     itens.append({"url": href, "nome_hint": label})
+                    adicionados += 1
+            except Exception:
+                pass
+        if adicionados:
+            logger.info("Estratégia 2 (xpath links) adicionou %d extras.", adicionados)
 
     except Exception as exc:
         logger.error("Erro ao coletar feed: %s", exc)
@@ -290,18 +354,19 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
     """
     driver.get(maps_url)
     try:
-        WebDriverWait(driver, 12).until(
+        WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "h1"))
         )
     except TimeoutException:
-        pass
-    time.sleep(1.5)
+        logger.warning("h1 não carregou em 20s para %s", maps_url[:80])
+    time.sleep(2)
 
     # Nome — valida para não aceitar título genérico da página
     nome = _primeiro_texto(driver, ["h1.DUwDvf", "h1[jsan]", "h1"])
     if not nome or nome.strip().lower() in _NOMES_INVALIDOS:
         nome = nome_hint
     if not nome:
+        logger.warning("Nome inválido, URL descartada: %s", maps_url[:80])
         return None
 
     # Endereço
