@@ -27,66 +27,67 @@ def obter_stats():
         c.execute(query, params)
         return _all(c)
 
-    # ── KPIs ──────────────────────────────────────────────────────────────────
-    kpis = {
-        "total_prospectadas": escalar("SELECT COUNT(*) FROM empresas"),
-        "sem_site":           escalar("SELECT COUNT(*) FROM empresas WHERE tem_site=0"),
-        "enviadas":           escalar("SELECT COUNT(*) FROM empresas WHERE mensagem_enviada=1"),
-        "interessados":       escalar("SELECT COUNT(*) FROM empresas WHERE status='interessado'"),
-        "fechados":           escalar("SELECT COUNT(*) FROM empresas WHERE status='fechado'"),
-        "blacklist":          escalar("SELECT COUNT(*) FROM blacklist"),
-    }
+    try:
+        # ── KPIs ──────────────────────────────────────────────────────────────────
+        kpis = {
+            "total_prospectadas": escalar("SELECT COUNT(*) FROM empresas"),
+            "sem_site":           escalar("SELECT COUNT(*) FROM empresas WHERE tem_site=0"),
+            "enviadas":           escalar("SELECT COUNT(*) FROM empresas WHERE mensagem_enviada=1"),
+            "interessados":       escalar("SELECT COUNT(*) FROM empresas WHERE status='interessado'"),
+            "fechados":           escalar("SELECT COUNT(*) FROM empresas WHERE status='fechado'"),
+            "blacklist":          escalar("SELECT COUNT(*) FROM blacklist"),
+        }
 
-    # ── CRM por status ────────────────────────────────────────────────────────
-    crm = resumo_funil()
+        # ── CRM por status ────────────────────────────────────────────────────────
+        crm = resumo_funil()
 
-    # ── Prospecções por dia — PostgreSQL syntax ───────────────────────────────
-    por_dia = query_all("""
-        SELECT
-            data_prospeccao::date AS data,
-            COUNT(*) AS total
-        FROM empresas
-        WHERE data_prospeccao >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY data_prospeccao::date
-        ORDER BY data_prospeccao::date
-    """)
-    por_dia = [{"data": str(r["data"]), "total": r["total"]} for r in por_dia]
+        # ── Prospecções por dia — PostgreSQL syntax ───────────────────────────────
+        por_dia = query_all("""
+            SELECT
+                data_prospeccao::date AS data,
+                COUNT(*) AS total
+            FROM empresas
+            WHERE data_prospeccao >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY data_prospeccao::date
+            ORDER BY data_prospeccao::date
+        """)
+        por_dia = [{"data": str(r["data"]), "total": r["total"]} for r in por_dia]
 
-    # ── Top categorias ────────────────────────────────────────────────────────
-    top_categorias = query_all("""
-        SELECT b.categoria, COUNT(e.id) as total
-        FROM empresas e
-        JOIN buscas b ON e.busca_id = b.id
-        GROUP BY b.categoria
-        ORDER BY total DESC
-        LIMIT 6
-    """)
+        # ── Top categorias ────────────────────────────────────────────────────────
+        top_categorias = query_all("""
+            SELECT b.categoria, COUNT(e.id) as total
+            FROM empresas e
+            JOIN buscas b ON e.busca_id = b.id
+            GROUP BY b.categoria
+            ORDER BY total DESC
+            LIMIT 6
+        """)
 
-    # ── Top cidades ───────────────────────────────────────────────────────────
-    top_cidades = query_all("""
-        SELECT b.cidade, COUNT(e.id) as total
-        FROM empresas e
-        JOIN buscas b ON e.busca_id = b.id
-        GROUP BY b.cidade
-        ORDER BY total DESC
-        LIMIT 6
-    """)
+        # ── Top cidades ───────────────────────────────────────────────────────────
+        top_cidades = query_all("""
+            SELECT b.cidade, COUNT(e.id) as total
+            FROM empresas e
+            JOIN buscas b ON e.busca_id = b.id
+            GROUP BY b.cidade
+            ORDER BY total DESC
+            LIMIT 6
+        """)
 
-    # ── Distribuição site vs sem-site ─────────────────────────────────────────
-    com_site    = escalar("SELECT COUNT(*) FROM empresas WHERE tem_site=1")
-    sem_site    = kpis["sem_site"]
-    score_medio = escalar("SELECT AVG(score) FROM empresas WHERE score > 0")
+        # ── Distribuição site vs sem-site ─────────────────────────────────────────
+        com_site    = escalar("SELECT COUNT(*) FROM empresas WHERE tem_site=1")
+        sem_site    = kpis["sem_site"]
+        score_medio = escalar("SELECT AVG(score) FROM empresas WHERE score > 0")
 
-    # ── Erros de envio ────────────────────────────────────────────────────────
-    erros = query_all("""
-        SELECT nome, telefone, erro_envio, tentativas_envio
-        FROM empresas
-        WHERE erro_envio IS NOT NULL AND erro_envio != ''
-        ORDER BY tentativas_envio DESC
-        LIMIT 10
-    """)
-
-    conn.close()
+        # ── Erros de envio ────────────────────────────────────────────────────────
+        erros = query_all("""
+            SELECT nome, telefone, erro_envio, tentativas_envio
+            FROM empresas
+            WHERE erro_envio IS NOT NULL AND erro_envio != ''
+            ORDER BY tentativas_envio DESC
+            LIMIT 10
+        """)
+    finally:
+        conn.close()
 
     return {
         "kpis":           kpis,

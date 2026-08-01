@@ -309,10 +309,10 @@ async function carregarPaginas() {
                 </td>
                 <td style="font-size:.8rem;color:var(--muted)">${data}</td>
                 <td style="display:flex;gap:5px;flex-wrap:wrap">
-                  <button class="btn btn-sm btn-secondary" onclick="window.open('${esc(p.url)}','_blank')">Ver</button>
-                  <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('${esc(p.url)}').then(()=>mostrarToast('Copiado!','success'))">Copiar</button>
-                  <button class="btn btn-sm btn-secondary" onclick="preencherGerador('${esc(p.nome_empresa)}','${esc(p.url)}')">+ Msg</button>
-                  <button class="btn btn-sm btn-danger" onclick="deletarPagina(${p.id})">Excluir</button>
+                  <button class="btn btn-sm btn-secondary" data-url="${esc(p.url)}" onclick="window.open(this.dataset.url,'_blank')">Ver</button>
+                  <button class="btn btn-sm btn-secondary" data-url="${esc(p.url)}" onclick="navigator.clipboard.writeText(this.dataset.url).then(()=>mostrarToast('Copiado!','success'))">Copiar</button>
+                  <button class="btn btn-sm btn-secondary" data-nome="${esc(p.nome_empresa)}" data-url="${esc(p.url)}" onclick="preencherGerador(this.dataset.nome,this.dataset.url)">+ Msg</button>
+                  <button class="btn btn-sm btn-danger" data-pid="${p.id}" onclick="deletarPagina(parseInt(this.dataset.pid))">Excluir</button>
                 </td>
               </tr>`;
             }).join("")}

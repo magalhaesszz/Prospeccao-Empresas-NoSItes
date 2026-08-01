@@ -1127,16 +1127,18 @@ def api_gemini_enriquecer_empresa():
     resultado = enriquecer(emp, api_key, app_url, criar_pagina=True)
 
     conn = get_connection()
-    c    = conn.cursor()
-    if resultado.get("slug") and resultado.get("html"):
-        criar_pagina_preview(emp["id"], emp.get("nome", ""), resultado["slug"], resultado["html"])
-        c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
-                  (resultado["slug"], emp["id"]))
-    if resultado.get("mensagem"):
-        c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
-                  (resultado["mensagem"], emp["id"]))
-    conn.commit()
-    conn.close()
+    try:
+        c = conn.cursor()
+        if resultado.get("slug") and resultado.get("html"):
+            criar_pagina_preview(emp["id"], emp.get("nome", ""), resultado["slug"], resultado["html"])
+            c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
+                      (resultado["slug"], emp["id"]))
+        if resultado.get("mensagem"):
+            c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
+                      (resultado["mensagem"], emp["id"]))
+        conn.commit()
+    finally:
+        conn.close()
 
     return jsonify({
         "ok":          True,
@@ -1299,10 +1301,12 @@ def api_groq_gerar_mensagem_empresa():
 
     from database.db import get_connection
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s", (mensagem, empresa_id))
-    conn.commit()
-    conn.close()
+    try:
+        c = conn.cursor()
+        c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s", (mensagem, empresa_id))
+        conn.commit()
+    finally:
+        conn.close()
 
     return jsonify({"mensagem": mensagem, "ok": True})
 
@@ -1762,17 +1766,19 @@ def _verificar_agendamentos():
             continue
 
         conn = get_connection()
-        c    = conn.cursor()
-        c.execute("""
-            SELECT * FROM empresas
-            WHERE mensagem_enviada=0 AND tem_site=0
-              AND telefone IS NOT NULL AND telefone != ''
-            ORDER BY score DESC, data_prospeccao DESC
-            LIMIT %s
-        """, (restantes,))
-        cols    = [d[0] for d in c.description]
-        empresas = [dict(zip(cols, r)) for r in c.fetchall()]
-        conn.close()
+        try:
+            c = conn.cursor()
+            c.execute("""
+                SELECT * FROM empresas
+                WHERE mensagem_enviada=0 AND tem_site=0
+                  AND telefone IS NOT NULL AND telefone != ''
+                ORDER BY score DESC, data_prospeccao DESC
+                LIMIT %s
+            """, (restantes,))
+            cols    = [d[0] for d in c.description]
+            empresas = [dict(zip(cols, r)) for r in c.fetchall()]
+        finally:
+            conn.close()
 
         if not empresas:
             continue

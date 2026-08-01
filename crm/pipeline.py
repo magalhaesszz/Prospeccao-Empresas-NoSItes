@@ -16,22 +16,28 @@ def _all(cur):
 def kanban_por_status():
     """Retorna dict { status: [lista de empresas] } com qtd_notas por empresa."""
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("""
-        SELECT e.*, b.cidade, b.categoria
-        FROM empresas e
-        LEFT JOIN buscas b ON e.busca_id = b.id
-        ORDER BY e.score DESC, e.data_prospeccao DESC
-    """)
-    rows = _all(c)
-    conn.close()
+    try:
+        c = conn.cursor()
+        # Conta notas em JOIN para evitar N+1 queries (1 conexão por empresa)
+        c.execute("""
+            SELECT e.*, b.cidade, b.categoria,
+                   COALESCE(n.qtd, 0) AS qtd_notas
+            FROM empresas e
+            LEFT JOIN buscas b ON e.busca_id = b.id
+            LEFT JOIN (
+                SELECT empresa_id, COUNT(*) AS qtd FROM notas GROUP BY empresa_id
+            ) n ON n.empresa_id = e.id
+            ORDER BY e.score DESC, e.data_prospeccao DESC
+        """)
+        rows = _all(c)
+    finally:
+        conn.close()
 
     resultado = {s: [] for s in COLUNAS_CRM}
     for emp in rows:
         status = emp.get("status") or "novo"
         if status not in resultado:
             status = "novo"
-        emp["qtd_notas"] = contar_notas(emp["id"])
         resultado[status].append(emp)
 
     return resultado
@@ -40,10 +46,12 @@ def kanban_por_status():
 def resumo_funil():
     """Contagem por status para o dashboard."""
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT status, COUNT(*) as total FROM empresas GROUP BY status")
-    rows = _all(c)
-    conn.close()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT status, COUNT(*) as total FROM empresas GROUP BY status")
+        rows = _all(c)
+    finally:
+        conn.close()
 
     contagens = {s: 0 for s in COLUNAS_CRM}
     for row in rows:
