@@ -1123,9 +1123,11 @@ def api_gemini_enriquecer_empresa():
     from ai.enricher import enriquecer
     from database.db import get_connection
 
+    import time as _time
     job_id   = uuid.uuid4().hex[:10]
     base_url = _app_base_url()
-    _jobs_pagina[job_id] = {"status": "gerando"}
+    _jobs_pagina[job_id] = {"status": "gerando", "_ts": _time.time()}
+    criar_job(job_id)
 
     def _bg():
         try:
@@ -1133,6 +1135,11 @@ def api_gemini_enriquecer_empresa():
             slug = resultado.get("slug")
             html = resultado.get("html")
             url  = resultado.get("preview_url") or ""
+
+            if not slug or not html:
+                _jobs_pagina[job_id] = {"status": "erro", "erro": "Geração de página falhou. Tente novamente."}
+                atualizar_job_erro(job_id, "Geração de página falhou.")
+                return
 
             _jobs_pagina[job_id] = {
                 "status":   "ok",
@@ -1145,19 +1152,23 @@ def api_gemini_enriquecer_empresa():
             try:
                 conn = get_connection()
                 c = conn.cursor()
-                if slug and html:
-                    criar_pagina_preview(emp["id"], emp.get("nome", ""), slug, html)
-                    c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s", (slug, emp["id"]))
+                criar_pagina_preview(emp["id"], emp.get("nome", ""), slug, html)
+                c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s", (slug, emp["id"]))
                 if resultado.get("mensagem"):
                     c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
                               (resultado["mensagem"], emp["id"]))
                 conn.commit()
                 conn.close()
+                atualizar_job_ok(job_id, slug, url)
             except Exception as db_err:
                 logger.error("[AI] Falha ao salvar enriquecimento no DB: %s", db_err)
         except Exception as e:
             logger.error("[AI] Falha enriquecer empresa %s: %s", empresa_id, e)
             _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}
+            try:
+                atualizar_job_erro(job_id, str(e))
+            except Exception:
+                pass
 
     threading.Thread(target=_bg, daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -1507,8 +1518,9 @@ def api_gemini_gerar_pagina():
     if not nome:
         return jsonify({"erro": "Nome da empresa é obrigatório."}), 400
 
+    import time as _time
     job_id = uuid.uuid4().hex[:10]
-    _jobs_pagina[job_id] = {"status": "gerando"}
+    _jobs_pagina[job_id] = {"status": "gerando", "_ts": _time.time()}
     criar_job(job_id)
 
     # Descarta jobs antigos para não vazar memória
@@ -1561,6 +1573,7 @@ def api_gemini_gerar_pagina():
 @app.route("/api/ai/gerar-pagina/status/<job_id>")
 def api_gemini_pagina_status(job_id):
     """Polling de status do job de geração de página."""
+    import time as _time
     job = _jobs_pagina.get(job_id)
     if not job:
         # Servidor pode ter reiniciado — busca no DB
@@ -1570,6 +1583,19 @@ def api_gemini_pagina_status(job_id):
         job = {"status": db_job["status"], "slug": db_job.get("slug"), "url": db_job.get("url"), "erro": db_job.get("erro")}
         if job["status"] == "ok":
             _jobs_pagina[job_id] = job  # restaura em memória
+
+    # Watchdog: job preso em "gerando" por mais de 180s → marca como erro
+    if job.get("status") == "gerando":
+        ts = job.get("_ts")
+        if ts and (_time.time() - ts) > 180:
+            msg = "Tempo limite de geração excedido (3 min). Tente novamente."
+            _jobs_pagina[job_id] = {"status": "erro", "erro": msg}
+            try:
+                atualizar_job_erro(job_id, msg)
+            except Exception:
+                pass
+            return jsonify(_jobs_pagina[job_id])
+
     return jsonify(job)
 
 

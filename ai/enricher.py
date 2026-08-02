@@ -37,7 +37,7 @@ def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0, temperature=0.7, syst
             except Exception as e:
                 err = str(e).lower()
                 if ("429" in err or "rate" in err) and tentativa < 2:
-                    espera = (tentativa + 1) * 35
+                    espera = (tentativa + 1) * 10
                     logger.warning("[OpenRouter] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
                     time.sleep(espera)
                     continue
@@ -59,7 +59,7 @@ def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0, temperature=0.7, syst
             except Exception as e:
                 err = str(e).lower()
                 if ("429" in err or "rate_limit" in err or "rate limit" in err) and tentativa < 2:
-                    espera = (tentativa + 1) * 35
+                    espera = (tentativa + 1) * 10
                     logger.warning("[Groq] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
                     time.sleep(espera)
                     continue
@@ -103,12 +103,15 @@ def _validar_fotos(fotos_lista):
     validas = []
     with ThreadPoolExecutor(max_workers=6) as pool:
         futuros = {pool.submit(_checar, u): u for u in urls}
-        for fut in as_completed(futuros, timeout=5):
-            resultado = fut.result()
-            if resultado:
-                validas.append(resultado)
-            else:
-                logger.warning("[foto] Inacessível — descartando %s", futuros[fut][:80])
+        try:
+            for fut in as_completed(futuros, timeout=5):
+                resultado = fut.result()
+                if resultado:
+                    validas.append(resultado)
+                else:
+                    logger.warning("[foto] Inacessível — descartando %s", futuros[fut][:80])
+        except TimeoutError:
+            logger.warning("[foto] Validação de fotos: timeout 5s — %d válidas coletadas", len(validas))
 
     # Preserva ordem original
     ordem = {u: i for i, u in enumerate(urls)}
