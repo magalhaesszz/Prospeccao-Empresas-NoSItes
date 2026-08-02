@@ -1052,9 +1052,9 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
 
 @app.route("/api/gemini/enriquecer", methods=["POST"])
 def api_gemini_enriquecer():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "API key de IA não configurada no Railway (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     with _lock:
         if _estado.get("enriquecendo"):
@@ -1107,9 +1107,9 @@ def api_gemini_enriquecer():
 
 @app.route("/api/gemini/enriquecer-empresa", methods=["POST"])
 def api_gemini_enriquecer_empresa():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "API key de IA não configurada no Railway (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados      = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1150,9 +1150,9 @@ def api_gemini_enriquecer_empresa():
 
 @app.route("/api/gemini/responder-conversa", methods=["POST"])
 def api_gemini_responder_conversa():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
+        return jsonify({"erro": "API key de IA não configurada (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados = request.get_json(silent=True) or {}
     ultima_msg = (dados.get("ultima_msg") or "").strip()
@@ -1184,7 +1184,7 @@ Gere uma resposta profissional, empática e focada em avançar a venda.
 Retorne APENAS a mensagem de resposta."""
 
     try:
-        return jsonify({"mensagem": _gemini_gerar(prompt), "ok": True})
+        return jsonify({"mensagem": _ai_gerar(prompt), "ok": True})
     except Exception as e:
         logger.error("[Gemini conversa] %s", e)
         return jsonify({"erro": str(e)}), 500
@@ -1192,9 +1192,9 @@ Retorne APENAS a mensagem de resposta."""
 
 @app.route("/api/gemini/crm-followup", methods=["POST"])
 def api_gemini_crm_followup():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
+        return jsonify({"erro": "API key de IA não configurada (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados      = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1237,7 +1237,7 @@ Crie uma mensagem de follow-up personalizada e contextualizada.
 Retorne APENAS a mensagem."""
 
     try:
-        return jsonify({"mensagem": _gemini_gerar(prompt), "ok": True})
+        return jsonify({"mensagem": _ai_gerar(prompt), "ok": True})
     except Exception as e:
         logger.error("[Gemini followup] %s", e)
         return jsonify({"erro": str(e)}), 500
@@ -1245,9 +1245,9 @@ Retorne APENAS a mensagem."""
 
 @app.route("/api/gemini/gerar-template", methods=["POST"])
 def api_gemini_gerar_template():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
+        return jsonify({"erro": "API key de IA não configurada (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados     = request.get_json(silent=True) or {}
     descricao = (dados.get("descricao") or "").strip()
@@ -1271,7 +1271,7 @@ REGRAS OBRIGATÓRIAS:
 Retorne APENAS a mensagem do template."""
 
     try:
-        return jsonify({"template": _gemini_gerar(prompt), "ok": True})
+        return jsonify({"template": _ai_gerar(prompt), "ok": True})
     except Exception as e:
         logger.error("[Gemini template] %s", e)
         return jsonify({"erro": str(e)}), 500
@@ -1279,9 +1279,9 @@ Retorne APENAS a mensagem do template."""
 
 @app.route("/api/gemini/gerar-mensagem-empresa", methods=["POST"])
 def api_gemini_gerar_mensagem_empresa():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
+        return jsonify({"erro": "API key de IA não configurada (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1333,9 +1333,9 @@ def preview_pagina(slug):
 
 @app.route("/api/gemini/analisar-prospects", methods=["POST"])
 def api_gemini_analisar_prospects():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
+        return jsonify({"erro": "API key de IA não configurada (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados    = request.get_json(silent=True) or {}
     empresas = dados.get("empresas", [])
@@ -1370,7 +1370,7 @@ Responda EXATAMENTE neste formato (português brasileiro, direto):
 💡 DICA: [1 frase com estratégia de abordagem para este nicho]"""
 
     try:
-        analise = _gemini_gerar(prompt)
+        analise = _ai_gerar(prompt)
         return jsonify({"analise": analise, "ok": True})
     except Exception as e:
         logger.error("[Gemini prospects] %s", e)
@@ -1383,19 +1383,39 @@ def api_admin_limpar_lixo():
     return jsonify({"ok": True, "deletados": deleted})
 
 
-# ── Gemini AI Hub ──────────────────────────────────────────────────────────────
+# ── AI Hub (Groq / OpenRouter) ────────────────────────────────────────────────
 
-_GEMINI_MODELO = "gemini-2.0-flash"
+def _ai_api_key():
+    provider = CONFIG.get("ai_provider", "groq").lower()
+    if provider == "openrouter":
+        return CONFIG.get("openrouter_api_key", "").strip()
+    return CONFIG.get("groq_api_key", "").strip()
 
-def _gemini_gerar(prompt):
-    import google.generativeai as genai
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+
+def _ai_gerar(prompt):
+    provider = CONFIG.get("ai_provider", "groq").lower()
+    api_key  = _ai_api_key()
     if not api_key:
-        raise ValueError("GEMINI_API_KEY não configurado.")
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(_GEMINI_MODELO)
-    response = model.generate_content(prompt)
-    return response.text.strip()
+        raise ValueError(f"API key não configurada para provider '{provider}'.")
+
+    if provider == "openrouter":
+        from openai import OpenAI
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        resp = client.chat.completions.create(
+            model="google/gemini-2.0-flash-exp:free",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+        )
+        return resp.choices[0].message.content.strip()
+    else:
+        from groq import Groq
+        client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+        )
+        return resp.choices[0].message.content.strip()
 
 
 # Job store para geração assíncrona de páginas (in-memory, TTL simples por tamanho)
@@ -1416,28 +1436,27 @@ def _app_base_url():
 
 @app.route("/api/gemini/test")
 def api_test_gemini():
-    """Testa conexão Gemini com prompt mínimo. Retorna ok/erro e latência em ms."""
+    """Testa conexão IA com prompt mínimo. Retorna ok/erro, provider e latência em ms."""
     import time
-    import google.generativeai as genai
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    provider = CONFIG.get("ai_provider", "groq").lower()
+    api_key  = _ai_api_key()
     if not api_key:
-        return jsonify({"ok": False, "erro": "GEMINI_API_KEY não configurado."})
+        return jsonify({"ok": False, "erro": f"API key não configurada para '{provider}'.", "provider": provider})
     t0 = time.time()
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(_GEMINI_MODELO)
-        response = model.generate_content("Diga apenas: OK")
+        resposta = _ai_gerar("Diga apenas: OK")
         ms = int((time.time() - t0) * 1000)
-        return jsonify({"ok": True, "resposta": response.text.strip(), "ms": ms})
+        return jsonify({"ok": True, "resposta": resposta, "ms": ms, "provider": provider})
     except Exception as e:
         ms = int((time.time() - t0) * 1000)
-        return jsonify({"ok": False, "erro": str(e), "ms": ms})
+        return jsonify({"ok": False, "erro": str(e), "ms": ms, "provider": provider})
 
 
 @app.route("/api/gemini/status")
 def api_gemini_status():
-    configurado = bool(CONFIG.get("gemini_api_key", "").strip())
-    return jsonify({"configurado": configurado})
+    provider    = CONFIG.get("ai_provider", "groq").lower()
+    configurado = bool(_ai_api_key())
+    return jsonify({"configurado": configurado, "provider": provider})
 
 
 @app.route("/api/gemini/gerar-pagina", methods=["POST"])
@@ -1445,9 +1464,9 @@ def api_gemini_gerar_pagina():
     """Inicia geração de página em background. Retorna job_id para polling."""
     from ai.enricher import gerar_pagina as _enr_gerar_pagina
 
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "API key de IA não configurada no Railway (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
@@ -1553,7 +1572,7 @@ REGRAS:
 Retorne APENAS a mensagem, sem prefácio ou explicações."""
 
     try:
-        mensagem = _gemini_gerar(prompt)
+        mensagem = _ai_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
         logger.error("[Geminimsg] %s", e)
@@ -1613,9 +1632,9 @@ def api_wa_webhook():
 # ── IA — Gerar mensagem personalizada ─────────────────────────────────────────
 @app.route("/api/whatsapp/gerar-mensagem", methods=["POST"])
 def api_wa_gerar_mensagem():
-    api_key = CONFIG.get("gemini_api_key", "").strip()
+    api_key = _ai_api_key()
     if not api_key:
-        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "API key de IA não configurada no Railway (GROQ_API_KEY ou OPENROUTER_API_KEY)."}), 400
 
     dados     = request.get_json(silent=True) or {}
     nome      = (dados.get("nome")      or "").strip()
@@ -1644,7 +1663,7 @@ def api_wa_gerar_mensagem():
     )
 
     try:
-        mensagem = _gemini_gerar(prompt)
+        mensagem = _ai_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
         logger.error("[IA] %s", e)

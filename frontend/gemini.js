@@ -19,12 +19,13 @@ async function verificarStatusGemini() {
     const d = await fetch("/api/gemini/status").then(r => r.json());
     const dot = document.getElementById("gemini-status-dot");
     const txt = document.getElementById("gemini-status-txt");
+    const label = d.provider === "openrouter" ? "OpenRouter" : "Groq";
     if (d.configurado) {
       dot.style.background = "#10B981";
-      txt.textContent      = "Gemini configurado";
+      txt.textContent      = `${label} configurado`;
     } else {
       dot.style.background = "#EF4444";
-      txt.textContent      = "Configure GEMINI_API_KEY no Railway";
+      txt.textContent      = `Configure ${d.provider === "openrouter" ? "OPENROUTER_API_KEY" : "GROQ_API_KEY"} no Railway`;
     }
   } catch (e) {
     console.error("Status Gemini:", e);

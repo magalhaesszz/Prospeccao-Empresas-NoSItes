@@ -1,5 +1,5 @@
 """
-Gemini AI enrichment pipeline.
+AI enrichment pipeline — suporta Groq e OpenRouter.
 Given a company dict (with scraped Google Maps data), generates:
   - Personalized WhatsApp message (unique per company, uses real data)
   - Landing page HTML (complete, self-contained, uses real data)
@@ -8,29 +8,56 @@ import secrets, logging, re, json
 logger = logging.getLogger(__name__)
 
 
-_MODELO = "gemini-2.0-flash"
+_MODELO_GROQ       = "llama-3.3-70b-versatile"
+_MODELO_OPENROUTER = "google/gemini-2.0-flash-exp:free"
+
 
 def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
     import time
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        _MODELO,
-        generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens),
-    )
-    for tentativa in range(3):
-        try:
-            response = model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            err = str(e).lower()
-            if ("429" in err or "quota" in err or "rate" in err) and tentativa < 2:
-                espera = (tentativa + 1) * 35  # 35s, 70s
-                logger.warning("[Gemini] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
-                time.sleep(espera)
-                continue
-            raise
-    raise Exception("Rate limit Gemini após 3 tentativas — tente novamente em alguns minutos")
+    from config import CONFIG
+    provider = CONFIG.get("ai_provider", "groq").lower()
+
+    if provider == "openrouter":
+        from openai import OpenAI
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        for tentativa in range(3):
+            try:
+                resp = client.chat.completions.create(
+                    model=_MODELO_OPENROUTER,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                )
+                return resp.choices[0].message.content.strip()
+            except Exception as e:
+                err = str(e).lower()
+                if ("429" in err or "rate" in err) and tentativa < 2:
+                    espera = (tentativa + 1) * 35
+                    logger.warning("[OpenRouter] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
+                    time.sleep(espera)
+                    continue
+                raise
+        raise Exception("Rate limit OpenRouter após 3 tentativas — tente novamente em alguns minutos")
+
+    else:  # groq (padrão)
+        from groq import Groq
+        client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
+        for tentativa in range(3):
+            try:
+                resp = client.chat.completions.create(
+                    model=_MODELO_GROQ,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                )
+                return resp.choices[0].message.content.strip()
+            except Exception as e:
+                err = str(e).lower()
+                if ("429" in err or "rate_limit" in err or "rate limit" in err) and tentativa < 2:
+                    espera = (tentativa + 1) * 35
+                    logger.warning("[Groq] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
+                    time.sleep(espera)
+                    continue
+                raise
+        raise Exception("Rate limit Groq após 3 tentativas — tente novamente em alguns minutos")
 
 
 def _strip_markdown(text):

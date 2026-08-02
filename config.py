@@ -28,8 +28,10 @@ CONFIG = {
     "evolution_api_key":  os.environ.get("EVOLUTION_API_KEY",  ""),
     # IA — Anthropic (opcional)
     "anthropic_api_key":  os.environ.get("ANTHROPIC_API_KEY",  ""),
-    # IA — Gemini
-    "gemini_api_key":     os.environ.get("GEMINI_API_KEY",     ""),
+    # IA — Provider: "groq" ou "openrouter" (define via AI_PROVIDER no Railway)
+    "ai_provider":        os.environ.get("AI_PROVIDER",        "groq"),
+    "groq_api_key":       os.environ.get("GROQ_API_KEY",       ""),
+    "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
     # URL pública do app (Railway) — usada nos links de preview
     "app_url":            os.environ.get("APP_URL",            ""),
 
