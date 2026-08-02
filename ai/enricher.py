@@ -8,7 +8,7 @@ import secrets, logging, re, json
 logger = logging.getLogger(__name__)
 
 
-_MODELO = "gemini-1.5-pro"
+_MODELO = "gemini-2.5-pro"
 
 def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
     import time
