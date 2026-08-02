@@ -12,10 +12,15 @@ _MODELO_GROQ       = "openai/gpt-oss-120b"
 _MODELO_OPENROUTER = "google/gemini-2.0-flash-exp:free"
 
 
-def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
+def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0, temperature=0.7, system=None):
     import time
     from config import CONFIG
     provider = CONFIG.get("ai_provider", "groq").lower()
+
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
 
     if provider == "openrouter":
         from openai import OpenAI
@@ -24,8 +29,9 @@ def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
             try:
                 resp = client.chat.completions.create(
                     model=_MODELO_OPENROUTER,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     max_tokens=max_tokens,
+                    temperature=temperature,
                 )
                 return resp.choices[0].message.content.strip()
             except Exception as e:
@@ -45,8 +51,9 @@ def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
             try:
                 resp = client.chat.completions.create(
                     model=_MODELO_GROQ,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     max_tokens=max_tokens,
+                    temperature=temperature,
                 )
                 return resp.choices[0].message.content.strip()
             except Exception as e:
@@ -61,13 +68,38 @@ def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
 
 
 def _strip_markdown(text):
-    """Remove ```html ... ``` wrappers if Gemini returns them."""
+    """Remove ```html ... ``` wrappers that models sometimes add around HTML."""
     t = text.strip()
+    # Remove fence opening (```html or ```)
     if t.startswith("```"):
         lines = t.split("\n")
         lines = [l for l in lines if not l.strip().startswith("```")]
         t = "\n".join(lines).strip()
+    # Some models prepend a line before DOCTYPE — strip it
+    if not t.lower().startswith("<!doctype") and "<!doctype" in t.lower():
+        idx = t.lower().index("<!doctype")
+        t = t[idx:]
     return t
+
+
+def _validar_fotos(fotos_lista):
+    """Filtra URLs de foto que retornam erro HTTP (Google CDN expira links)."""
+    import urllib.request
+    validas = []
+    for url in fotos_lista:
+        if not url:
+            continue
+        try:
+            req = urllib.request.Request(url, method="HEAD",
+                                         headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=4) as r:
+                if r.status < 400:
+                    validas.append(url)
+                else:
+                    logger.warning("[foto] HTTP %d — descartando %s", r.status, url[:80])
+        except Exception:
+            logger.warning("[foto] Inacessível — descartando %s", url[:80])
+    return validas
 
 
 # ── Contexto da empresa ───────────────────────────────────────────────────────
@@ -215,6 +247,7 @@ def gerar_pagina(empresa, api_key):
     if foto_url and foto_url not in fotos_lista:
         fotos_lista.insert(0, foto_url)
     fotos_lista = [f for f in fotos_lista if f][:6]
+    fotos_lista = _validar_fotos(fotos_lista)
 
     # Preenche até 6 slots (vazio = sem foto)
     fotos_pad = (fotos_lista + [""] * 6)[:6]
@@ -232,8 +265,15 @@ def gerar_pagina(empresa, api_key):
     else:
         aviso_fotos = "Não há fotos reais disponíveis. NÃO use imagens placeholder, picsum, unsplash ou via.placeholder. Seção galeria deve exibir mensagem 'Fotos em breve'."
 
-    prompt = f"""Você é um Desenvolvedor Front-end Sênior e Copywriter de Conversão.
-Sua missão é gerar um arquivo HTML único, completo e de altíssima qualidade para uma landing page comercial de alta conversão.
+    system_msg = (
+        "Você é um Desenvolvedor Front-end Sênior e Copywriter de Conversão especializado em "
+        "landing pages de alta conversão para negócios locais brasileiros. "
+        "Você produz HTML5 impecável, autocontido, mobile-first, sem dependências externas. "
+        "Siga todas as instruções com precisão absoluta. Retorne SOMENTE o código HTML — "
+        "sem texto, sem comentários, sem blocos markdown fora do HTML."
+    )
+
+    prompt = f"""Gere um arquivo HTML único, completo e de altíssima qualidade para uma landing page comercial de alta conversão.
 
 === DADOS DO CLIENTE ===
 Nome da Empresa: {nome}
@@ -320,13 +360,40 @@ Foto 6: {foto_6 or "indisponível"}
 
 EXTRA OBRIGATÓRIO: Botão flutuante WhatsApp (position:fixed; bottom:24px; right:24px; z-index:9999) círculo verde #25D366 com SVG branco → {wa_link}
 
-=== FORMATO DE SAÍDA ===
-Retorne APENAS o código HTML, iniciando em <!DOCTYPE html> e terminando em </html>.
-Nenhum texto, comentário ou bloco markdown fora do HTML."""
+=== SCHEMA.ORG (OBRIGATÓRIO — inserir no <head> antes de </head>) ===
+Adicione este bloco JSON-LD exato, substituindo os valores pelos dados reais:
+<script type="application/ld+json">
+{{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "{nome}",
+  "description": "{categoria} em {cidade}",
+  "address": {{
+    "@type": "PostalAddress",
+    "streetAddress": "{endereco}",
+    "addressLocality": "{cidade}",
+    "addressCountry": "BR"
+  }},
+  "telephone": "{telefone}",
+  "url": "",
+  "aggregateRating": {{
+    "@type": "AggregateRating",
+    "ratingValue": "{nota_fmt}",
+    "reviewCount": "{total_avaliacoes}"
+  }}
+}}
+</script>
 
-    # Página HTML completa precisa de muito mais tokens que uma mensagem.
-    # 8192 cobre até as páginas mais longas sem truncar o HTML.
-    html = _strip_markdown(_gerar(prompt, api_key, max_tokens=8192, timeout=120.0))
+=== FORMATO DE SAÍDA ===
+Inicie com <!DOCTYPE html> e termine com </html>. Nada mais."""
+
+    html = _strip_markdown(_gerar(
+        prompt, api_key,
+        max_tokens=8192,
+        timeout=120.0,
+        temperature=0.4,
+        system=system_msg,
+    ))
 
     # Valida que o HTML está completo
     html_lower = html.strip().lower()
@@ -338,7 +405,7 @@ Nenhum texto, comentário ou bloco markdown fora do HTML."""
             html = html.rstrip() + "\n</body>\n</html>"
         else:
             html = html.rstrip() + "\n</html>"
-        logger.warning("[Gemini] HTML truncado para '%s' — fechado automaticamente", nome)
+        logger.warning("[AI] HTML truncado para '%s' — fechado automaticamente", nome)
 
     slug = secrets.token_urlsafe(8)
     return slug, html
@@ -362,16 +429,16 @@ def enriquecer(empresa, api_key, app_url="", criar_pagina=True):
             slug, html = gerar_pagina(empresa, api_key)
             if app_url:
                 preview_url = f"{app_url.rstrip('/')}/p/{slug}"
-            logger.info("[Gemini] Página gerada para '%s' → /p/%s", empresa.get("nome"), slug)
+            logger.info("[AI] Página gerada para '%s' → /p/%s", empresa.get("nome"), slug)
         except Exception as e:
-            logger.error("[Gemini] Falha página '%s': %s", empresa.get("nome"), e)
+            logger.error("[AI] Falha página '%s': %s", empresa.get("nome"), e)
 
     mensagem = None
     try:
         mensagem = gerar_mensagem(empresa, api_key, preview_url)
-        logger.info("[Gemini] Mensagem gerada para '%s'", empresa.get("nome"))
+        logger.info("[AI] Mensagem gerada para '%s'", empresa.get("nome"))
     except Exception as e:
-        logger.error("[Gemini] Falha mensagem '%s': %s", empresa.get("nome"), e)
+        logger.error("[AI] Falha mensagem '%s': %s", empresa.get("nome"), e)
 
     return {
         "empresa_id":  empresa.get("id"),
