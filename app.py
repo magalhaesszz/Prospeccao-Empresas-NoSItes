@@ -1123,29 +1123,44 @@ def api_gemini_enriquecer_empresa():
     from ai.enricher import enriquecer
     from database.db import get_connection
 
-    app_url  = _app_base_url()  # em request context — usa fallback correto
-    resultado = enriquecer(emp, api_key, app_url, criar_pagina=True)
+    job_id   = uuid.uuid4().hex[:10]
+    base_url = _app_base_url()
+    _jobs_pagina[job_id] = {"status": "gerando"}
 
-    conn = get_connection()
-    try:
-        c = conn.cursor()
-        if resultado.get("slug") and resultado.get("html"):
-            criar_pagina_preview(emp["id"], emp.get("nome", ""), resultado["slug"], resultado["html"])
-            c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s",
-                      (resultado["slug"], emp["id"]))
-        if resultado.get("mensagem"):
-            c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
-                      (resultado["mensagem"], emp["id"]))
-        conn.commit()
-    finally:
-        conn.close()
+    def _bg():
+        try:
+            resultado = enriquecer(emp, api_key, base_url, criar_pagina=True)
+            slug = resultado.get("slug")
+            html = resultado.get("html")
+            url  = resultado.get("preview_url") or ""
 
-    return jsonify({
-        "ok":          True,
-        "slug":        resultado.get("slug"),
-        "preview_url": resultado.get("preview_url"),
-        "mensagem":    resultado.get("mensagem"),
-    })
+            _jobs_pagina[job_id] = {
+                "status":   "ok",
+                "slug":     slug,
+                "url":      url,
+                "html":     html,
+                "mensagem": resultado.get("mensagem"),
+            }
+
+            try:
+                conn = get_connection()
+                c = conn.cursor()
+                if slug and html:
+                    criar_pagina_preview(emp["id"], emp.get("nome", ""), slug, html)
+                    c.execute("UPDATE empresas SET gemini_pagina_slug=%s WHERE id=%s", (slug, emp["id"]))
+                if resultado.get("mensagem"):
+                    c.execute("UPDATE empresas SET gemini_mensagem=%s WHERE id=%s",
+                              (resultado["mensagem"], emp["id"]))
+                conn.commit()
+                conn.close()
+            except Exception as db_err:
+                logger.error("[AI] Falha ao salvar enriquecimento no DB: %s", db_err)
+        except Exception as e:
+            logger.error("[AI] Falha enriquecer empresa %s: %s", empresa_id, e)
+            _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}
+
+    threading.Thread(target=_bg, daemon=True).start()
+    return jsonify({"job_id": job_id})
 
 
 @app.route("/api/ai/responder-conversa", methods=["POST"])

@@ -353,37 +353,60 @@ function _badgeStatus(status, enviado, duplicado) {
 
 async function gerarSiteEmpresa(empresaId) {
   const btn = document.getElementById(`btn-gerar-${empresaId}`);
-  if (btn) {
-    btn.disabled   = true;
-    btn.innerHTML  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"
-      style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Gerando...`;
-  }
+  const _spinner = (msg) => {
+    if (btn) btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${msg}`;
+  };
+  if (btn) { btn.disabled = true; _spinner("Iniciando..."); }
+
   try {
-    const r = await fetch("/api/ai/enriquecer-empresa", {
+    // 1. Dispara job em background
+    const r0 = await fetch("/api/ai/enriquecer-empresa", {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresa_id: empresaId }),
     });
-    const d = await r.json();
-    if (!r.ok || d.erro) throw new Error(d.erro || "Erro desconhecido");
+    const d0 = await r0.json();
+    if (!r0.ok || d0.erro) throw new Error(d0.erro || "Erro desconhecido");
 
-    const emp = APP.empresas.find(e => e.id === empresaId);
-    if (emp) {
-      if (d.slug)     emp.gemini_pagina_slug = d.slug;
-      if (d.mensagem) emp.gemini_mensagem    = d.mensagem;
+    const jobId = d0.job_id;
+    let tentativas = 0;
+    const MAX = 120; // 240s máximo
+
+    // 2. Polling
+    while (tentativas < MAX) {
+      await new Promise(res => setTimeout(res, 2000));
+      tentativas++;
+      _spinner(`Gerando... (${tentativas * 2}s)`);
+
+      const resp = await fetch(`/api/ai/gerar-pagina/status/${jobId}`);
+      if (resp.status === 404) throw new Error("Servidor reiniciou. Tente novamente.");
+      const rs = await resp.json();
+
+      if (rs.status === "ok") {
+        const emp = APP.empresas.find(e => e.id === empresaId);
+        if (emp) {
+          if (rs.slug)     emp.gemini_pagina_slug = rs.slug;
+          if (rs.mensagem) emp.gemini_mensagem    = rs.mensagem;
+        }
+        if (btn && rs.url) {
+          btn.outerHTML = `
+            <a href="${rs.url}" target="_blank" rel="noopener"
+                class="btn btn-sm" style="font-size:.73rem;background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.3);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Ver Site Demo
+            </a>
+            <button id="btn-gerar-${empresaId}" class="btn btn-sm" onclick="gerarSiteEmpresa(${empresaId})"
+                style="font-size:.73rem;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
+              Regenerar
+            </button>`;
+        }
+        mostrarToast(`Site gerado: ${emp?.nome || "empresa"}!`, "success");
+        return;
+      }
+
+      if (rs.status === "erro") throw new Error(rs.erro || "Erro na geração.");
     }
 
-    if (btn && d.preview_url) {
-      btn.outerHTML = `<a href="${d.preview_url}" target="_blank" rel="noopener"
-          class="btn btn-sm" style="font-size:.73rem;background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.3);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          Ver Site Demo
-        </a>
-        <button class="btn btn-sm" onclick="gerarSiteEmpresa(${empresaId})"
-            style="font-size:.73rem;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
-          Regenerar
-        </button>`;
-    }
-    mostrarToast(`Site gerado: ${emp?.nome || "empresa"}!`, "success");
+    throw new Error("Tempo limite atingido (4 min). Tente novamente.");
   } catch (e) {
     mostrarToast("Erro ao gerar site: " + e.message, "error");
     if (btn) {
