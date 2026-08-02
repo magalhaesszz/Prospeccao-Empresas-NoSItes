@@ -1521,9 +1521,8 @@ def api_gemini_gerar_pagina():
             slug, html = _enr_gerar_pagina(empresa, api_key)
             url = f"{base_url}/p/{slug}"
 
-            # Marca job como OK imediatamente — antes de qualquer operação de DB.
-            # Isso garante que o polling recebe "ok" mesmo se o INSERT demorar.
-            _jobs_pagina[job_id] = {"status": "ok", "slug": slug, "url": url}
+            # Inclui o HTML no job para o frontend renderizar via srcdoc (sem depender do DB).
+            _jobs_pagina[job_id] = {"status": "ok", "slug": slug, "url": url, "html": html}
 
             try:
                 pid = criar_pagina_preview(empresa_id, nome, slug, html)
@@ -1532,7 +1531,6 @@ def api_gemini_gerar_pagina():
                 logger.info("[AI] Página salva no DB para '%s' → %s", nome, url)
             except Exception as db_err:
                 logger.error("[AI] HTML gerado mas falha ao salvar no DB para '%s': %s", nome, db_err)
-                # Mantém status "ok" — página foi gerada, só não persistiu no DB
         except Exception as e:
             logger.error("[AI] Falha na geração para '%s': %s", nome, e)
             _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}

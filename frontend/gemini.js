@@ -195,8 +195,16 @@ async function gerarPagina() {
         const gmLink = document.getElementById("gm-link");
         if (urlInp) urlInp.value       = rs.url;
         if (urlBar) urlBar.textContent = rs.url;
-        if (iframe) iframe.src         = rs.url;
         if (gmLink) gmLink.value       = rs.url;
+        // Usa srcdoc se o HTML veio na resposta (evita depender do DB estar pronto)
+        if (iframe) {
+          if (rs.html) {
+            iframe.srcdoc = rs.html;
+            iframe.removeAttribute("src");
+          } else {
+            iframe.src = rs.url;
+          }
+        }
         if (resultado) resultado.style.display = "block";
         mostrarToast("Site gerado com sucesso!", "success");
         carregarPaginas();
