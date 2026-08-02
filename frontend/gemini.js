@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function verificarStatusGemini() {
   try {
-    const d = await fetch("/api/gemini/status").then(r => r.json());
+    const d = await fetch("/api/ai/status").then(r => r.json());
     const dot = document.getElementById("gemini-status-dot");
     const txt = document.getElementById("gemini-status-txt");
     const label = d.provider === "openrouter" ? "OpenRouter" : "Groq";
@@ -120,7 +120,7 @@ async function gerarPagina() {
     _setSpinner("Iniciando geração...");
 
     // 1. Dispara job em background
-    const r0 = await fetch("/api/gemini/gerar-pagina", {
+    const r0 = await fetch("/api/ai/gerar-pagina", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
@@ -140,7 +140,7 @@ async function gerarPagina() {
 
       let rs;
       try {
-        const resp = await fetch(`/api/gemini/gerar-pagina/status/${jobId}`);
+        const resp = await fetch(`/api/ai/gerar-pagina/status/${jobId}`);
         rs = await resp.json();
         // 404 = servidor reiniciou e perdeu o job em memória
         if (resp.status === 404) throw new Error("Servidor reiniciou durante a geração. Tente novamente.");
@@ -232,7 +232,7 @@ async function gerarMensagemGemini() {
   if (erroEl)    erroEl.style.display    = "none";
 
   try {
-    const r = await fetch("/api/gemini/gerar-mensagem", {
+    const r = await fetch("/api/ai/gerar-mensagem", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ nome, categoria, cidade, link }),
@@ -275,7 +275,7 @@ async function carregarPaginas() {
   if (!lista) return;
 
   try {
-    const paginas = await fetch("/api/gemini/paginas").then(r => r.json());
+    const paginas = await fetch("/api/ai/paginas").then(r => r.json());
     if (count) count.textContent = paginas.length;
 
     if (!paginas.length) {
@@ -337,7 +337,7 @@ function preencherGerador(nome, url) {
 
 async function deletarPagina(id) {
   if (!confirm("Excluir este site gerado? O link para o prospect vai parar de funcionar.")) return;
-  await fetch(`/api/gemini/paginas/${id}`, { method: "DELETE" });
+  await fetch(`/api/ai/paginas/${id}`, { method: "DELETE" });
   mostrarToast("Site excluído.", "info");
   carregarPaginas();
 }

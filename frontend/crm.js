@@ -239,7 +239,7 @@ async function gerarFollowupIA() {
   if (res) res.style.display = "none";
 
   try {
-    const r = await fetch("/api/gemini/crm-followup", {
+    const r = await fetch("/api/ai/crm-followup", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresa_id: _empresaAbertaId }),

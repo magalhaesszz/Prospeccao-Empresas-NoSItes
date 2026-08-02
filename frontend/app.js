@@ -359,7 +359,7 @@ async function gerarSiteEmpresa(empresaId) {
       style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Gerando...`;
   }
   try {
-    const r = await fetch("/api/gemini/enriquecer-empresa", {
+    const r = await fetch("/api/ai/enriquecer-empresa", {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresa_id: empresaId }),
     });
@@ -624,7 +624,7 @@ async function iniciarEnriquecimento() {
     const payload = {};
     if (APP.buscaId) payload.busca_id = APP.buscaId;
 
-    const r = await fetch("/api/gemini/enriquecer", {
+    const r = await fetch("/api/ai/enriquecer", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
@@ -672,7 +672,7 @@ async function gerarMensagemEmpresa(empresaId, telefone) {
   if (emp?.gemini_mensagem) return;
 
   try {
-    const r = await fetch("/api/gemini/gerar-mensagem-empresa", {
+    const r = await fetch("/api/ai/gerar-mensagem-empresa", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresa_id: empresaId }),
@@ -729,7 +729,7 @@ async function gerarMensagensEmLote() {
   for (const emp of alvos) {
     setTxt(`Gerando para "${emp.nome}"... (${feitos}/${alvos.length})`);
     try {
-      const r = await fetch("/api/gemini/gerar-mensagem-empresa", {
+      const r = await fetch("/api/ai/gerar-mensagem-empresa", {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ empresa_id: emp.id }),
       });
@@ -764,7 +764,7 @@ async function analisarProspects() {
       .slice(0, 25)
       .map(e => ({ nome: e.nome, telefone: !!e.telefone, tem_site: !!e.tem_site, score: e.score || 0, nota: e.nota, avaliacoes: e.avaliacoes }));
 
-    const r = await fetch("/api/gemini/analisar-prospects", {
+    const r = await fetch("/api/ai/analisar-prospects", {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresas: top25 }),
     });

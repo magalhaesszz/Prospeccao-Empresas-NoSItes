@@ -143,7 +143,7 @@ async function gerarTemplateIA() {
   if (status) { status.textContent = "Gerando com IA..."; status.style.display = "block"; }
 
   try {
-    const r = await fetch("/api/gemini/gerar-template", {
+    const r = await fetch("/api/ai/gerar-template", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ descricao: desc }),

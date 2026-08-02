@@ -1050,7 +1050,7 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
     logger.info("[enriq] Concluído: %d empresas processadas, %d falhas.", len(empresas), falhas)
 
 
-@app.route("/api/gemini/enriquecer", methods=["POST"])
+@app.route("/api/ai/enriquecer", methods=["POST"])
 def api_gemini_enriquecer():
     api_key = _ai_api_key()
     if not api_key:
@@ -1105,7 +1105,7 @@ def api_gemini_enriquecer():
     return jsonify({"mensagem": f"Enriquecimento iniciado para {len(empresas)} empresa(s).", "total": len(empresas)})
 
 
-@app.route("/api/gemini/enriquecer-empresa", methods=["POST"])
+@app.route("/api/ai/enriquecer-empresa", methods=["POST"])
 def api_gemini_enriquecer_empresa():
     api_key = _ai_api_key()
     if not api_key:
@@ -1148,7 +1148,7 @@ def api_gemini_enriquecer_empresa():
     })
 
 
-@app.route("/api/gemini/responder-conversa", methods=["POST"])
+@app.route("/api/ai/responder-conversa", methods=["POST"])
 def api_gemini_responder_conversa():
     api_key = _ai_api_key()
     if not api_key:
@@ -1190,7 +1190,7 @@ Retorne APENAS a mensagem de resposta."""
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/gemini/crm-followup", methods=["POST"])
+@app.route("/api/ai/crm-followup", methods=["POST"])
 def api_gemini_crm_followup():
     api_key = _ai_api_key()
     if not api_key:
@@ -1243,7 +1243,7 @@ Retorne APENAS a mensagem."""
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/gemini/gerar-template", methods=["POST"])
+@app.route("/api/ai/gerar-template", methods=["POST"])
 def api_gemini_gerar_template():
     api_key = _ai_api_key()
     if not api_key:
@@ -1277,7 +1277,7 @@ Retorne APENAS a mensagem do template."""
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/gemini/gerar-mensagem-empresa", methods=["POST"])
+@app.route("/api/ai/gerar-mensagem-empresa", methods=["POST"])
 def api_gemini_gerar_mensagem_empresa():
     api_key = _ai_api_key()
     if not api_key:
@@ -1311,7 +1311,7 @@ def api_gemini_gerar_mensagem_empresa():
     return jsonify({"mensagem": mensagem, "ok": True})
 
 
-@app.route("/api/gemini/status-enriquecimento")
+@app.route("/api/ai/status-enriquecimento")
 def api_gemini_status_enriq():
     with _lock:
         return jsonify({
@@ -1331,7 +1331,7 @@ def preview_pagina(slug):
     return pagina["html"], 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
-@app.route("/api/gemini/analisar-prospects", methods=["POST"])
+@app.route("/api/ai/analisar-prospects", methods=["POST"])
 def api_gemini_analisar_prospects():
     api_key = _ai_api_key()
     if not api_key:
@@ -1434,7 +1434,7 @@ def _app_base_url():
     return detected
 
 
-@app.route("/api/gemini/test")
+@app.route("/api/ai/test")
 def api_test_gemini():
     """Testa conexão IA com prompt mínimo. Retorna ok/erro, provider e latência em ms."""
     import time
@@ -1452,14 +1452,14 @@ def api_test_gemini():
         return jsonify({"ok": False, "erro": str(e), "ms": ms, "provider": provider})
 
 
-@app.route("/api/gemini/status")
+@app.route("/api/ai/status")
 def api_gemini_status():
     provider    = CONFIG.get("ai_provider", "groq").lower()
     configurado = bool(_ai_api_key())
     return jsonify({"configurado": configurado, "provider": provider})
 
 
-@app.route("/api/gemini/gerar-pagina", methods=["POST"])
+@app.route("/api/ai/gerar-pagina", methods=["POST"])
 def api_gemini_gerar_pagina():
     """Inicia geração de página em background. Retorna job_id para polling."""
     from ai.enricher import gerar_pagina as _enr_gerar_pagina
@@ -1520,7 +1520,7 @@ def api_gemini_gerar_pagina():
     return jsonify({"job_id": job_id})
 
 
-@app.route("/api/gemini/gerar-pagina/status/<job_id>")
+@app.route("/api/ai/gerar-pagina/status/<job_id>")
 def api_gemini_pagina_status(job_id):
     """Polling de status do job de geração de página."""
     job = _jobs_pagina.get(job_id)
@@ -1535,7 +1535,7 @@ def api_gemini_pagina_status(job_id):
     return jsonify(job)
 
 
-@app.route("/api/gemini/gerar-mensagem", methods=["POST"])
+@app.route("/api/ai/gerar-mensagem", methods=["POST"])
 def api_gemini_gerar_mensagem():
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
@@ -1579,7 +1579,7 @@ Retorne APENAS a mensagem, sem prefácio ou explicações."""
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/gemini/paginas", methods=["GET"])
+@app.route("/api/ai/paginas", methods=["GET"])
 def api_gemini_paginas_get():
     paginas = listar_paginas_preview()
     base    = _app_base_url()
@@ -1589,7 +1589,7 @@ def api_gemini_paginas_get():
     return jsonify(paginas)
 
 
-@app.route("/api/gemini/paginas/<int:pid>", methods=["DELETE"])
+@app.route("/api/ai/paginas/<int:pid>", methods=["DELETE"])
 def api_gemini_paginas_delete(pid):
     deletar_pagina_preview(pid)
     return jsonify({"ok": True})
