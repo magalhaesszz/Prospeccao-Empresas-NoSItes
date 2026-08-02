@@ -1519,17 +1519,27 @@ def api_gemini_gerar_pagina():
                 "maps_url":         "",
             }
             slug, html = _enr_gerar_pagina(empresa, api_key)
-            pid  = criar_pagina_preview(empresa_id, nome, slug, html)
-            url  = f"{base_url}/p/{slug}"
-            logger.info("[Gemini] Página gerada para '%s' → %s", nome, url)
-            resultado = {"status": "ok", "id": pid, "slug": slug, "url": url}
-            _jobs_pagina[job_id] = resultado
-            atualizar_job_ok(job_id, slug, url)
+            url = f"{base_url}/p/{slug}"
+
+            # Marca job como OK imediatamente — antes de qualquer operação de DB.
+            # Isso garante que o polling recebe "ok" mesmo se o INSERT demorar.
+            _jobs_pagina[job_id] = {"status": "ok", "slug": slug, "url": url}
+
+            try:
+                pid = criar_pagina_preview(empresa_id, nome, slug, html)
+                _jobs_pagina[job_id]["id"] = pid
+                atualizar_job_ok(job_id, slug, url)
+                logger.info("[AI] Página salva no DB para '%s' → %s", nome, url)
+            except Exception as db_err:
+                logger.error("[AI] HTML gerado mas falha ao salvar no DB para '%s': %s", nome, db_err)
+                # Mantém status "ok" — página foi gerada, só não persistiu no DB
         except Exception as e:
-            logger.error("[Geminigerar-pagina] %s", e)
-            resultado = {"status": "erro", "erro": str(e)}
-            _jobs_pagina[job_id] = resultado
-            atualizar_job_erro(job_id, str(e))
+            logger.error("[AI] Falha na geração para '%s': %s", nome, e)
+            _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}
+            try:
+                atualizar_job_erro(job_id, str(e))
+            except Exception:
+                pass
 
     threading.Thread(target=_bg, daemon=True).start()
     return jsonify({"job_id": job_id})

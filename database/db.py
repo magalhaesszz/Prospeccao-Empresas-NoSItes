@@ -46,7 +46,7 @@ def get_connection():
         params = _parse_url(DATABASE_URL)
     except (ValueError, IndexError) as e:
         raise RuntimeError(f"DATABASE_URL malformada: {e}") from e
-    return psycopg2.connect(**params, sslmode="require")
+    return psycopg2.connect(**params, sslmode="require", connect_timeout=10)
 
 
 def _all(cur):
