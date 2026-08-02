@@ -1,4 +1,4 @@
-/* ===== Gemini AI Hub ===== */
+/* ===== IA Hub ===== */
 
 let _paginaAtualUrl  = "";
 let _todasEmpresas   = [];
@@ -7,14 +7,14 @@ let _empresaSelecionada = null;
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
-  verificarStatusGemini();
+  verificarStatusIA();
   carregarPaginas();
   carregarEmpresasDB();
 });
 
-// ── Status Gemini ─────────────────────────────────────────────────────────────
+// ── Status IA ─────────────────────────────────────────────────────────────────
 
-async function verificarStatusGemini() {
+async function verificarStatusIA() {
   try {
     const d = await fetch("/api/ai/status").then(r => r.json());
     const dot = document.getElementById("gemini-status-dot");
@@ -28,7 +28,7 @@ async function verificarStatusGemini() {
       txt.textContent      = `Configure ${d.provider === "openrouter" ? "OPENROUTER_API_KEY" : "GROQ_API_KEY"} no Railway`;
     }
   } catch (e) {
-    console.error("Status Gemini:", e);
+    console.error("Status IA:", e);
   }
 }
 
@@ -108,7 +108,7 @@ async function gerarPagina() {
   btn.disabled  = true;
   if (resultado) resultado.style.display = "none";
 
-  const _btnOriginal = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site com Gemini`;
+  const _btnOriginal = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Gerar Site com IA`;
   const _setSpinner = (msg) => {
     btn.innerHTML = `<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span> ${msg}`;
   };
@@ -136,7 +136,7 @@ async function gerarPagina() {
     while (tentativas < MAX_TENTATIVAS) {
       await new Promise(res => setTimeout(res, 2000));
       tentativas++;
-      _setSpinner(`Gemini gerando o site... (${tentativas * 2}s)`);
+      _setSpinner(`IA gerando o site... (${tentativas * 2}s)`);
 
       let rs;
       try {
@@ -170,7 +170,7 @@ async function gerarPagina() {
       // rs.status === "gerando" → continua polling
     }
 
-    throw new Error("Tempo limite atingido (4 min). Gemini não respondeu. Tente novamente.");
+    throw new Error("Tempo limite atingido (4 min). IA não respondeu. Tente novamente.");
   } catch (e) {
     mostrarToast("Erro: " + e.message, "error");
     console.error(e);
@@ -214,7 +214,7 @@ function toggleLinkInput() {
   if (box) box.style.display = chk?.checked ? "block" : "none";
 }
 
-async function gerarMensagemGemini() {
+async function gerarMensagemIA() {
   const nome      = (document.getElementById("gm-nome")?.value      || "").trim();
   const categoria = (document.getElementById("gm-categoria")?.value || "").trim();
   const cidade    = (document.getElementById("gm-cidade")?.value    || "").trim();
@@ -253,13 +253,13 @@ async function gerarMensagemGemini() {
   }
 }
 
-function copiarMensagemGemini() {
+function copiarMensagemIA() {
   const ta = document.getElementById("gm-mensagem");
   if (!ta) return;
   navigator.clipboard.writeText(ta.value).then(() => mostrarToast("Mensagem copiada!", "success"));
 }
 
-function usarMensagemGeminiNoTeste() {
+function usarMensagemIANoTeste() {
   const ta  = document.getElementById("gm-mensagem");
   const msg = ta?.value || "";
   if (!msg) return;

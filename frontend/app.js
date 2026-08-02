@@ -108,15 +108,15 @@ function processarEvento(ev) {
       break;
 
     case "enriquecimento_inicio":
-      mostrarProgressoGemini(0, ev.total, "Iniciando enriquecimento com Gemini...");
+      mostrarProgressoIA(0, ev.total, "Iniciando enriquecimento com IA...");
       break;
 
     case "enriquecimento_progresso":
-      mostrarProgressoGemini(ev.atual, ev.total, ev.empresa);
+      mostrarProgressoIA(ev.atual, ev.total, ev.empresa);
       break;
 
     case "enriquecimento_fim":
-      finalizarProgressoGemini(ev.total);
+      finalizarProgressoIA(ev.total);
       if (APP.buscaId) verBusca(APP.buscaId);
       break;
 
@@ -582,9 +582,9 @@ function mostrarToast(msg, tipo = "info") {
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
 }
 
-// ── Gemini Enrichment ─────────────────────────────────────────────────────────
+// ── AI Enrichment ─────────────────────────────────────────────────────────────
 
-function mostrarProgressoGemini(atual, total, empresa) {
+function mostrarProgressoIA(atual, total, empresa) {
   const secao = document.getElementById("secao-gemini-enriq");
   if (!secao) return;
   secao.classList.remove("hidden");
@@ -597,19 +597,19 @@ function mostrarProgressoGemini(atual, total, empresa) {
   if (cnt) cnt.textContent = `${atual} / ${total}`;
 }
 
-function finalizarProgressoGemini(total) {
+function finalizarProgressoIA(total) {
   const secao = document.getElementById("secao-gemini-enriq");
   const txt   = secao?.querySelector("#gemini-txt");
   const barra = secao?.querySelector("#gemini-barra");
-  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com Gemini.`;
+  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com IA.`;
   if (barra) barra.style.width = "100%";
-  mostrarToast(`Gemini:${total} mensagens + sites gerados!`, "success");
+  mostrarToast(`IA:${total} mensagens + sites gerados!`, "success");
 
   // Atualiza botão
   const btn = document.getElementById("btn-gemini-enriq");
   if (btn) {
     btn.disabled    = false;
-    btn.textContent = "Enriquecer com Gemini";
+    btn.textContent = "Enriquecer com IA";
   }
 }
 
@@ -631,10 +631,10 @@ async function iniciarEnriquecimento() {
     });
     const d = await r.json();
     if (!r.ok || d.erro) throw new Error(d.erro || "Erro desconhecido");
-    mostrarToast(`Gemini:processando ${d.total} empresa(s)...`, "info");
+    mostrarToast(`IA:processando ${d.total} empresa(s)...`, "info");
   } catch (e) {
-    mostrarToast("Erro Gemini:" + e.message, "error");
-    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com Gemini"; }
+    mostrarToast("Erro IA:" + e.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com IA"; }
   }
 }
 
