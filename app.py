@@ -1385,7 +1385,7 @@ def api_admin_limpar_lixo():
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
-_GEMINI_MODELO = "gemini-2.5-flash"
+_GEMINI_MODELO = "gemini-2.0-flash"
 
 def _gemini_gerar(prompt):
     import google.generativeai as genai
