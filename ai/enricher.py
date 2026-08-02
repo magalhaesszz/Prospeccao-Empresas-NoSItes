@@ -8,7 +8,7 @@ import secrets, logging, re, json
 logger = logging.getLogger(__name__)
 
 
-_MODELO_GROQ       = "llama-3.3-70b-versatile"
+_MODELO_GROQ       = "openai/gpt-oss-120b"
 _MODELO_OPENROUTER = "google/gemini-2.0-flash-exp:free"
 
 

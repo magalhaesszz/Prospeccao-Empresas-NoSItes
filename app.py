@@ -1411,7 +1411,7 @@ def _ai_gerar(prompt):
         from groq import Groq
         client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
         )
