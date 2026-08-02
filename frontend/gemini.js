@@ -14,21 +14,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── Status IA ─────────────────────────────────────────────────────────────────
 
+function _atualizarBotoesProvider(provider) {
+  const btnGroq = document.getElementById("btn-provider-groq");
+  const btnOR   = document.getElementById("btn-provider-openrouter");
+  if (!btnGroq || !btnOR) return;
+  const ativo   = "background:var(--brand);color:#fff";
+  const inativo = "background:var(--surface-2);color:var(--text)";
+  btnGroq.style.cssText += ";" + (provider === "groq"        ? ativo : inativo);
+  btnOR.style.cssText   += ";" + (provider === "openrouter"  ? ativo : inativo);
+}
+
 async function verificarStatusIA() {
   try {
     const d = await fetch("/api/ai/status").then(r => r.json());
-    const dot = document.getElementById("gemini-status-dot");
-    const txt = document.getElementById("gemini-status-txt");
+    const dot   = document.getElementById("gemini-status-dot");
+    const txt   = document.getElementById("gemini-status-txt");
     const label = d.provider === "openrouter" ? "OpenRouter" : "Groq";
+    _atualizarBotoesProvider(d.provider);
     if (d.configurado) {
       dot.style.background = "#10B981";
-      txt.textContent      = `${label} configurado`;
+      txt.textContent      = `${label} ativo`;
     } else {
       dot.style.background = "#EF4444";
       txt.textContent      = `Configure ${d.provider === "openrouter" ? "OPENROUTER_API_KEY" : "GROQ_API_KEY"} no Railway`;
     }
   } catch (e) {
     console.error("Status IA:", e);
+  }
+}
+
+async function trocarProvider(provider) {
+  try {
+    const d = await fetch("/api/ai/provider", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ provider }),
+    }).then(r => r.json());
+    if (d.erro) { mostrarToast("Erro: " + d.erro, "error"); return; }
+    _atualizarBotoesProvider(provider);
+    const label = provider === "openrouter" ? "OpenRouter" : "Groq";
+    const dot   = document.getElementById("gemini-status-dot");
+    const txt   = document.getElementById("gemini-status-txt");
+    if (d.configurado) {
+      dot.style.background = "#10B981";
+      txt.textContent      = `${label} ativo`;
+      mostrarToast(`Provider trocado para ${label}`, "success");
+    } else {
+      dot.style.background = "#EF4444";
+      txt.textContent      = `Configure ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "GROQ_API_KEY"} no Railway`;
+      mostrarToast(`${label} selecionado — API key não encontrada`, "error");
+    }
+  } catch (e) {
+    mostrarToast("Erro ao trocar provider", "error");
   }
 }
 

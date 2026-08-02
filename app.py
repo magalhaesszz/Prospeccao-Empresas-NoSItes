@@ -1459,6 +1459,21 @@ def api_gemini_status():
     return jsonify({"configurado": configurado, "provider": provider})
 
 
+@app.route("/api/ai/provider", methods=["GET", "POST"])
+def api_ai_provider():
+    if request.method == "POST":
+        dados    = request.get_json(silent=True) or {}
+        provider = (dados.get("provider") or "groq").lower()
+        if provider not in ("groq", "openrouter"):
+            return jsonify({"erro": "Provider inválido. Use 'groq' ou 'openrouter'."}), 400
+        CONFIG["ai_provider"] = provider
+        configurado = bool(_ai_api_key())
+        return jsonify({"ok": True, "provider": provider, "configurado": configurado})
+    provider    = CONFIG.get("ai_provider", "groq").lower()
+    configurado = bool(_ai_api_key())
+    return jsonify({"provider": provider, "configurado": configurado})
+
+
 @app.route("/api/ai/gerar-pagina", methods=["POST"])
 def api_gemini_gerar_pagina():
     """Inicia geração de página em background. Retorna job_id para polling."""

@@ -12,9 +12,23 @@
       </h1>
       <p style="color:var(--muted);font-size:.875rem;margin-top:2px">Gere landing pages profissionais e mensagens personalizadas com IA</p>
     </div>
-    <div id="gemini-status-badge" style="display:flex;align-items:center;gap:6px;font-size:.8rem;padding:6px 12px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border)">
-      <span id="gemini-status-dot" style="width:8px;height:8px;border-radius:50%;background:#6B7280"></span>
-      <span id="gemini-status-txt">Verificando...</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <!-- Seletor de provider -->
+      <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:.8rem">
+        <button id="btn-provider-groq" onclick="trocarProvider('groq')"
+          style="padding:6px 14px;border:none;cursor:pointer;font-size:.8rem;font-weight:600;transition:background .2s">
+          Groq
+        </button>
+        <button id="btn-provider-openrouter" onclick="trocarProvider('openrouter')"
+          style="padding:6px 14px;border:none;cursor:pointer;font-size:.8rem;font-weight:600;transition:background .2s;border-left:1px solid var(--border)">
+          OpenRouter
+        </button>
+      </div>
+      <!-- Status -->
+      <div id="gemini-status-badge" style="display:flex;align-items:center;gap:6px;font-size:.8rem;padding:6px 12px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border)">
+        <span id="gemini-status-dot" style="width:8px;height:8px;border-radius:50%;background:#6B7280"></span>
+        <span id="gemini-status-txt">Verificando...</span>
+      </div>
     </div>
   </div>
 
