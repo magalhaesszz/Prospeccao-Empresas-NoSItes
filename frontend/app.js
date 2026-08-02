@@ -108,15 +108,15 @@ function processarEvento(ev) {
       break;
 
     case "enriquecimento_inicio":
-      mostrarProgressoGroq(0, ev.total, "Iniciando enriquecimento com Groq...");
+      mostrarProgressoGemini(0, ev.total, "Iniciando enriquecimento com Gemini...");
       break;
 
     case "enriquecimento_progresso":
-      mostrarProgressoGroq(ev.atual, ev.total, ev.empresa);
+      mostrarProgressoGemini(ev.atual, ev.total, ev.empresa);
       break;
 
     case "enriquecimento_fim":
-      finalizarProgressoGroq(ev.total);
+      finalizarProgressoGemini(ev.total);
       if (APP.buscaId) verBusca(APP.buscaId);
       break;
 
@@ -582,9 +582,9 @@ function mostrarToast(msg, tipo = "info") {
   t._timer = setTimeout(() => t.className = "toast oculto", 3500);
 }
 
-// ── Groq Enrichment ─────────────────────────────────────────────────────────
+// ── Gemini Enrichment ─────────────────────────────────────────────────────────
 
-function mostrarProgressoGroq(atual, total, empresa) {
+function mostrarProgressoGemini(atual, total, empresa) {
   const secao = document.getElementById("secao-gemini-enriq");
   if (!secao) return;
   secao.classList.remove("hidden");
@@ -597,19 +597,19 @@ function mostrarProgressoGroq(atual, total, empresa) {
   if (cnt) cnt.textContent = `${atual} / ${total}`;
 }
 
-function finalizarProgressoGroq(total) {
+function finalizarProgressoGemini(total) {
   const secao = document.getElementById("secao-gemini-enriq");
   const txt   = secao?.querySelector("#gemini-txt");
   const barra = secao?.querySelector("#gemini-barra");
-  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com Groq.`;
+  if (txt)   txt.textContent = `Enriquecimento concluído! ${total} empresa(s) processadas com Gemini.`;
   if (barra) barra.style.width = "100%";
-  mostrarToast(`Groq: ${total} mensagens + sites gerados!`, "success");
+  mostrarToast(`Gemini:${total} mensagens + sites gerados!`, "success");
 
   // Atualiza botão
   const btn = document.getElementById("btn-gemini-enriq");
   if (btn) {
     btn.disabled    = false;
-    btn.textContent = "Enriquecer com Groq";
+    btn.textContent = "Enriquecer com Gemini";
   }
 }
 
@@ -631,10 +631,10 @@ async function iniciarEnriquecimento() {
     });
     const d = await r.json();
     if (!r.ok || d.erro) throw new Error(d.erro || "Erro desconhecido");
-    mostrarToast(`Groq: processando ${d.total} empresa(s)...`, "info");
+    mostrarToast(`Gemini:processando ${d.total} empresa(s)...`, "info");
   } catch (e) {
-    mostrarToast("Erro Groq: " + e.message, "error");
-    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com Groq"; }
+    mostrarToast("Erro Gemini:" + e.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Enriquecer com Gemini"; }
   }
 }
 
@@ -672,7 +672,7 @@ async function gerarMensagemEmpresa(empresaId, telefone) {
   if (emp?.gemini_mensagem) return;
 
   try {
-    const r = await fetch("/api/groq/gerar-mensagem-empresa", {
+    const r = await fetch("/api/gemini/gerar-mensagem-empresa", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresa_id: empresaId }),
@@ -729,7 +729,7 @@ async function gerarMensagensEmLote() {
   for (const emp of alvos) {
     setTxt(`Gerando para "${emp.nome}"... (${feitos}/${alvos.length})`);
     try {
-      const r = await fetch("/api/groq/gerar-mensagem-empresa", {
+      const r = await fetch("/api/gemini/gerar-mensagem-empresa", {
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ empresa_id: emp.id }),
       });
@@ -764,7 +764,7 @@ async function analisarProspects() {
       .slice(0, 25)
       .map(e => ({ nome: e.nome, telefone: !!e.telefone, tem_site: !!e.tem_site, score: e.score || 0, nota: e.nota, avaliacoes: e.avaliacoes }));
 
-    const r = await fetch("/api/groq/analisar-prospects", {
+    const r = await fetch("/api/gemini/analisar-prospects", {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ empresas: top25 }),
     });

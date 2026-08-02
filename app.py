@@ -101,7 +101,7 @@ def verificar_auth():
     senha = CONFIG.get("senha_painel", "").strip()
     if not senha:
         return  # sem senha = sem proteção
-    rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook", "api_test_groq", "api_status"}
+    rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook", "api_test_gemini", "api_status"}
     if request.endpoint in rotas_publicas:
         return
     if not session.get("autenticado"):
@@ -1052,9 +1052,9 @@ def _executar_enriquecimento(empresas, api_key, criar_pagina, app_url=""):
 
 @app.route("/api/gemini/enriquecer", methods=["POST"])
 def api_gemini_enriquecer():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
 
     with _lock:
         if _estado.get("enriquecendo"):
@@ -1107,9 +1107,9 @@ def api_gemini_enriquecer():
 
 @app.route("/api/gemini/enriquecer-empresa", methods=["POST"])
 def api_gemini_enriquecer_empresa():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
 
     dados      = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1148,11 +1148,11 @@ def api_gemini_enriquecer_empresa():
     })
 
 
-@app.route("/api/groq/responder-conversa", methods=["POST"])
-def api_groq_responder_conversa():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+@app.route("/api/gemini/responder-conversa", methods=["POST"])
+def api_gemini_responder_conversa():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
 
     dados = request.get_json(silent=True) or {}
     ultima_msg = (dados.get("ultima_msg") or "").strip()
@@ -1184,17 +1184,17 @@ Gere uma resposta profissional, empática e focada em avançar a venda.
 Retorne APENAS a mensagem de resposta."""
 
     try:
-        return jsonify({"mensagem": _groq_gerar(prompt), "ok": True})
+        return jsonify({"mensagem": _gemini_gerar(prompt), "ok": True})
     except Exception as e:
-        logger.error("[Groq conversa] %s", e)
+        logger.error("[Gemini conversa] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/groq/crm-followup", methods=["POST"])
-def api_groq_crm_followup():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+@app.route("/api/gemini/crm-followup", methods=["POST"])
+def api_gemini_crm_followup():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
 
     dados      = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1237,17 +1237,17 @@ Crie uma mensagem de follow-up personalizada e contextualizada.
 Retorne APENAS a mensagem."""
 
     try:
-        return jsonify({"mensagem": _groq_gerar(prompt), "ok": True})
+        return jsonify({"mensagem": _gemini_gerar(prompt), "ok": True})
     except Exception as e:
-        logger.error("[Groq followup] %s", e)
+        logger.error("[Gemini followup] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/groq/gerar-template", methods=["POST"])
-def api_groq_gerar_template():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+@app.route("/api/gemini/gerar-template", methods=["POST"])
+def api_gemini_gerar_template():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
 
     dados     = request.get_json(silent=True) or {}
     descricao = (dados.get("descricao") or "").strip()
@@ -1271,17 +1271,17 @@ REGRAS OBRIGATÓRIAS:
 Retorne APENAS a mensagem do template."""
 
     try:
-        return jsonify({"template": _groq_gerar(prompt), "ok": True})
+        return jsonify({"template": _gemini_gerar(prompt), "ok": True})
     except Exception as e:
-        logger.error("[Groq template] %s", e)
+        logger.error("[Gemini template] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/groq/gerar-mensagem-empresa", methods=["POST"])
-def api_groq_gerar_mensagem_empresa():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+@app.route("/api/gemini/gerar-mensagem-empresa", methods=["POST"])
+def api_gemini_gerar_mensagem_empresa():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
 
     dados = request.get_json(silent=True) or {}
     empresa_id = dados.get("empresa_id")
@@ -1296,7 +1296,7 @@ def api_groq_gerar_mensagem_empresa():
     try:
         mensagem = gerar_mensagem(emp, api_key)
     except Exception as e:
-        logger.error("[Groq msg empresa] %s", e)
+        logger.error("[Gemini msg empresa] %s", e)
         return jsonify({"erro": str(e)}), 500
 
     from database.db import get_connection
@@ -1331,11 +1331,11 @@ def preview_pagina(slug):
     return pagina["html"], 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
-@app.route("/api/groq/analisar-prospects", methods=["POST"])
-def api_groq_analisar_prospects():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+@app.route("/api/gemini/analisar-prospects", methods=["POST"])
+def api_gemini_analisar_prospects():
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado."}), 400
 
     dados    = request.get_json(silent=True) or {}
     empresas = dados.get("empresas", [])
@@ -1370,10 +1370,10 @@ Responda EXATAMENTE neste formato (português brasileiro, direto):
 💡 DICA: [1 frase com estratégia de abordagem para este nicho]"""
 
     try:
-        analise = _groq_gerar(prompt)
+        analise = _gemini_gerar(prompt)
         return jsonify({"analise": analise, "ok": True})
     except Exception as e:
-        logger.error("[Groq prospects] %s", e)
+        logger.error("[Gemini prospects] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 
@@ -1385,20 +1385,17 @@ def api_admin_limpar_lixo():
 
 # ── Gemini AI Hub ──────────────────────────────────────────────────────────────
 
-_GROQ_MODELO = "llama-3.3-70b-versatile"
+_GEMINI_MODELO = "gemini-1.5-pro"
 
-def _groq_gerar(prompt):
-    from groq import Groq
-    api_key = CONFIG.get("groq_api_key", "").strip()
+def _gemini_gerar(prompt):
+    import google.generativeai as genai
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        raise ValueError("GROQ_API_KEY não configurado.")
-    client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
-    resp = client.chat.completions.create(
-        model=_GROQ_MODELO,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=4096,
-    )
-    return resp.choices[0].message.content.strip()
+        raise ValueError("GEMINI_API_KEY não configurado.")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(_GEMINI_MODELO)
+    response = model.generate_content(prompt)
+    return response.text.strip()
 
 
 # Job store para geração assíncrona de páginas (in-memory, TTL simples por tamanho)
@@ -1417,24 +1414,21 @@ def _app_base_url():
     return detected
 
 
-@app.route("/api/gemini/test-groq")
-def api_test_groq():
-    """Testa conexão Groq com prompt mínimo. Retorna ok/erro e latência em ms."""
+@app.route("/api/gemini/test")
+def api_test_gemini():
+    """Testa conexão Gemini com prompt mínimo. Retorna ok/erro e latência em ms."""
     import time
-    from groq import Groq
-    api_key = CONFIG.get("groq_api_key", "").strip()
+    import google.generativeai as genai
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"ok": False, "erro": "GROQ_API_KEY não configurado."})
+        return jsonify({"ok": False, "erro": "GEMINI_API_KEY não configurado."})
     t0 = time.time()
     try:
-        client = Groq(api_key=api_key, timeout=30.0, max_retries=0)
-        resp = client.chat.completions.create(
-            model=_GROQ_MODELO,
-            messages=[{"role": "user", "content": "Diga apenas: OK"}],
-            max_tokens=5,
-        )
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(_GEMINI_MODELO)
+        response = model.generate_content("Diga apenas: OK")
         ms = int((time.time() - t0) * 1000)
-        return jsonify({"ok": True, "resposta": resp.choices[0].message.content.strip(), "ms": ms})
+        return jsonify({"ok": True, "resposta": response.text.strip(), "ms": ms})
     except Exception as e:
         ms = int((time.time() - t0) * 1000)
         return jsonify({"ok": False, "erro": str(e), "ms": ms})
@@ -1442,18 +1436,18 @@ def api_test_groq():
 
 @app.route("/api/gemini/status")
 def api_gemini_status():
-    configurado = bool(CONFIG.get("groq_api_key", "").strip())
+    configurado = bool(CONFIG.get("gemini_api_key", "").strip())
     return jsonify({"configurado": configurado})
 
 
 @app.route("/api/gemini/gerar-pagina", methods=["POST"])
-def api_groq_gerar_pagina():
+def api_gemini_gerar_pagina():
     """Inicia geração de página em background. Retorna job_id para polling."""
     from ai.enricher import gerar_pagina as _enr_gerar_pagina
 
-    api_key = CONFIG.get("groq_api_key", "").strip()
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
 
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
@@ -1493,12 +1487,12 @@ def api_groq_gerar_pagina():
             slug, html = _enr_gerar_pagina(empresa, api_key)
             pid  = criar_pagina_preview(empresa_id, nome, slug, html)
             url  = f"{base_url}/p/{slug}"
-            logger.info("[Groq] Página gerada para '%s' → %s", nome, url)
+            logger.info("[Gemini] Página gerada para '%s' → %s", nome, url)
             resultado = {"status": "ok", "id": pid, "slug": slug, "url": url}
             _jobs_pagina[job_id] = resultado
             atualizar_job_ok(job_id, slug, url)
         except Exception as e:
-            logger.error("[Groq gerar-pagina] %s", e)
+            logger.error("[Geminigerar-pagina] %s", e)
             resultado = {"status": "erro", "erro": str(e)}
             _jobs_pagina[job_id] = resultado
             atualizar_job_erro(job_id, str(e))
@@ -1508,7 +1502,7 @@ def api_groq_gerar_pagina():
 
 
 @app.route("/api/gemini/gerar-pagina/status/<job_id>")
-def api_groq_pagina_status(job_id):
+def api_gemini_pagina_status(job_id):
     """Polling de status do job de geração de página."""
     job = _jobs_pagina.get(job_id)
     if not job:
@@ -1523,7 +1517,7 @@ def api_groq_pagina_status(job_id):
 
 
 @app.route("/api/gemini/gerar-mensagem", methods=["POST"])
-def api_groq_gerar_mensagem():
+def api_gemini_gerar_mensagem():
     dados      = request.get_json(silent=True) or {}
     nome       = (dados.get("nome")       or "").strip()
     categoria  = (dados.get("categoria")  or "").strip()
@@ -1559,10 +1553,10 @@ REGRAS:
 Retorne APENAS a mensagem, sem prefácio ou explicações."""
 
     try:
-        mensagem = _groq_gerar(prompt)
+        mensagem = _gemini_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
-        logger.error("[Groq msg] %s", e)
+        logger.error("[Geminimsg] %s", e)
         return jsonify({"erro": str(e)}), 500
 
 
@@ -1619,9 +1613,9 @@ def api_wa_webhook():
 # ── IA — Gerar mensagem personalizada ─────────────────────────────────────────
 @app.route("/api/whatsapp/gerar-mensagem", methods=["POST"])
 def api_wa_gerar_mensagem():
-    api_key = CONFIG.get("groq_api_key", "").strip()
+    api_key = CONFIG.get("gemini_api_key", "").strip()
     if not api_key:
-        return jsonify({"erro": "GROQ_API_KEY não configurado no Railway."}), 400
+        return jsonify({"erro": "GEMINI_API_KEY não configurado no Railway."}), 400
 
     dados     = request.get_json(silent=True) or {}
     nome      = (dados.get("nome")      or "").strip()
@@ -1650,7 +1644,7 @@ def api_wa_gerar_mensagem():
     )
 
     try:
-        mensagem = _groq_gerar(prompt)
+        mensagem = _gemini_gerar(prompt)
         return jsonify({"mensagem": mensagem})
     except Exception as e:
         logger.error("[IA] %s", e)

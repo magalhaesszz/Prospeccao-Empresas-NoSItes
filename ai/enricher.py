@@ -1,5 +1,5 @@
 """
-Groq AI enrichment pipeline.
+Gemini AI enrichment pipeline.
 Given a company dict (with scraped Google Maps data), generates:
   - Personalized WhatsApp message (unique per company, uses real data)
   - Landing page HTML (complete, self-contained, uses real data)
@@ -8,29 +8,29 @@ import secrets, logging, re, json
 logger = logging.getLogger(__name__)
 
 
-_MODELO = "llama-3.3-70b-versatile"
+_MODELO = "gemini-1.5-pro"
 
 def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0):
     import time
-    from groq import Groq
-    client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        _MODELO,
+        generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens),
+    )
     for tentativa in range(3):
         try:
-            resp = client.chat.completions.create(
-                model=_MODELO,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-            )
-            return resp.choices[0].message.content.strip()
+            response = model.generate_content(prompt)
+            return response.text.strip()
         except Exception as e:
             err = str(e).lower()
-            if ("429" in err or "rate_limit" in err or "rate limit" in err) and tentativa < 2:
+            if ("429" in err or "quota" in err or "rate" in err) and tentativa < 2:
                 espera = (tentativa + 1) * 35  # 35s, 70s
-                logger.warning("[Groq] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
+                logger.warning("[Gemini] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
                 time.sleep(espera)
                 continue
             raise
-    raise Exception("Rate limit Groq após 3 tentativas — tente novamente em alguns minutos")
+    raise Exception("Rate limit Gemini após 3 tentativas — tente novamente em alguns minutos")
 
 
 def _strip_markdown(text):
@@ -175,7 +175,7 @@ def gerar_pagina(empresa, api_key):
     tel_digits = "".join(d for d in (telefone or "") if d.isdigit())
     wa_number  = f"55{tel_digits}" if tel_digits and not tel_digits.startswith("55") else tel_digits
     wa_link    = f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/"
-    tel_link   = f"tel:+55{tel_digits}" if tel_digits else "#"
+    tel_link   = f"tel:+{wa_number}" if wa_number else "#"
 
     cor_primaria, cor_acento = _paleta_segmento(categoria)
 
@@ -379,7 +379,7 @@ RETORNE APENAS O CÓDIGO HTML. Começa com <!DOCTYPE html> e termina com </html>
             html = html.rstrip() + "\n</body>\n</html>"
         else:
             html = html.rstrip() + "\n</html>"
-        logger.warning("[Groq] HTML truncado para '%s' — fechado automaticamente", nome)
+        logger.warning("[Gemini] HTML truncado para '%s' — fechado automaticamente", nome)
 
     slug = secrets.token_urlsafe(8)
     return slug, html
@@ -403,16 +403,16 @@ def enriquecer(empresa, api_key, app_url="", criar_pagina=True):
             slug, html = gerar_pagina(empresa, api_key)
             if app_url:
                 preview_url = f"{app_url.rstrip('/')}/p/{slug}"
-            logger.info("[Groq] Página gerada para '%s' → /p/%s", empresa.get("nome"), slug)
+            logger.info("[Gemini] Página gerada para '%s' → /p/%s", empresa.get("nome"), slug)
         except Exception as e:
-            logger.error("[Groq] Falha página '%s': %s", empresa.get("nome"), e)
+            logger.error("[Gemini] Falha página '%s': %s", empresa.get("nome"), e)
 
     mensagem = None
     try:
         mensagem = gerar_mensagem(empresa, api_key, preview_url)
-        logger.info("[Groq] Mensagem gerada para '%s'", empresa.get("nome"))
+        logger.info("[Gemini] Mensagem gerada para '%s'", empresa.get("nome"))
     except Exception as e:
-        logger.error("[Groq] Falha mensagem '%s': %s", empresa.get("nome"), e)
+        logger.error("[Gemini] Falha mensagem '%s': %s", empresa.get("nome"), e)
 
     return {
         "empresa_id":  empresa.get("id"),

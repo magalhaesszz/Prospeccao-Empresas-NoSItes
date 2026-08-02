@@ -707,7 +707,7 @@ async function iaResponderConversa() {
   input.disabled = true;
 
   try {
-    const r = await fetch("/api/groq/responder-conversa", {
+    const r = await fetch("/api/gemini/responder-conversa", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
