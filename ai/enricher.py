@@ -24,7 +24,7 @@ def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0, temperature=0.7, syst
 
     if provider == "openrouter":
         from openai import OpenAI
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=timeout)
         for tentativa in range(3):
             try:
                 resp = client.chat.completions.create(
@@ -83,23 +83,36 @@ def _strip_markdown(text):
 
 
 def _validar_fotos(fotos_lista):
-    """Filtra URLs de foto que retornam erro HTTP (Google CDN expira links)."""
+    """Filtra URLs de foto expiradas (Google CDN). Verificações em paralelo, max 3s."""
     import urllib.request
-    validas = []
-    for url in fotos_lista:
-        if not url:
-            continue
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _checar(url):
         try:
             req = urllib.request.Request(url, method="HEAD",
                                          headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=4) as r:
-                if r.status < 400:
-                    validas.append(url)
-                else:
-                    logger.warning("[foto] HTTP %d — descartando %s", r.status, url[:80])
+            with urllib.request.urlopen(req, timeout=3) as r:
+                return url if r.status < 400 else None
         except Exception:
-            logger.warning("[foto] Inacessível — descartando %s", url[:80])
-    return validas
+            return None
+
+    urls = [u for u in fotos_lista if u]
+    if not urls:
+        return []
+
+    validas = []
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futuros = {pool.submit(_checar, u): u for u in urls}
+        for fut in as_completed(futuros, timeout=5):
+            resultado = fut.result()
+            if resultado:
+                validas.append(resultado)
+            else:
+                logger.warning("[foto] Inacessível — descartando %s", futuros[fut][:80])
+
+    # Preserva ordem original
+    ordem = {u: i for i, u in enumerate(urls)}
+    return sorted(validas, key=lambda u: ordem.get(u, 99))
 
 
 # ── Contexto da empresa ───────────────────────────────────────────────────────
