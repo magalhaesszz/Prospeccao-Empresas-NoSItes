@@ -580,6 +580,13 @@ def api_dashboard_stats():
     return jsonify(obter_stats())
 
 
+@app.route("/api/nichos")
+def api_nichos():
+    """Nichos com landing page dedicada (motor ai.site_gen)."""
+    from ai.site_gen.theme import listar_nichos
+    return jsonify(listar_nichos())
+
+
 # ── Templates ─────────────────────────────────────────────────────────────────
 @app.route("/api/templates", methods=["GET"])
 def api_templates_get():
@@ -671,9 +678,24 @@ def api_wa_qrcode():
     if not (webhook and instance and api_key):
         return jsonify({"erro": "Evolution API não configurada."})
 
+    import time
     headers = {"apikey": api_key, "Content-Type": "application/json"}
     base_url = webhook.rstrip("/")
 
+    def _extrai_qr(data):
+        """Extrai o base64 do QR de qualquer formato (v1 aninhado ou v2 flat)."""
+        if not isinstance(data, dict):
+            return None
+        b64 = (data.get("base64")
+               or (data.get("qrcode") or {}).get("base64")
+               or (data.get("instance") or {}).get("base64"))
+        if not b64:
+            return None
+        if not b64.startswith("data:"):
+            b64 = "data:image/png;base64," + b64
+        return b64
+
+    # 1. Cria a instância (idempotente — 409 = já existe). Já pode devolver o QR.
     try:
         cr = req.post(
             f"{base_url}/instance/create",
@@ -681,31 +703,51 @@ def api_wa_qrcode():
             json={"instanceName": instance, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
             timeout=15,
         )
-        cr_data = cr.json()
-        # 409 = já existe, tudo bem. Outro erro = retorna pro usuário
+        try:
+            cr_data = cr.json()
+        except Exception:
+            cr_data = {}
         if not cr.ok and cr.status_code not in (409, 403):
             return jsonify({"erro": f"Erro ao criar instância: {str(cr_data)[:300]}"})
+        qr = _extrai_qr(cr_data) or _extrai_qr(cr_data.get("qrcode"))
+        if qr:
+            return jsonify({"base64": qr})
     except Exception as e:
         return jsonify({"erro": f"Não conseguiu conectar na Evolution API: {str(e)}"})
 
-    try:
-        r = req.get(
-            f"{base_url}/instance/connect/{instance}",
-            headers={"apikey": api_key},
-            timeout=15,
-        )
-        data = r.json()
+    # 2. Conecta e busca o QR com retries (o QR pode não estar pronto no 1º hit).
+    ultima = None
+    for tentativa in range(4):
+        try:
+            r = req.get(
+                f"{base_url}/instance/connect/{instance}",
+                headers={"apikey": api_key},
+                timeout=15,
+            )
+            data = r.json()
+        except Exception as e:
+            ultima = str(e)
+            time.sleep(1.2)
+            continue
+
+        ultima = data
         state = (data.get("instance", {}).get("state") or data.get("state") or "").lower()
         if state in ("open", "connected"):
             return jsonify({"conectado": True})
-        b64 = data.get("base64") or data.get("qrcode", {}).get("base64") or data.get("code")
-        if b64:
-            if not b64.startswith("data:"):
-                b64 = "data:image/png;base64," + b64
-            return jsonify({"base64": b64})
-        return jsonify({"erro": f"QR não disponível. Resposta: {str(data)[:300]}"})
-    except Exception as e:
-        return jsonify({"erro": str(e)})
+
+        qr = _extrai_qr(data)
+        if qr:
+            return jsonify({"base64": qr})
+
+        # Ainda sem QR: na 2ª volta força um restart da instância (estado travado).
+        if tentativa == 1:
+            try:
+                req.post(f"{base_url}/instance/restart/{instance}", headers=headers, timeout=15)
+            except Exception:
+                pass
+        time.sleep(1.4)
+
+    return jsonify({"erro": f"QR ainda não disponível — clique em Novo QR Code. (resposta: {str(ultima)[:200]})"})
 
 
 @app.route("/api/whatsapp/desconectar", methods=["POST"])
@@ -992,10 +1034,15 @@ def api_wa_mensagens():
                 "mimetype":  p["mimetype"],
                 "timestamp": m.get("messageTimestamp") or 0,
                 "status":    m.get("status") or "",
+                "key": {
+                    "id":          key.get("id") or "",
+                    "remoteJid":   key.get("remoteJid") or jid,
+                    "fromMe":      bool(key.get("fromMe")),
+                    "participant": key.get("participant") or "",
+                },
             }
-            # Para mídia: inclui o objeto completo pra que o front possa buscar base64 via proxy
-            if p["tipo"] in TIPOS_MIDIA:
-                item["raw_msg"] = m.get("message", {})
+            # Objeto completo da mensagem: mídia (proxy base64) + citar/encaminhar (quoted)
+            item["raw_msg"] = m.get("message", {})
             mensagens.append(item)
 
         mensagens.sort(key=lambda x: x["timestamp"] or 0)
@@ -1093,20 +1140,212 @@ def api_wa_disparar_pendentes():
     return jsonify({"mensagem": f"Disparo iniciado para {len(empresas)} empresa(s) pendente(s)."})
 
 
+def _wa_send_text(numero, texto, quoted=None):
+    """Envia texto via Evolution (com suporte a `quoted`). Fallback p/ webhook genérico."""
+    base, instance, api_key = _wa_config()
+    if base and instance and api_key:
+        import requests as req
+        headers = {"apikey": api_key, "Content-Type": "application/json"}
+        payload = {"number": _wa_numero_e2(numero), "text": texto}
+        if quoted and (quoted.get("key") or {}).get("id"):
+            payload["quoted"] = {"key": quoted["key"]}
+            if quoted.get("message"):
+                payload["quoted"]["message"] = quoted["message"]
+        r = req.post(f"{base}/message/sendText/{instance}", headers=headers, json=payload, timeout=60)
+        if not r.ok:
+            raise Exception(f"HTTP {r.status_code}: {r.text[:200]}")
+        return True
+    from whatsapp.disparar import _enviar_via_webhook
+    return _enviar_via_webhook(numero, texto)
+
+
 @app.route("/api/whatsapp/responder", methods=["POST"])
 def api_wa_responder():
-    """Envia resposta manual dentro de uma conversa."""
-    from whatsapp.disparar import _enviar_via_webhook
+    """Envia resposta manual dentro de uma conversa. Aceita `quoted` (responder citando)."""
+    dados  = request.get_json(silent=True) or {}
+    numero = (dados.get("numero") or "").strip()
+    texto  = (dados.get("texto") or "").strip()
+    quoted = dados.get("quoted")  # {key:{...}, message:{...}} — opcional
+    if not numero or not texto:
+        return jsonify({"ok": False, "erro": "Número e texto obrigatórios."})
+    try:
+        _wa_send_text(numero, texto, quoted)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/api/whatsapp/encaminhar", methods=["POST"])
+def api_wa_encaminhar():
+    """Encaminha texto para outro número. Body: {numero, texto}."""
     dados  = request.get_json(silent=True) or {}
     numero = (dados.get("numero") or "").strip()
     texto  = (dados.get("texto") or "").strip()
     if not numero or not texto:
         return jsonify({"ok": False, "erro": "Número e texto obrigatórios."})
     try:
-        _enviar_via_webhook(numero, texto)
+        _wa_send_text(numero, texto)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/api/whatsapp/reagir", methods=["POST"])
+def api_wa_reagir():
+    """Reage a uma mensagem. Body: {key:{id,remoteJid,fromMe,participant?}, emoji}."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    dados = request.get_json(silent=True) or {}
+    key   = dados.get("key") or {}
+    emoji = (dados.get("emoji") or "").strip()  # "" remove a reação
+    if not (base and instance and api_key):
+        return jsonify({"ok": False, "erro": "Não configurado."}), 400
+    if not (key.get("id") and key.get("remoteJid")):
+        return jsonify({"ok": False, "erro": "key inválida."}), 400
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    corpo = {
+        "key": {
+            "id":        key["id"],
+            "remoteJid": key["remoteJid"],
+            "fromMe":    bool(key.get("fromMe")),
+        },
+        "reaction": emoji,
+    }
+    if key.get("participant"):
+        corpo["key"]["participant"] = key["participant"]
+    try:
+        r = req.post(f"{base}/message/sendReaction/{instance}", headers=headers, json=corpo, timeout=20)
+        if not r.ok:
+            return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {r.text[:200]}"}), 400
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/whatsapp/marcar-lida", methods=["POST"])
+def api_wa_marcar_lida():
+    """Marca mensagens como lidas. Body: {keys:[{id,remoteJid,fromMe}]}."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    dados = request.get_json(silent=True) or {}
+    keys  = dados.get("keys") or []
+    if not (base and instance and api_key):
+        return jsonify({"ok": False, "erro": "Não configurado."}), 400
+    lidas = [
+        {"id": k.get("id"), "remoteJid": k.get("remoteJid"), "fromMe": bool(k.get("fromMe"))}
+        for k in keys if k.get("id") and k.get("remoteJid")
+    ]
+    if not lidas:
+        return jsonify({"ok": True, "marcadas": 0})
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    try:
+        r = req.post(f"{base}/chat/markMessageAsRead/{instance}",
+                     headers=headers, json={"readMessages": lidas}, timeout=20)
+        if not r.ok:
+            return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {r.text[:200]}"}), 400
+        return jsonify({"ok": True, "marcadas": len(lidas)})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+def _wa_numero_e2(numero):
+    """Normaliza número para o formato da Evolution (55 + dígitos)."""
+    dig = _so_digitos(numero)
+    if dig and not dig.startswith("55"):
+        dig = "55" + dig
+    return dig
+
+
+def _strip_data_uri(b64):
+    """Remove prefixo 'data:...;base64,' se presente, retornando só o base64."""
+    b64 = (b64 or "").strip()
+    if b64.startswith("data:") and "," in b64:
+        return b64.split(",", 1)[1]
+    return b64
+
+
+@app.route("/api/whatsapp/enviar-audio", methods=["POST"])
+def api_wa_enviar_audio():
+    """Envia áudio de voz (PTT). Body: {numero, audio (base64)}."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    dados  = request.get_json(silent=True) or {}
+    numero = (dados.get("numero") or "").strip()
+    audio  = _strip_data_uri(dados.get("audio"))
+    if not (base and instance and api_key):
+        return jsonify({"ok": False, "erro": "Não configurado."}), 400
+    if not numero or not audio:
+        return jsonify({"ok": False, "erro": "Número e áudio obrigatórios."}), 400
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    payload = {"number": _wa_numero_e2(numero), "audio": audio, "delay": 800}
+    try:
+        r = req.post(f"{base}/message/sendWhatsAppAudio/{instance}",
+                     headers=headers, json=payload, timeout=90)
+        if not r.ok:
+            return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {r.text[:200]}"}), 400
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/whatsapp/enviar-midia", methods=["POST"])
+def api_wa_enviar_midia():
+    """Envia imagem/vídeo/documento. Body: {numero, media (base64), mediatype, filename, caption, mimetype}."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    dados     = request.get_json(silent=True) or {}
+    numero    = (dados.get("numero") or "").strip()
+    media     = _strip_data_uri(dados.get("media"))
+    mediatype = (dados.get("mediatype") or "image").strip()  # image | video | document
+    filename  = (dados.get("filename") or "").strip()
+    caption   = (dados.get("caption") or "").strip()
+    mimetype  = (dados.get("mimetype") or "").strip()
+    if not (base and instance and api_key):
+        return jsonify({"ok": False, "erro": "Não configurado."}), 400
+    if not numero or not media:
+        return jsonify({"ok": False, "erro": "Número e mídia obrigatórios."}), 400
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    payload = {"number": _wa_numero_e2(numero), "mediatype": mediatype, "media": media}
+    if mimetype: payload["mimetype"] = mimetype
+    if caption:  payload["caption"]  = caption
+    if filename: payload["fileName"] = filename
+    try:
+        r = req.post(f"{base}/message/sendMedia/{instance}",
+                     headers=headers, json=payload, timeout=120)
+        if not r.ok:
+            return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {r.text[:200]}"}), 400
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/whatsapp/apagar-msg", methods=["POST"])
+def api_wa_apagar_msg():
+    """Apaga mensagem para todos. Body: {key:{id, remoteJid, fromMe, participant?}}."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    dados = request.get_json(silent=True) or {}
+    key   = dados.get("key") or {}
+    if not (base and instance and api_key):
+        return jsonify({"ok": False, "erro": "Não configurado."}), 400
+    if not (key.get("id") and key.get("remoteJid")):
+        return jsonify({"ok": False, "erro": "key inválida."}), 400
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    corpo = {
+        "id":        key["id"],
+        "remoteJid": key["remoteJid"],
+        "fromMe":    bool(key.get("fromMe", True)),
+    }
+    if key.get("participant"):
+        corpo["participant"] = key["participant"]
+    try:
+        r = req.delete(f"{base}/chat/deleteMessageForEveryone/{instance}",
+                       headers=headers, json=corpo, timeout=20)
+        if not r.ok:
+            return jsonify({"ok": False, "erro": f"HTTP {r.status_code}: {r.text[:200]}"}), 400
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
 
 
 # ── Enriquecimento Gemini — pipeline completo ─────────────────────────────────

@@ -88,7 +88,39 @@
     </div>
   </div>
 
+  <!-- Nichos com landing page dedicada -->
+  <div class="card" id="card-nichos">
+    <h3 class="chart-titulo">🎨 Nichos com landing page dedicada (<span id="nichos-total">—</span>)</h3>
+    <p style="color:var(--muted);font-size:.8rem;margin:-4px 0 14px">
+      A landing é detectada automaticamente pela categoria da empresa. Fora dessa lista, cai no layout genérico.
+    </p>
+    <div id="nichos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px"></div>
+  </div>
+
 </div>
+
+<script>
+(function(){
+  fetch('/api/nichos').then(function(r){return r.json();}).then(function(lista){
+    var grid=document.getElementById('nichos-grid');
+    var reais=lista.filter(function(n){return !n.fallback;});
+    document.getElementById('nichos-total').textContent=reais.length;
+    lista.forEach(function(n){
+      var el=document.createElement('div');
+      el.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;'+
+        'border:1px solid var(--border,rgba(255,255,255,.1));background:'+
+        (n.fallback?'transparent':'rgba(99,102,241,.06)')+(n.fallback?';opacity:.65':'');
+      el.innerHTML='<span style="font-size:1.3rem">'+n.emoji+'</span>'+
+        '<div style="min-width:0"><div style="font-weight:600;font-size:.85rem;white-space:nowrap;'+
+        'overflow:hidden;text-overflow:ellipsis">'+n.rotulo+'</div>'+
+        '<div style="font-size:.7rem;color:var(--muted)">'+n.archetype+'</div></div>';
+      grid.appendChild(el);
+    });
+  }).catch(function(){
+    document.getElementById('card-nichos').style.display='none';
+  });
+})();
+</script>
 {% endblock %}
 
 {% block scripts %}<script src="/dashboard.js"></script>{% endblock %}

@@ -404,6 +404,8 @@ function voltarLista() {
 
 async function abrirConversa(c) {
   _chatAtual = c;
+  cancelarReply();
+  c.nao_lidas = 0;  // zera badge local ao abrir
   renderConversas(_conversas.filter(x =>
     !document.getElementById("chat-busca").value.trim() ||
     JSON.stringify(x).toLowerCase().includes(document.getElementById("chat-busca").value.toLowerCase())
@@ -434,6 +436,7 @@ async function abrirConversa(c) {
     }
     cont.innerHTML = renderMensagens(d.mensagens);
     cont.scrollTop = cont.scrollHeight;   // começa no fim; rola pra cima = histórico
+    _marcarLida(d.mensagens);             // marca as recebidas como lidas
   } catch (e) {
     cont.innerHTML = '<p class="vazio" style="margin:auto">Erro ao carregar mensagens.</p>';
   }
@@ -459,12 +462,24 @@ function renderMensagens(msgs) {
     const mesmaDe = ultimaDeMim === m.de_mim;
     ultimaDeMim = m.de_mim;
 
+    const temKey    = m.key && m.key.id && !m.apagada;
+    const podeApagar = m.de_mim && temKey;
+    const acoes = temKey ? `
+        <div class="wa-msg-acoes">
+          <button title="Reagir" onclick="abrirReacoes(${idx}, this)">😀</button>
+          <button title="Responder" onclick="responderCitando(${idx})">↩</button>
+          <button title="Encaminhar" onclick="encaminharMsg(${idx})">➡</button>
+          ${podeApagar ? `<button title="Apagar para todos" onclick="apagarMsg(${idx})">🗑</button>` : ""}
+        </div>` : "";
+    const reacao = m.reacao ? `<span class="wa-msg-reacao">${esc(m.reacao)}</span>` : "";
     html += `
       <div class="wa-msg ${m.de_mim ? "wa-msg-eu" : "wa-msg-outro"}${mesmaDe ? " wa-msg-seq" : ""}">
-        <div class="wa-msg-bolha${m.tipo !== "texto" ? " wa-msg-bolha-midia" : ""}">
+        <div class="wa-msg-bolha${m.tipo !== "texto" ? " wa-msg-bolha-midia" : ""}${m.apagada ? " wa-msg-apagada" : ""}">
           ${renderConteudoMsg(m, idx)}
           <span class="wa-msg-hora">${fmtHora(m.timestamp)}${m.de_mim ? " ✓✓" : ""}</span>
+          ${reacao}
         </div>
+        ${acoes}
       </div>`;
   });
   return html;
@@ -621,11 +636,20 @@ async function responderConversa() {
   if (!texto) return;
   input.value = "";
 
+  // Se estiver respondendo/citando uma mensagem, monta o quoted
+  let quoted = null;
+  if (_respondendo != null) {
+    const m = _msgAtual[_respondendo];
+    if (m && m.key && m.key.id) quoted = { key: m.key, message: m.raw_msg || undefined };
+  }
+  const citando = _respondendo != null;
+  cancelarReply();
+
   const cont = document.getElementById("chat-mensagens");
   const agora = Math.floor(Date.now() / 1000);
   cont.insertAdjacentHTML("beforeend", `
     <div class="wa-msg wa-msg-eu">
-      <div class="wa-msg-bolha">${esc(texto)}<span class="wa-msg-hora">${fmtHora(agora)} 🕓</span></div>
+      <div class="wa-msg-bolha">${citando ? '<span class="wa-msg-citada">↩ resposta</span>' : ""}${esc(texto)}<span class="wa-msg-hora">${fmtHora(agora)} 🕓</span></div>
     </div>`);
   cont.scrollTop = cont.scrollHeight;
 
@@ -633,13 +657,264 @@ async function responderConversa() {
     const r = await fetch("/api/whatsapp/responder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numero: _chatAtual.numero, texto }),
+      body: JSON.stringify({ numero: _chatAtual.numero, texto, quoted }),
     });
     const d = await r.json();
     if (!d.ok) mostrarToast("Erro: " + (d.erro || "falha no envio"), "error");
   } catch (e) {
     mostrarToast("Erro de rede.", "error");
   }
+}
+
+// ── Responder citando / Encaminhar / Reagir ───────────────────────────────────
+let _respondendo = null;
+
+function responderCitando(idx) {
+  const m = _msgAtual[idx];
+  if (!m) return;
+  _respondendo = idx;
+  const prev = (m.texto || { imagem: "🖼️ Foto", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", figurinha: "🌟 Figurinha" }[m.tipo] || "Mídia").slice(0, 90);
+  document.getElementById("reply-titulo").textContent = m.de_mim ? "Você" : (_chatAtual?.nome || "Contato");
+  document.getElementById("reply-texto").textContent = prev;
+  document.getElementById("reply-bar").classList.remove("hidden");
+  document.getElementById("chat-resposta").focus();
+}
+
+function cancelarReply() {
+  _respondendo = null;
+  document.getElementById("reply-bar")?.classList.add("hidden");
+}
+
+async function encaminharMsg(idx) {
+  const m = _msgAtual[idx];
+  if (!m) return;
+  const texto = (m.texto || "").trim();
+  if (!texto) { mostrarToast("Só é possível encaminhar texto por aqui.", "warning"); return; }
+  const destino = prompt("Encaminhar para qual número? (com DDD, ex: 62999998888)");
+  if (!destino) return;
+  try {
+    const r = await fetch("/api/whatsapp/encaminhar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numero: destino.trim(), texto }),
+    });
+    const d = await r.json();
+    if (!d.ok) mostrarToast("Erro: " + (d.erro || "falha"), "error");
+    else mostrarToast("Encaminhado!", "success");
+  } catch (e) { mostrarToast("Erro de rede.", "error"); }
+}
+
+const REACOES = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+function abrirReacoes(idx, btn) {
+  // remove picker anterior
+  document.querySelectorAll(".wa-reacao-picker").forEach(p => p.remove());
+  const pick = document.createElement("div");
+  pick.className = "wa-reacao-picker";
+  pick.innerHTML = REACOES.map(e => `<span onclick="reagirMsg(${idx}, '${e}')">${e}</span>`).join("") +
+    `<span class="wa-reacao-x" onclick="reagirMsg(${idx}, '')" title="Remover">🚫</span>`;
+  btn.parentNode.appendChild(pick);
+  setTimeout(() => {
+    document.addEventListener("click", function fecha(ev) {
+      if (!pick.contains(ev.target) && ev.target !== btn) { pick.remove(); document.removeEventListener("click", fecha); }
+    });
+  }, 0);
+}
+
+async function reagirMsg(idx, emoji) {
+  document.querySelectorAll(".wa-reacao-picker").forEach(p => p.remove());
+  const m = _msgAtual[idx];
+  if (!m || !m.key || !m.key.id) { mostrarToast("Não é possível reagir a esta mensagem.", "warning"); return; }
+  try {
+    const r = await fetch("/api/whatsapp/reagir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: m.key, emoji }),
+    });
+    const d = await r.json();
+    if (!d.ok) { mostrarToast("Erro: " + (d.erro || "falha"), "error"); return; }
+    m.reacao = emoji;
+    const cont = document.getElementById("chat-mensagens");
+    const scroll = cont.scrollTop;
+    cont.innerHTML = renderMensagens(_msgAtual);
+    cont.scrollTop = scroll;
+  } catch (e) { mostrarToast("Erro de rede.", "error"); }
+}
+
+async function _marcarLida(msgs) {
+  const keys = msgs.filter(m => !m.de_mim && m.key && m.key.id)
+                   .slice(-30)
+                   .map(m => ({ id: m.key.id, remoteJid: m.key.remoteJid, fromMe: false }));
+  if (!keys.length) return;
+  try {
+    await fetch("/api/whatsapp/marcar-lida", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys }),
+    });
+  } catch (_) {}
+}
+
+// ── Apagar mensagem ───────────────────────────────────────────────────────────
+async function apagarMsg(idx) {
+  const m = _msgAtual[idx];
+  if (!m || !m.key || !m.key.id) { mostrarToast("Não é possível apagar esta mensagem.", "warning"); return; }
+  if (!confirm("Apagar esta mensagem para todos?")) return;
+  try {
+    const r = await fetch("/api/whatsapp/apagar-msg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: m.key }),
+    });
+    const d = await r.json();
+    if (!d.ok) { mostrarToast("Erro: " + (d.erro || "falha"), "error"); return; }
+    m.apagada = true; m.tipo = "texto"; m.texto = "🚫 Você apagou esta mensagem";
+    const cont = document.getElementById("chat-mensagens");
+    cont.innerHTML = renderMensagens(_msgAtual);
+    cont.scrollTop = cont.scrollHeight;
+    mostrarToast("Mensagem apagada.", "info");
+  } catch (e) { mostrarToast("Erro de rede.", "error"); }
+}
+
+// ── Anexos (imagem / vídeo / documento) ───────────────────────────────────────
+function abrirAnexo() {
+  if (!_chatAtual) { mostrarToast("Abra uma conversa primeiro.", "warning"); return; }
+  document.getElementById("anexo-input").click();
+}
+
+function _fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+}
+
+async function enviarAnexo(input) {
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file || !_chatAtual) return;
+  if (file.size > 16 * 1024 * 1024) { mostrarToast("Arquivo muito grande (máx 16MB).", "warning"); return; }
+
+  let mediatype = "document";
+  if (file.type.startsWith("image/")) mediatype = "image";
+  else if (file.type.startsWith("video/")) mediatype = "video";
+
+  const b64 = await _fileToBase64(file);
+  const cont = document.getElementById("chat-mensagens");
+  const agora = Math.floor(Date.now() / 1000);
+  const icone = mediatype === "image" ? "🖼️" : mediatype === "video" ? "🎥" : "📄";
+  cont.insertAdjacentHTML("beforeend", `
+    <div class="wa-msg wa-msg-eu">
+      <div class="wa-msg-bolha wa-msg-bolha-midia">${icone} ${esc(file.name)}<span class="wa-msg-hora">${fmtHora(agora)} 🕓</span></div>
+    </div>`);
+  cont.scrollTop = cont.scrollHeight;
+
+  try {
+    const r = await fetch("/api/whatsapp/enviar-midia", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numero: _chatAtual.numero, media: b64, mediatype, filename: file.name, mimetype: file.type }),
+    });
+    const d = await r.json();
+    if (!d.ok) mostrarToast("Erro: " + (d.erro || "falha no envio"), "error");
+    else mostrarToast("Enviado!", "success");
+  } catch (e) { mostrarToast("Erro de rede.", "error"); }
+}
+
+// ── Áudio de voz (gravação) ───────────────────────────────────────────────────
+let _mediaRecorder = null, _audioChunks = [], _gravTimer = null, _gravSeg = 0, _enviarAudio = false;
+
+function _blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+}
+
+function _barraGrav(on) {
+  document.getElementById("chat-input-normal").classList.toggle("hidden", on);
+  document.getElementById("chat-input-gravando").classList.toggle("hidden", !on);
+}
+
+function _tickTimer() {
+  const mm = Math.floor(_gravSeg / 60), ss = String(_gravSeg % 60).padStart(2, "0");
+  const el = document.getElementById("grav-timer");
+  if (el) el.textContent = `${mm}:${ss}`;
+  if (_gravSeg >= 300) { pararEnviarGravacao(); return; }  // limite 5 min
+  _gravSeg++;
+}
+
+function _pararGravUI() { clearInterval(_gravTimer); _gravTimer = null; _barraGrav(false); }
+
+async function toggleGravacao() {
+  if (_mediaRecorder && _mediaRecorder.state === "recording") { pararEnviarGravacao(); return; }
+  if (!_chatAtual) { mostrarToast("Abra uma conversa primeiro.", "warning"); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    mostrarToast("Gravação de áudio não suportada neste navegador.", "error"); return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let mime = "audio/ogg;codecs=opus";
+    if (!MediaRecorder.isTypeSupported(mime)) mime = "audio/webm;codecs=opus";
+    if (!MediaRecorder.isTypeSupported(mime)) mime = "";
+    _mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    _audioChunks = []; _enviarAudio = false;
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+    _mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const enviar = _enviarAudio;
+      _mediaRecorder = null;
+      if (enviar) _finalizarEnvioAudio();
+    };
+    _mediaRecorder.start();
+    _barraGrav(true); _gravSeg = 0; _tickTimer();
+    _gravTimer = setInterval(_tickTimer, 1000);
+  } catch (e) {
+    mostrarToast("Permita o acesso ao microfone para gravar.", "error");
+  }
+}
+
+function pararEnviarGravacao() {
+  if (!_mediaRecorder) { _barraGrav(false); return; }
+  _enviarAudio = true; _pararGravUI();
+  if (_mediaRecorder.state !== "inactive") _mediaRecorder.stop();
+}
+
+function cancelarGravacao() {
+  if (!_mediaRecorder) { _barraGrav(false); return; }
+  _enviarAudio = false; _pararGravUI();
+  if (_mediaRecorder.state !== "inactive") _mediaRecorder.stop();
+}
+
+async function _finalizarEnvioAudio() {
+  const tipo = (_audioChunks[0] && _audioChunks[0].type) || "audio/ogg";
+  const blob = new Blob(_audioChunks, { type: tipo });
+  _audioChunks = [];
+  if (!blob.size || !_chatAtual) return;
+
+  const b64 = await _blobToBase64(blob);
+  const cont = document.getElementById("chat-mensagens");
+  const agora = Math.floor(Date.now() / 1000);
+  cont.insertAdjacentHTML("beforeend", `
+    <div class="wa-msg wa-msg-eu">
+      <div class="wa-msg-bolha wa-msg-bolha-midia">🎤 Áudio enviado<span class="wa-msg-hora">${fmtHora(agora)} 🕓</span></div>
+    </div>`);
+  cont.scrollTop = cont.scrollHeight;
+
+  try {
+    const r = await fetch("/api/whatsapp/enviar-audio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numero: _chatAtual.numero, audio: b64 }),
+    });
+    const d = await r.json();
+    if (!d.ok) mostrarToast("Erro no áudio: " + (d.erro || "falha"), "error");
+    else mostrarToast("Áudio enviado!", "success");
+  } catch (e) { mostrarToast("Erro de rede.", "error"); }
 }
 
 function iniciais(nome) {

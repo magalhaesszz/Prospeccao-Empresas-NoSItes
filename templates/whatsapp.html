@@ -150,12 +150,31 @@
           <div class="wa-chat-cabecalho" id="chat-cabecalho"></div>
           <div class="wa-chat-mensagens" id="chat-mensagens"></div>
           <div class="wa-emoji-picker hidden" id="emoji-picker"></div>
-          <div class="wa-chat-input">
+          <div class="wa-reply-bar hidden" id="reply-bar">
+            <div class="wa-reply-info">
+              <span class="wa-reply-titulo" id="reply-titulo"></span>
+              <span class="wa-reply-texto" id="reply-texto"></span>
+            </div>
+            <button class="wa-reply-x" onclick="cancelarReply()" title="Cancelar">&times;</button>
+          </div>
+          <div class="wa-chat-input" id="chat-input-normal">
             <button class="wa-emoji-btn" onclick="toggleEmoji()" title="Emoji">&#128512;</button>
+            <button class="wa-emoji-btn" onclick="abrirAnexo()" title="Anexar imagem/arquivo">&#128206;</button>
+            <input type="file" id="anexo-input" style="display:none"
+              accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+              onchange="enviarAnexo(this)"/>
             <button onclick="iaResponderConversa()" id="btn-ia-chat" title="Gerar resposta com IA"
               style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;cursor:pointer;white-space:nowrap;font-weight:600;flex-shrink:0">⚡ IA</button>
             <input type="text" id="chat-resposta" placeholder="Digite ou use ⚡ IA para gerar resposta..." onkeydown="if(event.key==='Enter')responderConversa()"/>
+            <button class="wa-emoji-btn" id="btn-gravar" onclick="toggleGravacao()" title="Gravar áudio de voz">&#127908;</button>
             <button class="wa-chat-enviar" onclick="responderConversa()" title="Enviar">&#10148;</button>
+          </div>
+          <div class="wa-chat-input wa-gravando hidden" id="chat-input-gravando">
+            <button class="wa-emoji-btn wa-grav-cancel" onclick="cancelarGravacao()" title="Cancelar">&#128465;</button>
+            <span class="wa-grav-dot"></span>
+            <span class="wa-grav-timer" id="grav-timer">0:00</span>
+            <span style="flex:1;color:var(--muted);font-size:.85rem">Gravando áudio...</span>
+            <button class="wa-chat-enviar" onclick="pararEnviarGravacao()" title="Enviar áudio">&#10148;</button>
           </div>
         </div>
       </div>
