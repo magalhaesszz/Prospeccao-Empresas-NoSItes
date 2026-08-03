@@ -196,7 +196,7 @@ REGRAS OBRIGATÓRIAS:
 - Use os dados reais (nota, avaliações, segmento, cidade) de forma natural e específica
 - A empresa não tem site — mencione isso como oportunidade, não como crítica
 - Proposta de valor: site profissional + automação de processos → cobra APENAS após entrega
-{"- Mencione naturalmente que você JÁ criou uma prévia do site para eles e compartilhe o link" if tem_link else ""}
+{"- Mencione naturalmente que você JÁ criou uma prévia do site para eles e compartilhe o link" if tem_link else "- Ao final, pergunte de forma natural e curiosa se a empresa gostaria de ver um site demonstrativo criado especialmente para eles, sem compromisso"}
 - Formatação WhatsApp: *negrito* para 1-2 pontos chave apenas
 - Máximo 2 emojis, estratégicos e relevantes ao segmento
 - Termine com UMA pergunta simples que incentiva resposta
@@ -320,9 +320,26 @@ Foto 6: {foto_6 or "indisponível"}
 === REGRAS DE CÓDIGO E DESIGN (OBRIGATÓRIO) ===
 1. ARQUITETURA AUTOCONTIDA: Código 100% em único arquivo. CSS dentro de <style> no <head>. JavaScript mínimo (menu mobile + smooth scroll) antes do </body>.
 2. ZERO DEPENDÊNCIAS: Proibido Bootstrap, Tailwind, jQuery, Google Fonts, CDNs. Use font-family: system-ui, -apple-system, sans-serif e ícones SVG inline.
-3. CSS VARIABLES: Use :root com --cor-primaria: {cor_primaria}; --cor-acento: {cor_acento}; aplique via var(). Mobile-first com @media (min-width: 768px) para desktop. Flexbox/Grid moderno.
-4. IMAGENS: Use APENAS as URLs fornecidas acima. Fotos marcadas como "indisponível" NÃO devem aparecer no HTML. object-fit: cover em todas as imagens. Alt text descritivo focado em {categoria}.
-5. COPYWRITING: Proibido Lorem Ipsum. Textos persuasivos, criativos e específicos para {categoria} em {cidade}.
+3. CSS VARIABLES: :root deve conter:
+   --cor-primaria: {cor_primaria};
+   --cor-acento: {cor_acento};
+   --cor-primaria-escura: [versão 20% mais escura de {cor_primaria}];
+   --sombra-card: 0 4px 24px rgba(0,0,0,0.10);
+   --radius: 14px;
+   --radius-btn: 50px;
+   --transicao: 0.25s ease;
+   Mobile-first com @media (min-width: 768px) para desktop. Flexbox/Grid moderno.
+4. DESIGN VISUAL DE ALTA QUALIDADE (obrigatório):
+   - Todos os cards: background:#fff; border-radius:var(--radius); box-shadow:var(--sombra-card); padding:28px 24px; border-top:4px solid var(--cor-acento).
+   - Hover nos cards: transform:translateY(-5px); box-shadow:0 12px 36px rgba(0,0,0,0.18); transition:var(--transicao).
+   - Botões CTA: border-radius:var(--radius-btn); padding:14px 32px; font-weight:700; letter-spacing:0.3px; transition:var(--transicao); sem borda quadrada jamais.
+   - Hover nos botões: filter:brightness(1.1); transform:translateY(-2px).
+   - Seções alternadas: fundo branco (#fff) e fundo claro (f8f9fa ou var(--cor-primaria) em 6% opacidade).
+   - Títulos de seção: font-size:clamp(1.7rem,4vw,2.5rem); font-weight:800; posição central; linha decorativa embaixo (width:60px; height:4px; background:var(--cor-acento); border-radius:2px; margin:12px auto 0).
+   - Ícones SVG: 48px, cor var(--cor-acento), círculo de fundo com var(--cor-acento) em 12% opacidade, border-radius:50%, padding:14px.
+   - Inputs do formulário: border:2px solid #e0e0e0; border-radius:10px; padding:12px 16px; focus:border-color:var(--cor-acento); outline:none; width:100%.
+5. IMAGENS: Use APENAS as URLs fornecidas acima. Fotos marcadas como "indisponível" NÃO devem aparecer no HTML. object-fit: cover em todas as imagens. Alt text descritivo focado em {categoria}.
+6. COPYWRITING: Proibido Lorem Ipsum. Textos persuasivos, criativos e específicos para {categoria} em {cidade}.
 
 === ESTRUTURA OBRIGATÓRIA (9 seções, nesta ordem exata) ===
 
@@ -407,7 +424,7 @@ Inicie com <!DOCTYPE html> e termine com </html>. Nada mais."""
         prompt, api_key,
         max_tokens=8192,
         timeout=120.0,
-        temperature=0.4,
+        temperature=0.6,
         system=system_msg,
     ))
 
