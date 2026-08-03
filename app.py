@@ -695,56 +695,89 @@ def api_wa_qrcode():
             b64 = "data:image/png;base64," + b64
         return b64
 
-    # 1. Cria a instância (idempotente — 409 = já existe). Já pode devolver o QR.
-    try:
-        cr = req.post(
-            f"{base_url}/instance/create",
-            headers=headers,
-            json={"instanceName": instance, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
-            timeout=15,
-        )
+    def _criar_e_pegar_qr():
+        """Cria instância nova com qrcode=True. O QR fresco vem no corpo da criação."""
         try:
-            cr_data = cr.json()
-        except Exception:
-            cr_data = {}
-        if not cr.ok and cr.status_code not in (409, 403):
-            return jsonify({"erro": f"Erro ao criar instância: {str(cr_data)[:300]}"})
+            cr = req.post(
+                f"{base_url}/instance/create",
+                headers=headers,
+                json={"instanceName": instance, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
+                timeout=20,
+            )
+            try:
+                cr_data = cr.json()
+            except Exception:
+                cr_data = {}
+        except Exception as e:
+            return None, {"erro": str(e)}, None
         qr = _extrai_qr(cr_data) or _extrai_qr(cr_data.get("qrcode"))
-        if qr:
-            return jsonify({"base64": qr})
-    except Exception as e:
-        return jsonify({"erro": f"Não conseguiu conectar na Evolution API: {str(e)}"})
+        return qr, cr_data, cr
 
-    # 2. Conecta e busca o QR com retries (o QR pode não estar pronto no 1º hit).
-    ultima = None
-    for tentativa in range(4):
+    def _apagar_instancia():
+        """Logout + delete para zerar sessão travada e permitir QR novo."""
+        for ep in (f"{base_url}/instance/logout/{instance}",
+                   f"{base_url}/instance/delete/{instance}"):
+            try:
+                req.delete(ep, headers={"apikey": api_key}, timeout=10)
+            except Exception:
+                pass
+
+    def _connect_qr():
+        """Chama connect e tenta extrair QR. Retorna (qr, conectado, data)."""
         try:
-            r = req.get(
+            data = req.get(
                 f"{base_url}/instance/connect/{instance}",
                 headers={"apikey": api_key},
                 timeout=15,
-            )
-            data = r.json()
+            ).json()
         except Exception as e:
-            ultima = str(e)
-            time.sleep(1.2)
-            continue
-
-        ultima = data
+            return None, False, {"erro": str(e)}
         state = (data.get("instance", {}).get("state") or data.get("state") or "").lower()
         if state in ("open", "connected"):
-            return jsonify({"conectado": True})
+            return None, True, data
+        return _extrai_qr(data), False, data
 
-        qr = _extrai_qr(data)
+    # 0. Se já está conectado, NÃO recria (evita derrubar sessão viva).
+    try:
+        st = req.get(
+            f"{base_url}/instance/connectionState/{instance}",
+            headers={"apikey": api_key},
+            timeout=10,
+        ).json()
+        estado = (st.get("instance", {}).get("state") or st.get("state") or "").lower()
+        if estado in ("open", "connected"):
+            return jsonify({"conectado": True})
+    except Exception:
+        pass
+
+    # 1. Tenta criar do zero — instância nova devolve o QR na hora.
+    qr, cr_data, cr = _criar_e_pegar_qr()
+    if qr:
+        return jsonify({"base64": qr})
+
+    # 2. Instância já existe (409/403) ou create não trouxe QR. Tenta connect uma vez.
+    qr, conectado, _ = _connect_qr()
+    if conectado:
+        return jsonify({"conectado": True})
+    if qr:
+        return jsonify({"base64": qr})
+
+    # 3. Instância presa (ex.: connect devolve só {"count":0}). Apaga e recria do zero.
+    _apagar_instancia()
+    time.sleep(1.5)
+    qr, cr_data, cr = _criar_e_pegar_qr()
+    if qr:
+        return jsonify({"base64": qr})
+
+    # 4. Recriou mas QR ainda não pronto — dá alguns hits no connect.
+    ultima = cr_data
+    for _ in range(4):
+        qr, conectado, data = _connect_qr()
+        ultima = data
+        if conectado:
+            return jsonify({"conectado": True})
         if qr:
             return jsonify({"base64": qr})
-
-        # Ainda sem QR: na 2ª volta força um restart da instância (estado travado).
-        if tentativa == 1:
-            try:
-                req.post(f"{base_url}/instance/restart/{instance}", headers=headers, timeout=15)
-            except Exception:
-                pass
         time.sleep(1.4)
 
     return jsonify({"erro": f"QR ainda não disponível — clique em Novo QR Code. (resposta: {str(ultima)[:200]})"})
