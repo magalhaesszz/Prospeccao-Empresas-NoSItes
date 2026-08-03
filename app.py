@@ -682,18 +682,36 @@ def api_wa_qrcode():
     headers = {"apikey": api_key, "Content-Type": "application/json"}
     base_url = webhook.rstrip("/")
 
+    def _gera_qr_de_code(code):
+        """Gera PNG base64 a partir da string crua do QR (quando a API só devolve 'code')."""
+        try:
+            import io, base64 as b64lib, qrcode
+            img = qrcode.make(code)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return "data:image/png;base64," + b64lib.b64encode(buf.getvalue()).decode()
+        except Exception as e:
+            logger.warning("Falha ao gerar QR de code: %s", e)
+            return None
+
     def _extrai_qr(data):
-        """Extrai o base64 do QR de qualquer formato (v1 aninhado ou v2 flat)."""
+        """Extrai o QR como data-URL de qualquer formato (v1 aninhado, v2 flat, ou só 'code')."""
         if not isinstance(data, dict):
             return None
+        # 1. base64 pronto (achatado ou aninhado)
         b64 = (data.get("base64")
                or (data.get("qrcode") or {}).get("base64")
                or (data.get("instance") or {}).get("base64"))
-        if not b64:
-            return None
-        if not b64.startswith("data:"):
-            b64 = "data:image/png;base64," + b64
-        return b64
+        if b64:
+            return b64 if b64.startswith("data:") else "data:image/png;base64," + b64
+        # 2. só a string crua 'code' — gera o PNG localmente
+        code = (data.get("code")
+                or (data.get("qrcode") or {}).get("code")
+                or (data.get("instance") or {}).get("code")
+                or data.get("pairingCode"))
+        if code and isinstance(code, str) and len(code) > 8:
+            return _gera_qr_de_code(code)
+        return None
 
     def _criar_e_pegar_qr():
         """Cria instância nova com qrcode=True. O QR fresco vem no corpo da criação."""
@@ -714,13 +732,26 @@ def api_wa_qrcode():
         return qr, cr_data, cr
 
     def _apagar_instancia():
-        """Logout + delete para zerar sessão travada e permitir QR novo."""
+        """Logout + delete e ESPERA a instância sumir (delete é assíncrono na Evolution)."""
         for ep in (f"{base_url}/instance/logout/{instance}",
                    f"{base_url}/instance/delete/{instance}"):
             try:
                 req.delete(ep, headers={"apikey": api_key}, timeout=10)
             except Exception:
                 pass
+        # Poll até connectionState devolver 404 (sumiu) — senão o create seguinte dá 403.
+        for _ in range(8):
+            try:
+                rs = req.get(
+                    f"{base_url}/instance/connectionState/{instance}",
+                    headers={"apikey": api_key},
+                    timeout=8,
+                )
+                if rs.status_code == 404:
+                    return
+            except Exception:
+                return
+            time.sleep(1.0)
 
     def _connect_qr():
         """Chama connect e tenta extrair QR. Retorna (qr, conectado, data)."""
@@ -770,8 +801,8 @@ def api_wa_qrcode():
         return jsonify({"base64": qr})
 
     # 4. Recriou mas QR ainda não pronto — dá alguns hits no connect.
-    ultima = cr_data
-    for _ in range(4):
+    ultima = None
+    for _ in range(5):
         qr, conectado, data = _connect_qr()
         ultima = data
         if conectado:
@@ -780,7 +811,10 @@ def api_wa_qrcode():
             return jsonify({"base64": qr})
         time.sleep(1.4)
 
-    return jsonify({"erro": f"QR ainda não disponível — clique em Novo QR Code. (resposta: {str(ultima)[:200]})"})
+    return jsonify({"erro": (
+        "QR ainda não disponível — clique em Novo QR Code. "
+        f"(create: {str(cr_data)[:220]} | connect: {str(ultima)[:180]})"
+    )})
 
 
 @app.route("/api/whatsapp/desconectar", methods=["POST"])

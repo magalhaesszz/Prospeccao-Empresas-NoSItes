@@ -6,6 +6,7 @@ requests
 beautifulsoup4
 openpyxl
 phonenumbers
+qrcode[pil]
 psycopg2-binary
 anthropic
 groq
