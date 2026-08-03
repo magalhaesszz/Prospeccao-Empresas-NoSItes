@@ -1586,11 +1586,12 @@ def api_gemini_pagina_status(job_id):
         if job["status"] == "ok":
             _jobs_pagina[job_id] = job  # restaura em memória
 
-    # Watchdog: job preso em "gerando" por mais de 180s → marca como erro
+    # Watchdog: job preso em "gerando" por mais de 210s → marca como erro
+    # (acima do timeout de 180s do modelo, para não matar geração que está quase pronta)
     if job.get("status") == "gerando":
         ts = job.get("_ts")
-        if ts and (_time.time() - ts) > 180:
-            msg = "Tempo limite de geração excedido (3 min). Tente novamente."
+        if ts and (_time.time() - ts) > 210:
+            msg = "Tempo limite de geração excedido. Tente novamente."
             _jobs_pagina[job_id] = {"status": "erro", "erro": msg}
             try:
                 atualizar_job_erro(job_id, msg)

@@ -208,6 +208,19 @@ Retorne APENAS a mensagem. Zero prefácio ou explicação."""
 
 # ── Gerador de landing page ───────────────────────────────────────────────────
 
+def _escurecer(hex_cor, fator=0.78):
+    """Retorna versão mais escura de uma cor hex (#rrggbb). fator<1 = mais escuro."""
+    h = (hex_cor or "").lstrip("#")
+    if len(h) != 6:
+        return hex_cor
+    try:
+        r, g, b = (int(h[i:i+2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return hex_cor
+    r, g, b = (max(0, int(c * fator)) for c in (r, g, b))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def _paleta_segmento(categoria):
     """Retorna (cor_primaria, cor_acento) baseado no segmento da empresa."""
     cat = (categoria or "").lower()
@@ -220,7 +233,7 @@ def _paleta_segmento(categoria):
     if any(x in cat for x in ["academia", "fitness", "musculação", "musculacao", "crossfit", "pilates", "yoga"]):
         return "#0a0a0a", "#00d4aa"
     if any(x in cat for x in ["clínica", "clinica", "médico", "medico", "dentista", "odonto", "saúde", "saude", "farmácia", "farmacia", "hospital", "veterinár", "veterinar"]):
-        return "#f0f8ff", "#0066cc"
+        return "#0a3d62", "#3498db"
     if any(x in cat for x in ["auto", "mecânic", "mecanica", "oficina", "car wash", "borracharia"]):
         return "#1c1c1c", "#e63946"
     if any(x in cat for x in ["hotel", "pousada", "hostel", "turismo"]):
@@ -253,6 +266,7 @@ def gerar_pagina(empresa, api_key):
     tel_link   = f"tel:+{wa_number}" if wa_number else "#"
 
     cor_primaria, cor_acento = _paleta_segmento(categoria)
+    cor_primaria_escura = _escurecer(cor_primaria)
 
     # Monta lista de fotos reais (até 6)
     fotos_raw = empresa.get("fotos_urls") or "[]"
@@ -317,13 +331,22 @@ Foto 5: {foto_5 or "indisponível"}
 Foto 6: {foto_6 or "indisponível"}
 {aviso_fotos}
 
+=== FUNDAÇÃO TÉCNICA DO <head> (OBRIGATÓRIO) ===
+- Estrutura: <!DOCTYPE html>, <html lang="pt-BR">, <meta charset="UTF-8">, <meta name="viewport" content="width=device-width, initial-scale=1.0">.
+- <title>: "{nome} — {categoria} em {cidade}".
+- <meta name="description">: frase persuasiva de até 155 caracteres sobre {nome}, incluindo {categoria} e {cidade}.
+- RESET GLOBAL no CSS: seletor asterisco com margin:0; padding:0; box-sizing:border-box. Tag html com scroll-behavior:smooth. Tag img com display:block; max-width:100%.
+- FONTE PREMIUM (somente fontes de sistema): font-family "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif. Texto base: cor #1f2933, line-height:1.65, font-size:16px (17px em @media min-width:768px). Títulos com line-height:1.15 e letter-spacing:-0.02em.
+- CONTAINER: classe .container com max-width:1160px; margin:0 auto; padding:0 24px. TODO conteúdo de seção deve ficar dentro de um .container — nunca encostado na borda da tela.
+- RITMO VERTICAL: cada <section> com padding vertical clamp(56px, 8vw, 96px). Espaçamento generoso e consistente; jamais elementos colados.
+
 === REGRAS DE CÓDIGO E DESIGN (OBRIGATÓRIO) ===
-1. ARQUITETURA AUTOCONTIDA: Código 100% em único arquivo. CSS dentro de <style> no <head>. JavaScript mínimo (menu mobile + smooth scroll) antes do </body>.
+1. ARQUITETURA AUTOCONTIDA: Código 100% em único arquivo. CSS dentro de <style> no <head>. JavaScript mínimo antes do </body>: (a) toggle do menu mobile; (b) IntersectionObserver que adiciona a classe "visivel" às seções quando entram na viewport, para a animação de entrada.
 2. ZERO DEPENDÊNCIAS: Proibido Bootstrap, Tailwind, jQuery, Google Fonts, CDNs. Use font-family: system-ui, -apple-system, sans-serif e ícones SVG inline.
 3. CSS VARIABLES: :root deve conter:
    --cor-primaria: {cor_primaria};
    --cor-acento: {cor_acento};
-   --cor-primaria-escura: [versão 20% mais escura de {cor_primaria}];
+   --cor-primaria-escura: {cor_primaria_escura};
    --sombra-card: 0 4px 24px rgba(0,0,0,0.10);
    --radius: 14px;
    --radius-btn: 50px;
@@ -338,6 +361,8 @@ Foto 6: {foto_6 or "indisponível"}
    - Títulos de seção: font-size:clamp(1.7rem,4vw,2.5rem); font-weight:800; posição central; linha decorativa embaixo (width:60px; height:4px; background:var(--cor-acento); border-radius:2px; margin:12px auto 0).
    - Ícones SVG: 48px, cor var(--cor-acento), círculo de fundo com var(--cor-acento) em 12% opacidade, border-radius:50%, padding:14px.
    - Inputs do formulário: border:2px solid #e0e0e0; border-radius:10px; padding:12px 16px; focus:border-color:var(--cor-acento); outline:none; width:100%.
+   - ANIMAÇÃO DE ENTRADA (sutil e elegante): seções começam com opacity:0 e transform:translateY(28px); a classe "visivel" (adicionada via IntersectionObserver) aplica opacity:1 e translateY(0) com transition:0.6s ease. Envolver em @media (prefers-reduced-motion: reduce) que desativa a animação (opacity:1; transform:none).
+   - GRID RESPONSIVO REAL: em mobile todos os grids viram 1 coluna; nunca deixe texto ou cards espremidos lado a lado em telas pequenas.
 5. IMAGENS: Use APENAS as URLs fornecidas acima. Fotos marcadas como "indisponível" NÃO devem aparecer no HTML. object-fit: cover em todas as imagens. Alt text descritivo focado em {categoria}.
 6. COPYWRITING: Proibido Lorem Ipsum. Textos persuasivos, criativos e específicos para {categoria} em {cidade}.
 
@@ -349,14 +374,15 @@ Foto 6: {foto_6 or "indisponível"}
    - Direita: botão WhatsApp (background: var(--cor-acento)) → {wa_link}
    - Ícone hamburger (☰) mobile que abre menu vertical
 
-2. HERO SECTION (min-height:85vh, display:flex, align-items:center, text-align:center)
-   - Background: se hero URL disponível → background-image com overlay rgba(0,0,0,0.55); senão gradiente com var(--cor-primaria)
-   - H1 impactante focado na dor do cliente (font-size: clamp(2rem,5vw,3.5rem); font-weight:800; color:#fff)
-   - Subtítulo: {categoria} em {cidade}
-   - 2 CTAs: "📱 Agendar pelo WhatsApp" (var(--cor-acento)) e "↓ Nossos Serviços" (outline branco)
+2. HERO SECTION (min-height:88vh, display:flex, align-items:center, text-align:center, position:relative)
+   - Background COM foto: background-image em camadas — linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.72)) SOBRE a URL do hero; background-size:cover; background-position:center. O gradiente escurece embaixo para o texto respirar.
+   - Background SEM foto: gradiente rico 135deg de var(--cor-primaria) até var(--cor-primaria-escura), com uma sutil textura de brilho radial (radial-gradient com var(--cor-acento) em ~15% opacidade no canto superior).
+   - H1 impactante focado no benefício/dor do cliente (font-size:clamp(2.2rem,5.5vw,3.8rem); font-weight:800; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,0.3); max-width:820px; margin:0 auto).
+   - Subtítulo (color:rgba(255,255,255,0.92); font-size:clamp(1.05rem,2.5vw,1.35rem)): frase de valor sobre {categoria} em {cidade}.
+   - 2 CTAs lado a lado (flex-wrap:wrap; gap:16px; justify-content:center): "Agendar pelo WhatsApp" (fundo var(--cor-acento), com ícone SVG do WhatsApp) e "Ver Serviços" (outline branco 2px, fundo transparente).
 
-3. SERVIÇOS (id="servicos", background:#fff, padding:80px 20px)
-   - 4 a 6 cards em CSS Grid (repeat(auto-fit, minmax(220px,1fr)))
+3. SERVIÇOS (id="servicos", background:#fff — respeita o ritmo vertical e o .container)
+   - 4 a 6 cards em CSS Grid (repeat(auto-fit, minmax(240px,1fr)); gap:24px)
    - Cada card: SVG ícone inline, h3 do serviço, parágrafo descritivo
    - Serviços REAIS e específicos para {categoria} — zero genérico
 
@@ -422,8 +448,8 @@ Inicie com <!DOCTYPE html> e termine com </html>. Nada mais."""
 
     html = _strip_markdown(_gerar(
         prompt, api_key,
-        max_tokens=8192,
-        timeout=120.0,
+        max_tokens=16000,
+        timeout=180.0,
         temperature=0.6,
         system=system_msg,
     ))
