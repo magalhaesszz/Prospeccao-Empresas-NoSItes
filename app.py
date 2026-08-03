@@ -768,17 +768,31 @@ def api_wa_qrcode():
             return None, True, data
         return _extrai_qr(data), False, data
 
-    def _restart():
-        """Reinicia instância presa — Baileys reabre o socket e emite QR fresco.
-        Mais confiável que delete (assíncrono) quando a instância trava em 'connecting'."""
+    diag = {}  # captura status/corpo de cada passo p/ diagnóstico no erro final
+
+    def _hit(metodo, path):
+        """Dispara request e registra (status, corpo curto) em diag. Retorna a resposta ou None."""
         try:
-            req.put(
-                f"{base_url}/instance/restart/{instance}",
-                headers={"apikey": api_key},
-                timeout=15,
-            )
-        except Exception:
-            pass
+            r = req.request(metodo, f"{base_url}{path}", headers=headers, timeout=15)
+            corpo = None
+            try:
+                corpo = r.json()
+            except Exception:
+                corpo = (r.text or "")[:120]
+            diag[f"{metodo} {path}"] = {"status": r.status_code, "body": corpo}
+            return r
+        except Exception as e:
+            diag[f"{metodo} {path}"] = {"erro": str(e)}
+            return None
+
+    def _restart():
+        """Reinicia instância presa — Baileys reabre o socket e emite QR fresco."""
+        _hit("PUT", f"/instance/restart/{instance}")
+
+    def _logout():
+        """Derruba a sessão WA da instância EXISTENTE (não apaga o registro).
+        Move o estado p/ 'close', o que faz o connect seguinte reemitir QR fresco."""
+        _hit("DELETE", f"/instance/logout/{instance}")
 
     # 0. Se já está conectado, NÃO recria (evita derrubar sessão viva).
     try:
@@ -805,38 +819,45 @@ def api_wa_qrcode():
     if qr:
         return jsonify({"base64": qr})
 
-    # 3. Instância presa (ex.: connect devolve só {"count":0}). Reinicia — não depende
-    #    do delete assíncrono, que não gruda numa instância travada em 'connecting'.
+    ultima = None
+
+    def _loop_connect(n=5):
+        nonlocal ultima
+        for _ in range(n):
+            qr, conectado, data = _connect_qr()
+            ultima = data
+            if conectado:
+                return jsonify({"conectado": True})
+            if qr:
+                return jsonify({"base64": qr})
+            time.sleep(1.4)
+        return None
+
+    # 3. Instância presa (create=403, connect={count:0}). Derruba a sessão WA da
+    #    instância EXISTENTE — logout move o estado p/ 'close' e o connect reemite QR.
+    _logout()
+    time.sleep(2.0)
+    if (r := _loop_connect()):
+        return r
+
+    # 4. Logout não bastou — reinicia a instância (reabre o socket Baileys).
     _restart()
     time.sleep(2.0)
-    ultima = None
-    for _ in range(5):
-        qr, conectado, data = _connect_qr()
-        ultima = data
-        if conectado:
-            return jsonify({"conectado": True})
-        if qr:
-            return jsonify({"base64": qr})
-        time.sleep(1.4)
+    if (r := _loop_connect()):
+        return r
 
-    # 4. Restart não resolveu. Último recurso: apaga (esperando sumir) e recria do zero.
+    # 5. Último recurso: apaga e recria do zero.
     _apagar_instancia()
     time.sleep(1.5)
     qr, cr_data, cr = _criar_e_pegar_qr()
     if qr:
         return jsonify({"base64": qr})
-    for _ in range(5):
-        qr, conectado, data = _connect_qr()
-        ultima = data
-        if conectado:
-            return jsonify({"conectado": True})
-        if qr:
-            return jsonify({"base64": qr})
-        time.sleep(1.4)
+    if (r := _loop_connect()):
+        return r
 
     return jsonify({"erro": (
         "QR ainda não disponível — clique em Novo QR Code. "
-        f"(create: {str(cr_data)[:220]} | connect: {str(ultima)[:180]})"
+        f"(create: {str(cr_data)[:200]} | connect: {str(ultima)[:150]} | diag: {str(diag)[:600]})"
     )})
 
 
