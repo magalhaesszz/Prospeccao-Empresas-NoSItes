@@ -3,11 +3,42 @@ Banco de dados PostgreSQL (Supabase).
 Mesma API pública do SQLite — zero mudanças nos outros módulos.
 """
 import os
+import re
 import logging
 import psycopg2
 import psycopg2.extras
 
+try:
+    import phonenumbers
+except Exception:  # lib opcional; cai no fallback regex
+    phonenumbers = None
+
 logger = logging.getLogger(__name__)
+
+
+def normalizar_telefone(raw):
+    """Normaliza telefone para E164 (+55...). Usa phonenumbers; fallback regex.
+    Retorna None se inválido/curto demais — evita dedup falso em lixo."""
+    if not raw:
+        return None
+    raw = str(raw).strip()
+    if phonenumbers is not None:
+        try:
+            num = phonenumbers.parse(raw, "BR")
+            if phonenumbers.is_valid_number(num):
+                return phonenumbers.format_number(num, phonenumbers.PhoneNumberFormat.E164)
+        except Exception:
+            pass
+    # Fallback: só dígitos
+    if raw.startswith("+"):
+        d = "+" + re.sub(r"\D", "", raw)
+        return d if len(d) >= 12 else None
+    d = re.sub(r"\D", "", raw)
+    if len(d) < 10:
+        return None
+    if d.startswith("55") and len(d) >= 12:
+        return f"+{d}"
+    return f"+55{d}"
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
@@ -201,9 +232,67 @@ def inicializar_banco():
            OR (nome ~ '^Results' AND telefone IS NULL AND endereco = '')
     """)
 
+    # Remove duplicatas ANTES de criar índices UNIQUE (senão a criação falha)
+    rem_tel  = _dedup_por_coluna(c, "telefone")
+    rem_maps = _dedup_por_coluna(c, "maps_url")
+    if rem_tel or rem_maps:
+        logger.info("Dedup: removidas %d por telefone, %d por maps_url.", rem_tel, rem_maps)
+
+    # Commit do dedup ANTES dos índices: se um CREATE INDEX falhar, o rollback
+    # não pode desfazer a limpeza já feita.
     conn.commit()
+
+    # Índices UNIQUE parciais (ignoram NULL/vazio) — dedup atômico à prova de race
+    for nome_idx, coluna in (("uniq_empresas_telefone", "telefone"),
+                             ("uniq_empresas_maps_url", "maps_url")):
+        try:
+            c.execute(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS {nome_idx} "
+                f"ON empresas({coluna}) WHERE {coluna} IS NOT NULL AND {coluna} <> ''"
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.warning("Falha ao criar índice %s (duplicatas residuais?): %s", nome_idx, e)
+
     conn.close()
     logger.info("Banco PostgreSQL (Supabase) inicializado.")
+
+
+def _dedup_por_coluna(c, coluna):
+    """Remove duplicatas de empresas por `coluna` (telefone/maps_url), mantendo
+    o registro mais antigo (menor id). Repointa notas e páginas de preview dos
+    perdedores para o vencedor antes de apagar. `coluna` é confiável (hardcoded)."""
+    if coluna not in ("telefone", "maps_url"):
+        raise ValueError("coluna inválida para dedup")
+    ranked = (
+        f"(SELECT id, MIN(id) OVER (PARTITION BY {coluna}) AS keep_id "
+        f"FROM empresas WHERE {coluna} IS NOT NULL AND {coluna} <> '')"
+    )
+    # Repointa filhos do perdedor -> vencedor (evita perder notas por CASCADE)
+    c.execute(
+        f"UPDATE notas n SET empresa_id = r.keep_id "
+        f"FROM {ranked} r WHERE n.empresa_id = r.id AND r.id <> r.keep_id"
+    )
+    c.execute(
+        f"UPDATE paginas_preview p SET empresa_id = r.keep_id "
+        f"FROM {ranked} r WHERE p.empresa_id = r.id AND r.id <> r.keep_id"
+    )
+    c.execute(
+        f"DELETE FROM empresas e USING {ranked} r WHERE e.id = r.id AND r.id <> r.keep_id"
+    )
+    return c.rowcount
+
+
+def limpar_duplicatas():
+    """Executa a deduplicação manualmente. Retorna dict com contagens."""
+    conn = get_connection()
+    c = conn.cursor()
+    rem_tel  = _dedup_por_coluna(c, "telefone")
+    rem_maps = _dedup_por_coluna(c, "maps_url")
+    conn.commit()
+    conn.close()
+    return {"por_telefone": rem_tel, "por_maps_url": rem_maps, "total": rem_tel + rem_maps}
 
 
 def limpar_empresas_invalidas():
@@ -259,33 +348,52 @@ def listar_historico():
 
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
+def _buscar_existente(c, tel, maps_url):
+    """Retorna (id, mensagem_enviada, status) se já houver empresa com o mesmo
+    telefone ou maps_url; senão None."""
+    if tel:
+        c.execute("SELECT id, mensagem_enviada, status FROM empresas WHERE telefone=%s", (tel,))
+        row = c.fetchone()
+        if row:
+            return row
+    if maps_url:
+        c.execute("SELECT id, mensagem_enviada, status FROM empresas WHERE maps_url=%s", (maps_url,))
+        row = c.fetchone()
+        if row:
+            return row
+    return None
+
+
 def salvar_empresa(empresa, busca_id):
     conn = get_connection()
     c = conn.cursor()
 
-    if empresa.get("telefone"):
-        c.execute(
-            "SELECT id, mensagem_enviada, status FROM empresas WHERE telefone=%s",
-            (empresa["telefone"],)
-        )
-        row = c.fetchone()
-        if row:
-            conn.close()
-            empresa["_duplicado"]       = True
-            empresa["mensagem_enviada"] = row[1]
-            empresa["status"]           = row[2]
-            return row[0]
+    # Normaliza chaves de deduplicação
+    tel = normalizar_telefone(empresa.get("telefone"))
+    empresa["telefone"] = tel  # guarda já normalizado
+    maps_url = (empresa.get("maps_url") or "").strip() or None
 
+    # 1) Já existe? (telefone OU maps_url)
+    existente = _buscar_existente(c, tel, maps_url)
+    if existente:
+        conn.close()
+        empresa["_duplicado"]       = True
+        empresa["mensagem_enviada"] = existente[1]
+        empresa["status"]           = existente[2]
+        return existente[0]
+
+    # 2) Insere com proteção atômica contra corrida (índices UNIQUE parciais)
     c.execute("""
         INSERT INTO empresas
             (busca_id, nome, telefone, endereco, email, tem_site, site_url, score, status,
              descricao_google, nota, avaliacoes, maps_url, foto_url, fotos_urls)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo', %s, %s, %s, %s, %s, %s)
+        ON CONFLICT DO NOTHING
         RETURNING id
     """, (
         busca_id,
         empresa["nome"],
-        empresa.get("telefone"),
+        tel,
         empresa.get("endereco", ""),
         empresa.get("email"),
         1 if empresa.get("tem_site") else 0,
@@ -294,14 +402,26 @@ def salvar_empresa(empresa, busca_id):
         empresa.get("descricao_google"),
         empresa.get("nota"),
         empresa.get("avaliacoes") or 0,
-        empresa.get("maps_url", ""),
+        maps_url,
         empresa.get("foto_url", ""),
         empresa.get("fotos_urls", "[]"),
     ))
-    emp_id = c.fetchone()[0]
+    row = c.fetchone()
+    if row:
+        conn.commit()
+        conn.close()
+        return row[0]
+
+    # 3) Conflito (outra busca inseriu no meio do caminho) -> retorna o existente
     conn.commit()
+    existente = _buscar_existente(c, tel, maps_url)
     conn.close()
-    return emp_id
+    if existente:
+        empresa["_duplicado"]       = True
+        empresa["mensagem_enviada"] = existente[1]
+        empresa["status"]           = existente[2]
+        return existente[0]
+    return None
 
 
 def buscar_empresa_por_id(empresa_id):

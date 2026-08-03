@@ -568,6 +568,16 @@ def _primeiro_texto_em(pai, seletores):
 def _formatar_tel(raw):
     if not raw:
         return None
+    raw = str(raw).strip()
+    # Normalização E164 via phonenumbers (mesma regra do banco) — dedup consistente
+    try:
+        import phonenumbers
+        num = phonenumbers.parse(raw, "BR")
+        if phonenumbers.is_valid_number(num):
+            return phonenumbers.format_number(num, phonenumbers.PhoneNumberFormat.E164)
+    except Exception:
+        pass
+    # Fallback: só dígitos
     if raw.startswith("+"):
         digitos = "+" + re.sub(r"\D", "", raw)
         return digitos if len(digitos) >= 12 else None

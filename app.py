@@ -23,7 +23,7 @@ from database.db import (
     get_funil_conversao,
     criar_pagina_preview, buscar_pagina_por_slug, registrar_vista_pagina,
     listar_paginas_preview, deletar_pagina_preview,
-    limpar_empresas_invalidas,
+    limpar_empresas_invalidas, limpar_duplicatas,
     criar_job, atualizar_job_ok, atualizar_job_erro, buscar_job, limpar_jobs_antigos,
 )
 from crm.pipeline import kanban_por_status
@@ -389,7 +389,7 @@ def _executar_busca(cidade, categoria, quantidade=None):
         # IDs prontos pra disparo: sem site + com telefone + não enviados ainda
         prontos = [
             emp["id"] for emp in empresas
-            if not emp.get("tem_site") and emp.get("telefone") and not emp.get("mensagem_enviada")
+            if emp.get("id") and not emp.get("tem_site") and emp.get("telefone") and not emp.get("mensagem_enviada")
         ]
 
         with _lock:
@@ -527,6 +527,15 @@ def api_empresas():
     status         = request.args.get("status")
     busca_id       = int(busca_id_raw) if busca_id_raw else None
     return jsonify(buscar_todas_empresas(busca_id=busca_id, apenas_sem_mensagem=apenas_sem_msg, status=status))
+
+
+@app.route("/api/empresas/limpar-duplicatas", methods=["POST"])
+def api_limpar_duplicatas():
+    try:
+        return jsonify({"ok": True, **limpar_duplicatas()})
+    except Exception as e:
+        logger.error("[dedup] Falha ao limpar duplicatas: %s", e)
+        return jsonify({"ok": False, "erro": str(e)}), 500
 
 
 # ── CRM ───────────────────────────────────────────────────────────────────────
