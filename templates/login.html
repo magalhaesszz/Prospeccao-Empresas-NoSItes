@@ -6,7 +6,7 @@
   <title>Entrar — Prospector</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <style>
     :root{
       --brand:#E11D48; --brand-d:#BE123C; --brand-l:#FB7185;
@@ -146,6 +146,30 @@
     @media (prefers-reduced-motion:reduce){
       *{animation:none!important;transition:none!important}
     }
+
+    /* ===== PIXEL / RETRO override ===== */
+    :root{--brand:#ff2e63;--brand-d:#c81e4a;--brand-l:#ff6b91;--brand-glow:rgba(255,46,99,.5);--bg:#0d0620}
+    body{font-family:'VT323',monospace;font-size:18px;
+      background-image:
+        repeating-linear-gradient(to bottom,rgba(0,0,0,.28) 0 2px,transparent 2px 4px),
+        linear-gradient(rgba(180,107,255,.05) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(180,107,255,.05) 1px,transparent 1px);
+      background-size:100% 4px,32px 32px,32px 32px;}
+    svg{shape-rendering:crispEdges}
+    .login-icon{border-radius:0;border:3px solid #000;box-shadow:5px 5px 0 rgba(0,0,0,.5)}
+    .login-brand h1{font-family:'Press Start 2P',monospace;font-size:1.05rem;line-height:1.5;
+      color:#fff;text-shadow:0 0 8px var(--brand-glow)}
+    .login-brand p{font-size:1.05rem}
+    .login-card{border-radius:0;border:3px solid var(--brand);box-shadow:8px 8px 0 rgba(0,0,0,.6);backdrop-filter:none;background:#180f30}
+    label{font-family:'Press Start 2P',monospace;font-size:.52rem;line-height:1.6}
+    input{border-radius:0;border:3px solid #3a2a63;background:#120a26;font-size:1.05rem}
+    input:focus{box-shadow:0 0 0 3px var(--brand-glow)}
+    .btn-entrar{border-radius:0;border:3px solid #000;box-shadow:4px 4px 0 #000;
+      font-family:'Press Start 2P',monospace;font-size:.72rem;text-transform:uppercase}
+    .btn-entrar:hover:not(:disabled){transform:translate(2px,2px);box-shadow:2px 2px 0 #000}
+    .btn-entrar:active:not(:disabled){transform:translate(4px,4px);box-shadow:0 0 0 #000}
+    .msg{border-radius:0}
+    .msg.erro{border:2px solid rgba(248,113,113,.4)}
   </style>
 </head>
 <body>
@@ -241,6 +265,16 @@
       const dados = await resp.json().catch(() => ({}));
       if (resp.ok) {
         label.textContent = 'Bem-vindo!';
+        try{
+          const c=new (window.AudioContext||window.webkitAudioContext)();
+          [[523,0],[659,.09],[784,.18],[1046,.27]].forEach(([f,d])=>{
+            const o=c.createOscillator(),g=c.createGain(),t=c.currentTime+d;
+            o.type='square';o.frequency.setValueAtTime(f,t);
+            g.gain.setValueAtTime(.07,t);g.gain.exponentialRampToValueAtTime(.0001,t+.12);
+            o.connect(g).connect(c.destination);o.start(t);o.stop(t+.12);
+          });
+          setTimeout(()=>location.href='/',380); return;
+        }catch(_){}
         location.href = '/';
         return;
       }

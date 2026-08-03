@@ -6,11 +6,14 @@
   <title>{% block title %}Prospector{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css"/>
   {% block head %}{% endblock %}
 </head>
 <body>
+
+<!-- CRT overlay (scanlines + flicker + vinheta) -->
+<div class="crt-overlay" aria-hidden="true"></div>
 
 <!-- Floating Background Icons -->
 <div class="bg-floats" aria-hidden="true">
@@ -82,58 +85,61 @@
 
     <a href="/" class="sidebar-item {{ 'active' if page=='busca' }}">
       <span class="sidebar-icon">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M3 3h9v9H3V3Zm2 2v5h5V5H5Zm7 7h2v2h2v2h2v2h-2v-2h-2v-2h-2v-2Z"/></svg>
       </span>
       <span class="sidebar-label">Busca</span>
     </a>
 
     <a href="/crm" class="sidebar-item {{ 'active' if page=='crm' }}">
       <span class="sidebar-icon">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z"/></svg>
       </span>
       <span class="sidebar-label">CRM</span>
     </a>
 
     <a href="/dashboard" class="sidebar-item {{ 'active' if page=='dashboard' }}">
       <span class="sidebar-icon">
-        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 12h4v8H4v-8Zm6-6h4v14h-4V6Zm6 3h4v11h-4V9Z"/></svg>
       </span>
       <span class="sidebar-label">Dashboard</span>
     </a>
 
     <a href="/templates" class="sidebar-item {{ 'active' if page=='templates' }}">
       <span class="sidebar-icon">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 4h18v11H9l-4 4v-4H3V4Z"/></svg>
       </span>
       <span class="sidebar-label">Templates</span>
     </a>
 
     <a href="/blacklist" class="sidebar-item {{ 'active' if page=='blacklist' }}">
       <span class="sidebar-icon">
-        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9.5" y1="9.5" x2="14.5" y2="14.5"/><line x1="14.5" y1="9.5" x2="9.5" y2="14.5"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M12 2l9 3v6c0 6-9 10-9 10s-9-4-9-10V5l9-3Zm-5 8v3h10v-3H7Z"/></svg>
       </span>
       <span class="sidebar-label">Blacklist</span>
     </a>
 
     <a href="/whatsapp" class="sidebar-item {{ 'active' if page=='whatsapp' }}">
       <span class="sidebar-icon">
-        <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 3h16v12h-9l-4 4v-4H4V3Z"/></svg>
       </span>
       <span class="sidebar-label">WhatsApp</span>
     </a>
 
     <a href="/gemini" class="sidebar-item {{ 'active' if page=='gemini' }}" style="background:{{ 'linear-gradient(135deg,rgba(66,133,244,.18),rgba(52,168,83,.12))' if page=='gemini' else '' }}">
-      <span class="sidebar-icon" style="color:{{ '#4285F4' if page!='gemini' else 'inherit' }}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span class="sidebar-icon" style="color:{{ '#00f0ff' if page!='gemini' else 'inherit' }}">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l10 5-10 5L2 7l10-5Zm-8.5 8.2L12 14.5l8.5-4.3 1.5.8-10 5-10-5 1.5-.8Z"/></svg>
       </span>
       <span class="sidebar-label">IA Hub</span>
-      <span style="font-size:.6rem;background:linear-gradient(90deg,#4285F4,#34A853);color:#fff;padding:2px 5px;border-radius:4px;margin-left:auto;line-height:1.4">PRO</span>
+      <span style="font-size:.5rem;font-family:var(--font-pixel);background:var(--neon-cyan);color:#000;padding:3px 5px;border-radius:0;margin-left:auto;line-height:1;border:1px solid #000">PRO</span>
     </a>
 
     <div class="sidebar-phrase">Prospecte &middot; Conecte &middot; Venda</div>
   </nav>
 
   <div class="sidebar-footer">
+    <div class="sidebar-sfx-row">
+      <button class="sfx-toggle" id="sfx-toggle" onclick="toggleMute()" title="Som" aria-label="Ligar/desligar som"></button>
+    </div>
     <div class="user-box" id="user-box" style="display:none">
       <div class="user-avatar" id="user-avatar">?</div>
       <div class="user-info">
@@ -156,7 +162,7 @@
     <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
   <span class="mobile-title">Prospector</span>
-  <span style="width:40px"></span>
+  <button class="sfx-toggle" id="sfx-toggle-mobile" onclick="toggleMute()" title="Som" aria-label="Ligar/desligar som"></button>
 </header>
 
 <!-- Main -->
@@ -170,31 +176,31 @@
 <nav class="bottom-nav">
   <div class="bottom-nav-items">
     <a href="/"          class="bottom-nav-item {{ 'active' if page=='busca' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M3 3h9v9H3V3Zm2 2v5h5V5H5Zm7 7h2v2h2v2h2v2h-2v-2h-2v-2h-2v-2Z"/></svg></span>
       <span>Busca</span>
     </a>
     <a href="/crm"       class="bottom-nav-item {{ 'active' if page=='crm' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z"/></svg></span>
       <span>CRM</span>
     </a>
     <a href="/dashboard" class="bottom-nav-item {{ 'active' if page=='dashboard' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 12h4v8H4v-8Zm6-6h4v14h-4V6Zm6 3h4v11h-4V9Z"/></svg></span>
       <span>Board</span>
     </a>
     <a href="/templates" class="bottom-nav-item {{ 'active' if page=='templates' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 4h18v11H9l-4 4v-4H3V4Z"/></svg></span>
       <span>Templates</span>
     </a>
     <a href="/blacklist" class="bottom-nav-item {{ 'active' if page=='blacklist' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9.5" y1="9.5" x2="14.5" y2="14.5"/><line x1="14.5" y1="9.5" x2="9.5" y2="14.5"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M12 2l9 3v6c0 6-9 10-9 10s-9-4-9-10V5l9-3Zm-5 8v3h10v-3H7Z"/></svg></span>
       <span>Blacklist</span>
     </a>
     <a href="/whatsapp"  class="bottom-nav-item {{ 'active' if page=='whatsapp' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 3h16v12h-9l-4 4v-4H4V3Z"/></svg></span>
       <span>WhatsApp</span>
     </a>
     <a href="/gemini" class="bottom-nav-item {{ 'active' if page=='gemini' }}">
-      <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+      <span class="bnav-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l10 5-10 5L2 7l10-5Zm-8.5 8.2L12 14.5l8.5-4.3 1.5.8-10 5-10-5 1.5-.8Z"/></svg></span>
       <span>IA</span>
     </a>
   </div>
@@ -235,7 +241,69 @@ function mostrarToast(msg,tipo='info'){
   t.className='toast '+tipo;
   clearTimeout(t._timer);
   t._timer=setTimeout(()=>t.className='toast oculto',3500);
+  if(window.SFX){ if(tipo==='success')SFX.success(); else if(tipo==='error')SFX.error(); else if(tipo==='warning')SFX.warn(); }
 }
+
+/* ===== Motor de som 8-bit (Web Audio, sem arquivos) ===== */
+window.SFX=(function(){
+  let ctx=null, muted=localStorage.getItem('sfxMuted')==='1';
+  const vol=0.06;
+  function ac(){ if(!ctx){ try{ctx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;} } return ctx; }
+  function tone(freq,dur,type='square',slide=0){
+    if(muted)return;
+    const c=ac(); if(!c)return;
+    if(c.state==='suspended')c.resume();
+    const o=c.createOscillator(),g=c.createGain(),t=c.currentTime;
+    o.type=type; o.frequency.setValueAtTime(freq,t);
+    if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(60,freq+slide),t+dur);
+    g.gain.setValueAtTime(vol,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur);
+  }
+  function seq(notes){ let d=0; notes.forEach(n=>{ setTimeout(()=>tone(n[0],n[1],n[2]||'square',n[3]||0),d*1000); d+=n[1]; }); }
+  return {
+    click:()=>tone(420,0.05,'square'),
+    hover:()=>tone(680,0.03,'triangle'),
+    send: ()=>seq([[520,0.05],[780,0.08]]),
+    success:()=>seq([[523,0.07],[659,0.07],[784,0.12]]),
+    error:()=>seq([[300,0.1,'sawtooth',-140],[180,0.16,'sawtooth',-60]]),
+    warn: ()=>seq([[440,0.08,'square'],[440,0.08,'square']]),
+    isMuted:()=>muted,
+    setMuted:(m)=>{ muted=m; localStorage.setItem('sfxMuted',m?'1':'0'); }
+  };
+})();
+
+function _sfxIcon(m){
+  return m
+    ? '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 9h4l5-5v16l-5-5H3V9Z"/><path stroke="currentColor" stroke-width="2" d="M16 9l5 6M21 9l-5 6"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 9h4l5-5v16l-5-5H3V9Z"/><path stroke="currentColor" stroke-width="2" fill="none" d="M16 8a5 5 0 0 1 0 8M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+}
+function _renderMute(){
+  const m=SFX.isMuted();
+  document.querySelectorAll('.sfx-toggle').forEach(b=>{
+    b.innerHTML=_sfxIcon(m);
+    b.classList.toggle('muted',m);
+    b.title=m?'Som desligado':'Som ligado';
+  });
+}
+function toggleMute(){ SFX.setMuted(!SFX.isMuted()); if(!SFX.isMuted())SFX.click(); _renderMute(); }
+
+document.addEventListener('DOMContentLoaded',()=>{
+  _renderMute();
+  // Clique em elementos interativos
+  document.addEventListener('click',(e)=>{
+    const el=e.target.closest('button,.sidebar-item,.bottom-nav-item,.btn-card,.btn-pag,.wa-chat-item,summary');
+    if(!el||el.classList.contains('sfx-toggle'))return;
+    if(el.matches('.btn-whatsapp,.wa-chat-enviar')||el.closest('.btn-whatsapp')) SFX.send();
+    else SFX.click();
+  },true);
+  // Hover na navegação (desktop)
+  if(window.matchMedia('(hover:hover)').matches){
+    document.querySelectorAll('.sidebar-item,.bottom-nav-item').forEach(el=>{
+      el.addEventListener('mouseenter',()=>SFX.hover());
+    });
+  }
+});
 fetch('/api/status').then(r=>r.json()).then(d=>{
   if(d&&d.autenticado){
     const email=d.email||'Sessão ativa';
