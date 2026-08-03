@@ -768,6 +768,18 @@ def api_wa_qrcode():
             return None, True, data
         return _extrai_qr(data), False, data
 
+    def _restart():
+        """Reinicia instância presa — Baileys reabre o socket e emite QR fresco.
+        Mais confiável que delete (assíncrono) quando a instância trava em 'connecting'."""
+        try:
+            req.put(
+                f"{base_url}/instance/restart/{instance}",
+                headers={"apikey": api_key},
+                timeout=15,
+            )
+        except Exception:
+            pass
+
     # 0. Se já está conectado, NÃO recria (evita derrubar sessão viva).
     try:
         st = req.get(
@@ -793,15 +805,26 @@ def api_wa_qrcode():
     if qr:
         return jsonify({"base64": qr})
 
-    # 3. Instância presa (ex.: connect devolve só {"count":0}). Apaga e recria do zero.
+    # 3. Instância presa (ex.: connect devolve só {"count":0}). Reinicia — não depende
+    #    do delete assíncrono, que não gruda numa instância travada em 'connecting'.
+    _restart()
+    time.sleep(2.0)
+    ultima = None
+    for _ in range(5):
+        qr, conectado, data = _connect_qr()
+        ultima = data
+        if conectado:
+            return jsonify({"conectado": True})
+        if qr:
+            return jsonify({"base64": qr})
+        time.sleep(1.4)
+
+    # 4. Restart não resolveu. Último recurso: apaga (esperando sumir) e recria do zero.
     _apagar_instancia()
     time.sleep(1.5)
     qr, cr_data, cr = _criar_e_pegar_qr()
     if qr:
         return jsonify({"base64": qr})
-
-    # 4. Recriou mas QR ainda não pronto — dá alguns hits no connect.
-    ultima = None
     for _ in range(5):
         qr, conectado, data = _connect_qr()
         ultima = data
