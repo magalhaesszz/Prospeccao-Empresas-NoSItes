@@ -1428,7 +1428,7 @@ def _ai_gerar(prompt):
         from openai import OpenAI
         client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
         resp = client.chat.completions.create(
-            model="google/gemini-2.0-flash-exp:free",
+            model="google/gemini-2.5-flash-lite",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
         )
@@ -1437,7 +1437,7 @@ def _ai_gerar(prompt):
         from groq import Groq
         client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
         resp = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
         )
@@ -1559,8 +1559,10 @@ def api_gemini_gerar_pagina():
             except Exception as db_err:
                 logger.error("[AI] HTML gerado mas falha ao salvar no DB para '%s': %s", nome, db_err)
         except Exception as e:
-            logger.error("[AI] Falha na geração para '%s': %s", nome, e)
-            _jobs_pagina[job_id] = {"status": "erro", "erro": str(e)}
+            import traceback
+            erro_msg = str(e) or repr(e) or traceback.format_exc().splitlines()[-1]
+            logger.error("[AI] Falha na geração para '%s': %s\n%s", nome, e, traceback.format_exc())
+            _jobs_pagina[job_id] = {"status": "erro", "erro": erro_msg}
             try:
                 atualizar_job_erro(job_id, str(e))
             except Exception:
