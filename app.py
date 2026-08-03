@@ -108,12 +108,14 @@ def _supabase_login(email, senha):
     """Valida email+senha via Supabase Auth (GoTrue). Retorna (ok, email_ou_msg_erro)."""
     import requests
     url = f"{CONFIG['supabase_url']}/auth/v1/token?grant_type=password"
+    anon = CONFIG["supabase_anon_key"]
     try:
         r = requests.post(
             url,
             headers={
-                "apikey":       CONFIG["supabase_anon_key"],
-                "Content-Type": "application/json",
+                "apikey":        anon,
+                "Authorization": f"Bearer {anon}",
+                "Content-Type":  "application/json",
             },
             json={"email": email, "password": senha},
             timeout=15,
@@ -129,14 +131,31 @@ def _supabase_login(email, senha):
             user_email = email
         return True, user_email
 
-    logger.warning("[auth] Login negado (HTTP %s) para %s", r.status_code, email)
-    if r.status_code in (400, 401):
-        return False, "E-mail ou senha incorretos."
+    # Extrai mensagem real do GoTrue (varia por versão)
     try:
-        detalhe = r.json().get("error_description") or r.json().get("msg") or ""
+        body = r.json()
     except Exception:
-        detalhe = ""
-    return False, detalhe or "Erro no servidor de autenticação. Tente novamente."
+        body = {}
+    detalhe = (
+        body.get("error_description")
+        or body.get("msg")
+        or body.get("message")
+        or body.get("error")
+        or ""
+    )
+    codigo = body.get("error_code") or body.get("code") or ""
+    logger.warning(
+        "[auth] Login negado (HTTP %s cod=%s) para %s | body=%s",
+        r.status_code, codigo, email, (r.text or "")[:300],
+    )
+
+    # Credenciais inválidas
+    if r.status_code in (400, 401) and codigo in ("invalid_credentials", "invalid_grant", ""):
+        if "not confirmed" in detalhe.lower() or codigo == "email_not_confirmed":
+            return False, "E-mail não confirmado. Confirme o cadastro no Supabase."
+        return False, "E-mail ou senha incorretos."
+
+    return False, detalhe or f"Erro na autenticação (HTTP {r.status_code}). Verifique URL/chave do Supabase."
 
 
 @app.before_request
