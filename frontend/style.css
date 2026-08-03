@@ -1034,6 +1034,62 @@ code{
 }
 .wa-emoji-btn:hover{background:var(--border)}
 
+/* ── Gravação de áudio ── */
+.wa-chat-input.wa-gravando{gap:12px}
+.wa-grav-dot{
+  width:12px;height:12px;border-radius:50%;background:#E11D48;flex-shrink:0;
+  animation:wa-grav-pulso 1.1s infinite;
+}
+@keyframes wa-grav-pulso{0%,100%{opacity:1}50%{opacity:.25}}
+.wa-grav-timer{font-variant-numeric:tabular-nums;font-weight:600;color:var(--text);font-size:.9rem}
+.wa-grav-cancel:hover{background:rgba(225,29,72,.15)}
+
+/* ── Ações da mensagem (reagir / responder / encaminhar / apagar) ── */
+.wa-msg-acoes{
+  display:flex;align-items:center;gap:2px;align-self:center;flex-shrink:0;
+  opacity:0;transition:opacity .12s;padding:0 4px;position:relative;
+}
+.wa-msg-eu .wa-msg-acoes{order:-1}
+.wa-msg:hover .wa-msg-acoes{opacity:1}
+.wa-msg-acoes button{
+  border:none;background:transparent;cursor:pointer;
+  font-size:.9rem;line-height:1;padding:4px 5px;border-radius:6px;
+  color:#667781;transition:.12s;
+}
+.wa-msg-acoes button:hover{background:var(--border)}
+.wa-msg-bolha.wa-msg-apagada{font-style:italic;opacity:.7}
+.wa-msg-citada{
+  display:block;font-size:.72rem;opacity:.7;border-left:3px solid var(--wa);
+  padding:2px 6px;margin-bottom:3px;
+}
+/* Badge de reação no canto do balão */
+.wa-msg-reacao{
+  position:absolute;bottom:-11px;font-size:.85rem;line-height:1;
+  background:var(--card,#fff);border-radius:100px;padding:2px 5px;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+}
+.wa-msg-eu .wa-msg-reacao{left:8px}
+.wa-msg-outro .wa-msg-reacao{right:8px}
+/* Picker de reação (popover) */
+.wa-reacao-picker{
+  position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+  display:flex;gap:2px;background:var(--card,#fff);border:1px solid var(--border);
+  border-radius:100px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.22);
+  z-index:20;margin-bottom:4px;
+}
+.wa-reacao-picker span{cursor:pointer;font-size:1.15rem;padding:2px 3px;border-radius:50%;transition:transform .1s}
+.wa-reacao-picker span:hover{transform:scale(1.3)}
+/* Barra "respondendo a" */
+.wa-reply-bar{
+  position:absolute;bottom:var(--chat-input-h);left:0;right:0;
+  display:flex;align-items:center;gap:10px;
+  padding:8px 14px;background:var(--card,#f0f2f5);border-top:1px solid var(--border);z-index:2;
+}
+.wa-reply-info{flex:1;border-left:3px solid var(--wa);padding:2px 10px;min-width:0}
+.wa-reply-titulo{display:block;font-size:.78rem;font-weight:700;color:var(--wa)}
+.wa-reply-texto{display:block;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-reply-x{border:none;background:transparent;font-size:1.4rem;cursor:pointer;color:var(--muted);flex-shrink:0}
+
 /* ── Balões ── */
 .wa-msg-data{text-align:center;margin:12px 0 8px}
 .wa-msg-data span{
