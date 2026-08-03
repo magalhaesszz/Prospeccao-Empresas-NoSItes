@@ -55,6 +55,10 @@ if not _secret or _secret == "prospector-secret-2024":
     logger.warning("SECRET_KEY usa valor padrão inseguro. Defina SECRET_KEY no ambiente de produção.")
 app.secret_key = _secret
 
+# Sessão persiste por 7 dias (login "lembrado")
+from datetime import timedelta
+app.permanent_session_lifetime = timedelta(days=7)
+
 if not CONFIG.get("app_url", "").strip():
     logger.warning("APP_URL não definida. URLs de preview podem ficar incorretas em produção. Defina APP_URL=https://seu-dominio.com")
 
@@ -96,30 +100,91 @@ def _broadcast(evento: dict):
 
 
 # ── Autenticação ──────────────────────────────────────────────────────────────
+def _supabase_configurado():
+    return bool(CONFIG.get("supabase_url") and CONFIG.get("supabase_anon_key"))
+
+
+def _supabase_login(email, senha):
+    """Valida email+senha via Supabase Auth (GoTrue). Retorna (ok, email_ou_msg_erro)."""
+    import requests
+    url = f"{CONFIG['supabase_url']}/auth/v1/token?grant_type=password"
+    try:
+        r = requests.post(
+            url,
+            headers={
+                "apikey":       CONFIG["supabase_anon_key"],
+                "Content-Type": "application/json",
+            },
+            json={"email": email, "password": senha},
+            timeout=15,
+        )
+    except Exception as e:
+        logger.error("[auth] Falha de conexão com Supabase: %s", e)
+        return False, "Falha ao conectar no servidor de autenticação."
+
+    if r.status_code == 200:
+        try:
+            user_email = (r.json().get("user") or {}).get("email") or email
+        except Exception:
+            user_email = email
+        return True, user_email
+
+    logger.warning("[auth] Login negado (HTTP %s) para %s", r.status_code, email)
+    if r.status_code in (400, 401):
+        return False, "E-mail ou senha incorretos."
+    try:
+        detalhe = r.json().get("error_description") or r.json().get("msg") or ""
+    except Exception:
+        detalhe = ""
+    return False, detalhe or "Erro no servidor de autenticação. Tente novamente."
+
+
 @app.before_request
 def verificar_auth():
-    senha = CONFIG.get("senha_painel", "").strip()
-    if not senha:
-        return  # sem senha = sem proteção
+    protegido = _supabase_configurado() or bool(CONFIG.get("senha_painel", "").strip())
+    if not protegido:
+        return  # nenhuma auth configurada = sem proteção
     rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook", "api_test_gemini", "api_status"}
     if request.endpoint in rotas_publicas:
         return
     if not session.get("autenticado"):
+        # fetch de API recebe 401 (JSON); navegação normal é redirecionada ao login
+        if request.path.startswith("/api/"):
+            return jsonify({"erro": "Não autenticado"}), 401
         return redirect(url_for("login_page"))
 
 
 @app.route("/login")
 def login_page():
+    if session.get("autenticado"):
+        return redirect(url_for("index"))
     return render_template("login.html")
 
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
     dados = request.get_json(silent=True) or {}
-    if dados.get("senha") == CONFIG.get("senha_painel"):
+    email = (dados.get("email") or "").strip().lower()
+    senha = dados.get("senha") or ""
+
+    # 1) Auth via Supabase (email + senha) — modo preferencial
+    if _supabase_configurado():
+        if not email or not senha:
+            return jsonify({"erro": "Informe e-mail e senha."}), 400
+        ok, resultado = _supabase_login(email, senha)
+        if ok:
+            session.permanent  = True
+            session["autenticado"] = True
+            session["email"]       = resultado
+            return jsonify({"ok": True, "email": resultado})
+        return jsonify({"erro": resultado}), 401
+
+    # 2) Fallback legado: senha única (SENHA_PAINEL)
+    if senha and senha == CONFIG.get("senha_painel"):
+        session.permanent      = True
         session["autenticado"] = True
         return jsonify({"ok": True})
-    return jsonify({"erro": "Senha incorreta"}), 401
+    return jsonify({"erro": "E-mail ou senha incorretos."}), 401
 
 
 @app.route("/api/logout", methods=["POST"])

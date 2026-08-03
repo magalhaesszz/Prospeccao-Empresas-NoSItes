@@ -13,8 +13,13 @@ CONFIG = {
     # ── Servidor ─────────────────────────────────────────────────────────────
     # Replit usa porta 8080 por padrão; localmente usa 5000
     "porta":       int(os.environ.get("PORT", "8080")),
-    "senha_painel": os.environ.get("SENHA_PAINEL", ""),   # configure no Replit > Secrets
+    "senha_painel": os.environ.get("SENHA_PAINEL", ""),   # legado: senha única (fallback)
     "secret_key":   os.environ.get("SECRET_KEY",  "prospector-secret-2024"),
+
+    # ── Auth Supabase (email + senha) ────────────────────────────────────────
+    # SUPABASE_URL: https://<ref>.supabase.co  |  SUPABASE_ANON_KEY: chave anon (public)
+    "supabase_url":      os.environ.get("SUPABASE_URL",      "").rstrip("/"),
+    "supabase_anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
 
     # ── WhatsApp ─────────────────────────────────────────────────────────────
     "intervalo_min":    int(os.environ.get("WA_INTERVALO_MIN", "8")),
