@@ -267,6 +267,9 @@ def api_status():
     with _lock:
         dados = {k: v for k, v in _estado.items()}
     dados["senha_configurada"] = bool(CONFIG.get("senha_painel", "").strip())
+    dados["auth_configurada"]  = _supabase_configurado() or bool(CONFIG.get("senha_painel", "").strip())
+    dados["autenticado"]       = bool(session.get("autenticado"))
+    dados["email"]             = session.get("email", "")
     return jsonify(dados)
 
 

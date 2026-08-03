@@ -134,12 +134,16 @@
   </nav>
 
   <div class="sidebar-footer">
-    <button class="sidebar-item" onclick="logout()" id="btn-logout" style="display:none">
-      <span class="sidebar-icon">
+    <div class="user-box" id="user-box" style="display:none">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <div class="user-info">
+        <span class="user-email" id="user-email">—</span>
+        <span class="user-role">Sessão ativa</span>
+      </div>
+      <button class="user-logout" onclick="logout()" title="Sair" aria-label="Sair">
         <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      </span>
-      <span class="sidebar-label">Sair</span>
-    </button>
+      </button>
+    </div>
   </div>
 </aside>
 
@@ -221,9 +225,14 @@ function mostrarToast(msg,tipo='info'){
   t._timer=setTimeout(()=>t.className='toast oculto',3500);
 }
 fetch('/api/status').then(r=>r.json()).then(d=>{
-  if(d&&d.senha_configurada){
-    const b=document.getElementById('btn-logout');
-    if(b)b.style.display='';
+  if(d&&d.autenticado){
+    const email=d.email||'Sessão ativa';
+    const em=document.getElementById('user-email');
+    const av=document.getElementById('user-avatar');
+    const box=document.getElementById('user-box');
+    if(em){em.textContent=email;em.title=email;}
+    if(av)av.textContent=(email.trim()[0]||'U').toUpperCase();
+    if(box)box.style.display='';
   }
 }).catch(()=>{});
 </script>
