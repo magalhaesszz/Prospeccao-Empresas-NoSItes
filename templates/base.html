@@ -203,6 +203,18 @@
 <div id="toast" class="toast oculto"></div>
 
 <script>
+// Sessão expirada (401): manda pro login automaticamente
+(function(){
+  const _fetch=window.fetch;
+  window.fetch=function(...args){
+    return _fetch.apply(this,args).then(resp=>{
+      if(resp.status===401 && !location.pathname.startsWith('/login')){
+        location.href='/login';
+      }
+      return resp;
+    });
+  };
+})();
 function toggleSidebar(){
   const sb=document.getElementById('sidebar');
   const ov=document.getElementById('sidebar-overlay');

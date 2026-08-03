@@ -55,9 +55,11 @@ if not _secret or _secret == "prospector-secret-2024":
     logger.warning("SECRET_KEY usa valor padrão inseguro. Defina SECRET_KEY no ambiente de produção.")
 app.secret_key = _secret
 
-# Sessão persiste por 7 dias (login "lembrado")
+# Sessão expira por inatividade: 30 min sem uso desloga (deslizante).
 from datetime import timedelta
-app.permanent_session_lifetime = timedelta(days=7)
+SESSAO_INATIVIDADE = timedelta(minutes=30)
+app.permanent_session_lifetime = SESSAO_INATIVIDADE
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 
 if not CONFIG.get("app_url", "").strip():
     logger.warning("APP_URL não definida. URLs de preview podem ficar incorretas em produção. Defina APP_URL=https://seu-dominio.com")
@@ -166,10 +168,26 @@ def verificar_auth():
     rotas_publicas = {"login_page", "api_login", "static", "preview_pagina", "api_wa_webhook", "api_test_gemini", "api_status"}
     if request.endpoint in rotas_publicas:
         return
-    if not session.get("autenticado"):
+
+    autenticado = bool(session.get("autenticado"))
+    expirado = False
+    if autenticado:
+        import time as _t
+        agora = _t.time()
+        ultima = session.get("ultima_atividade", 0)
+        if ultima and (agora - ultima) > SESSAO_INATIVIDADE.total_seconds():
+            # Inatividade excedida -> encerra sessão
+            session.clear()
+            autenticado = False
+            expirado = True
+        else:
+            session["ultima_atividade"] = agora  # renova (deslizante)
+
+    if not autenticado:
         # fetch de API recebe 401 (JSON); navegação normal é redirecionada ao login
         if request.path.startswith("/api/"):
-            return jsonify({"erro": "Não autenticado"}), 401
+            return jsonify({"erro": "Sessão expirada." if expirado else "Não autenticado",
+                            "expirado": expirado}), 401
         return redirect(url_for("login_page"))
 
 
@@ -192,16 +210,20 @@ def api_login():
             return jsonify({"erro": "Informe e-mail e senha."}), 400
         ok, resultado = _supabase_login(email, senha)
         if ok:
+            import time as _t
             session.permanent  = True
             session["autenticado"] = True
             session["email"]       = resultado
+            session["ultima_atividade"] = _t.time()
             return jsonify({"ok": True, "email": resultado})
         return jsonify({"erro": resultado}), 401
 
     # 2) Fallback legado: senha única (SENHA_PAINEL)
     if senha and senha == CONFIG.get("senha_painel"):
+        import time as _t
         session.permanent      = True
         session["autenticado"] = True
+        session["ultima_atividade"] = _t.time()
         return jsonify({"ok": True})
     return jsonify({"erro": "E-mail ou senha incorretos."}), 401
 
