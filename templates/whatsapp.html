@@ -25,6 +25,31 @@
     </div>
   </div>
 
+  <!-- IA responde sozinha -->
+  <div class="card" id="card-ia-auto">
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v3h1a2 2 0 0 1 0 4h-1v3a2 2 0 0 1-2 2h-3v-1a2 2 0 0 0-4 0v1H7a2 2 0 0 1-2-2v-3H4a2 2 0 0 1 0-4h1V7a2 2 0 0 1 2-2h3V4a2 2 0 0 1 2-2z"/></svg>
+      IA responde sozinha
+    </h2>
+    <div class="wa-status-row" style="align-items:center">
+      <div class="wa-status-info">
+        <div class="wa-status-titulo" id="ia-auto-titulo">IA de atendimento desligada</div>
+        <div class="wa-status-sub" id="ia-auto-sub">Quando ligada, a IA responde automaticamente as mensagens recebidas.</div>
+      </div>
+      <label class="wa-switch">
+        <input type="checkbox" id="ia-auto-toggle" onchange="salvarIaAuto()"/>
+        <span class="wa-switch-slider"></span>
+      </label>
+    </div>
+    <details style="margin-top:14px">
+      <summary class="detalhes-toggle">Personalizar como a IA fala (opcional)</summary>
+      <textarea id="ia-auto-prompt" class="wa-textarea" rows="4"
+        placeholder="Ex.: Você é o assistente do Matheus, vende sites + automação, cobra só após entrega, tom positivo e curto..."></textarea>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="salvarIaAuto()">Salvar instruções</button>
+    </details>
+    <div id="ia-auto-msg" class="wa-config-warn" style="margin-top:10px;display:none"></div>
+  </div>
+
   <!-- QR Code -->
   <div class="card hidden" id="card-qr">
     <h2 class="card-title">

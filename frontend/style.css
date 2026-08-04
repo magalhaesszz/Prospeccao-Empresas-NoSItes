@@ -1393,3 +1393,13 @@ a,button,summary,label,select,input[type=checkbox],input[type=radio],
   .card-title{font-size:.62rem}
   .kpi-valor{font-size:1.15rem}
 }
+
+/* ── IA responde sozinha: switch + textarea ── */
+.wa-switch{position:relative;display:inline-block;width:52px;height:30px;flex:none}
+.wa-switch input{opacity:0;width:0;height:0}
+.wa-switch-slider{position:absolute;cursor:pointer;inset:0;background:var(--border,#cbd5e1);border-radius:30px;transition:.2s}
+.wa-switch-slider:before{content:"";position:absolute;height:22px;width:22px;left:4px;bottom:4px;background:#fff;border-radius:50%;transition:.2s}
+.wa-switch input:checked + .wa-switch-slider{background:#10B981}
+.wa-switch input:checked + .wa-switch-slider:before{transform:translateX(22px)}
+.wa-textarea{width:100%;margin-top:10px;padding:10px 12px;border:1px solid var(--border,#cbd5e1);border-radius:8px;font:inherit;font-size:.9rem;resize:vertical;background:var(--card-bg,#fff);color:inherit;box-sizing:border-box}
+.wa-textarea:focus{outline:none;border-color:var(--brand)}

@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
   carregarStats();
   carregarPendentes();
   carregarAgendamentos();
+  carregarIaAuto();
   _pollTimer = setInterval(() => atualizarStatus(true), 8000);
 });
 
@@ -1138,4 +1139,50 @@ async function deletarAgendamento(id) {
   await fetch(`/api/agendamentos/${id}`, { method: "DELETE" });
   mostrarToast("Agendamento excluído.", "info");
   carregarAgendamentos();
+}
+
+// ── IA responde sozinha ──────────────────────────────────────────────────────
+async function carregarIaAuto() {
+  try {
+    const r = await fetch("/api/whatsapp/ia-auto");
+    const d = await r.json();
+    const tog = document.getElementById("ia-auto-toggle");
+    if (tog) tog.checked = !!d.ativo;
+    const pr = document.getElementById("ia-auto-prompt");
+    if (pr) pr.value = d.prompt || "";
+    pintarIaAuto(!!d.ativo);
+  } catch (e) { /* silencioso */ }
+}
+
+function pintarIaAuto(ativo) {
+  const t = document.getElementById("ia-auto-titulo");
+  const s = document.getElementById("ia-auto-sub");
+  if (t) t.textContent = ativo ? "IA de atendimento LIGADA" : "IA de atendimento desligada";
+  if (s) s.textContent = ativo
+    ? "A IA está respondendo automaticamente as mensagens recebidas."
+    : "Quando ligada, a IA responde automaticamente as mensagens recebidas.";
+}
+
+async function salvarIaAuto() {
+  const ativo  = document.getElementById("ia-auto-toggle").checked;
+  const prompt = (document.getElementById("ia-auto-prompt").value || "").trim();
+  const msgEl  = document.getElementById("ia-auto-msg");
+  try {
+    const r = await fetch("/api/whatsapp/ia-auto", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ ativo, prompt }),
+    });
+    const d = await r.json();
+    pintarIaAuto(!!d.ativo);
+    mostrarToast(d.ativo ? "IA ligada — respondendo sozinha." : "IA desligada.", d.ativo ? "success" : "info");
+    if (msgEl && d.webhook) {
+      msgEl.style.display = "block";
+      msgEl.textContent = d.webhook;
+    } else if (msgEl) {
+      msgEl.style.display = "none";
+    }
+  } catch (e) {
+    mostrarToast("Erro ao salvar IA: " + e.message, "error");
+  }
 }

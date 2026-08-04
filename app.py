@@ -18,6 +18,7 @@ from database.db import (
     listar_blacklist, adicionar_blacklist, remover_blacklist,
     listar_notas, adicionar_nota, deletar_nota,
     buscar_empresa_por_telefone, marcar_respondeu,
+    get_config, set_config,
     criar_agendamento, listar_agendamentos, ativar_agendamento,
     deletar_agendamento, atualizar_ultima_execucao, contagem_enviadas_hoje,
     get_funil_conversao,
@@ -844,6 +845,18 @@ def api_wa_qrcode():
         logger.warning("Instância '%s' presa; migrado para '%s'", instance, novo)
         return jsonify({"base64": qr2})
 
+    # Banco da Evolution quebrado: create de nome novo estoura no Prisma (500).
+    # Não há fix no lado do app — as migrations do Prisma têm que rodar no servidor.
+    if "Prisma" in str(diag.get("create_novo", {}).get("body", "")):
+        return jsonify({"erro": (
+            "Banco da Evolution API com schema desatualizado (Prisma: tabela "
+            "IntegrationSession ausente). O app não consegue criar/recriar a "
+            "instância. Fix no SERVIDOR Evolution (Railway): rode as migrations — "
+            "`npx prisma migrate deploy --schema ./prisma/postgresql-schema.prisma` "
+            "no container, ou redeploy garantindo que o entrypoint execute as "
+            "migrations e que DATABASE_CONNECTION_URI aponte pro Postgres certo."
+        )})
+
     return jsonify({"erro": (
         "QR ainda não disponível — clique em Novo QR Code. "
         f"(create: {str(cr_data)[:200]} | connect: {str(ultima)[:150]} | diag: {str(diag)[:600]})"
@@ -1657,7 +1670,8 @@ Cliente: {nome}{hist_part}
 
 Gere uma resposta profissional, empática e focada em avançar a venda.
 - Português brasileiro, tom natural e amigável
-- Máximo 120 palavras
+- CURTA: máximo 55 palavras, 2-4 frases
+- Tom 100% positivo: só elogios, oportunidades e benefícios. NUNCA aponte falhas, defeitos ou o que falta no negócio do cliente
 - Se perguntou sobre preço: reforce "só paga após a entrega", proponha ver uma prévia
 - Se demonstrou interesse: proponha próximo passo concreto
 - Se expressou dúvida: esclareça com tranquilidade
@@ -1711,7 +1725,8 @@ NOTAS REGISTRADAS:
 
 Crie uma mensagem de follow-up personalizada e contextualizada.
 - Português brasileiro, tom amigável
-- Máximo 150 palavras
+- CURTA: máximo 60 palavras
+- Tom 100% positivo: só oportunidades e benefícios. NUNCA aponte falhas, defeitos ou o que falta no negócio do cliente
 - Referencie o histórico de forma natural
 - CTA claro e simples
 - *Negrito* com moderação
@@ -1745,10 +1760,11 @@ DESCRIÇÃO DO TEMPLATE: {descricao}
 REGRAS OBRIGATÓRIAS:
 - Use {{NOME_DA_EMPRESA}} onde mencionar o nome da empresa (será substituído automaticamente)
 - Português brasileiro, tom amigável e direto
-- Máximo 200 palavras
-- Mencione: identificou que não têm presença digital, oferece site + automação, cobra após entrega
+- CURTA: máximo 70 palavras
+- Tom 100% positivo: enquadre como oportunidade de fortalecer/ampliar a presença digital. NUNCA aponte falhas nem diga que "não têm site" ou "não têm presença digital"
+- Ofereça site + automação; cobra após entrega
 - *Negrito* para pontos-chave
-- Máximo 3 emojis estratégicos
+- Máximo 2 emojis estratégicos
 - CTA claro no final
 
 Retorne APENAS a mensagem do template."""
@@ -2084,13 +2100,13 @@ DADOS:
 
 REGRAS:
 - Português brasileiro, tom amigável e profissional, direto ao ponto
-- Máximo 180 palavras
-- Mencione que identificou que a empresa não tem site/presença digital
+- CURTA: máximo 70 palavras
+- Tom 100% positivo: enquadre como oportunidade de fortalecer/ampliar a presença digital. NUNCA aponte falhas nem diga que "não tem site" ou "não tem presença digital"
 - Ofereça: criação de site profissional + automação de processos
 - Destaque: cobra apenas após entrega finalizada
 {"- Mencione o link da prévia do site que criou especificamente para eles (isso é diferencial poderoso)" if link else ""}
 - Formatação WhatsApp: *negrito* para pontos importantes
-- Máximo 2-3 emojis estratégicos
+- Máximo 2 emojis estratégicos
 - CTA claro pedindo resposta
 
 Retorne APENAS a mensagem, sem prefácio ou explicações."""
@@ -2117,6 +2133,159 @@ def api_gemini_paginas_get():
 def api_gemini_paginas_delete(pid):
     deletar_pagina_preview(pid)
     return jsonify({"ok": True})
+
+
+# ── IA que responde sozinha no WhatsApp ───────────────────────────────────────
+_IA_MSGS_TRATADAS = set()   # ids de mensagens já respondidas (anti-duplicata)
+_IA_LOCK = threading.Lock()
+
+_IA_PROMPT_PADRAO = (
+    "Você é o assistente virtual de Matheus Magalhães, que vende criação de site "
+    "profissional + automação de processos para pequenas empresas. Política: cobra "
+    "APENAS após a entrega finalizada. Você responde os clientes no WhatsApp por ele."
+)
+
+
+def _ia_auto_ativa():
+    return (get_config("ia_auto_resposta", "off") or "off").lower() == "on"
+
+
+def _wa_registrar_webhook(base_url):
+    """Aponta o webhook da instância na Evolution p/ este app, com messages.upsert.
+    Sem isso a Evolution não envia as mensagens recebidas e a IA nunca é acionada."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    if not (base and instance and api_key and base_url):
+        return False, "app_url ou Evolution não configurados"
+    url = f"{base_url.rstrip('/')}/api/whatsapp/webhook"
+    corpo = {"webhook": {
+        "enabled": True,
+        "url": url,
+        "webhookByEvents": False,
+        "byEvents": False,
+        "events": ["MESSAGES_UPSERT"],
+    }}
+    try:
+        r = req.post(
+            f"{base}/webhook/set/{instance}",
+            headers={"apikey": api_key, "Content-Type": "application/json"},
+            json=corpo, timeout=15,
+        )
+        if r.ok:
+            return True, url
+        return False, f"HTTP {r.status_code}: {r.text[:150]}"
+    except Exception as e:
+        return False, str(e)
+
+
+def _ia_persona():
+    return (get_config("ia_system_prompt", "") or "").strip() or _IA_PROMPT_PADRAO
+
+
+def _wa_historico_conversa(jid, n=12):
+    """Últimas n mensagens da conversa (p/ dar contexto à IA). Lista [{de_mim, texto}]."""
+    import requests as req
+    base, instance, api_key = _wa_config()
+    if not (base and instance and api_key):
+        return []
+    try:
+        r = req.post(
+            f"{base}/chat/findMessages/{instance}",
+            headers={"apikey": api_key, "Content-Type": "application/json"},
+            json={"where": {"key": {"remoteJid": jid}}, "limit": 50},
+            timeout=20,
+        )
+        dados = r.json()
+        msgs = dados.get("messages", dados.get("data", [])) if isinstance(dados, dict) else dados
+        if isinstance(msgs, dict):
+            msgs = msgs.get("records", msgs.get("data", []))
+    except Exception:
+        return []
+    itens = []
+    for m in (msgs or []):
+        p = _parse_msg(m.get("message", {}) or {})
+        if p["texto"]:
+            itens.append({
+                "de_mim": bool(m.get("key", {}).get("fromMe")),
+                "texto":  p["texto"],
+                "ts":     m.get("messageTimestamp") or 0,
+            })
+    itens.sort(key=lambda x: x["ts"] or 0)
+    return itens[-n:]
+
+
+def _ia_responder_async(numero, jid, texto_recebido, nome_contato, empresa):
+    """Gera resposta com IA e envia. Roda em thread p/ o webhook responder rápido."""
+    try:
+        ctx_empresa = ""
+        if empresa:
+            ctx_empresa = (
+                f"\nDADOS DO CLIENTE (prospect nosso): nome={empresa.get('nome','')}, "
+                f"segmento={empresa.get('categoria','') or empresa.get('descricao_google','') or '?'}, "
+                f"cidade={empresa.get('cidade','') or '?'}, "
+                f"status_crm={empresa.get('status','')}."
+            )
+        historico = _wa_historico_conversa(jid, 12)
+        hist_txt = "\n".join(
+            f"{'Eu' if h['de_mim'] else (nome_contato or 'Cliente')}: {h['texto']}"
+            for h in historico
+        ) or "(sem histórico anterior)"
+
+        prompt = f"""{_ia_persona()}
+{ctx_empresa}
+
+Conversa até agora:
+{hist_txt}
+
+Última mensagem do cliente ({nome_contato or 'cliente'}):
+"{texto_recebido}"
+
+Escreva a PRÓXIMA resposta como se fosse o Matheus, no WhatsApp.
+- Português brasileiro, natural e amigável
+- CURTA: máximo 55 palavras, 1-3 frases
+- Tom 100% positivo: só oportunidades e benefícios. NUNCA aponte falhas ou o que falta no negócio do cliente
+- Responda diretamente o que ele perguntou; avance a conversa com 1 pergunta ou próximo passo
+- Se perguntar preço: reforce "só paga após a entrega" e ofereça mostrar uma prévia
+- Se for algo delicado (reclamação, negociação de valor, jurídico) que precise do Matheus, responda algo acolhedor e diga que ele já assume a conversa
+- No máximo 1 emoji
+Retorne APENAS o texto da resposta, sem aspas nem prefácio."""
+
+        resposta = (_ai_gerar(prompt) or "").strip()
+        if not resposta:
+            return
+        _wa_send_text(numero, resposta)
+        logger.info("[IA-auto] Respondeu %s (%s): %s", nome_contato or "", numero, resposta[:60])
+        _broadcast({"tipo": "ia_respondeu", "numero": numero, "jid": jid, "texto": resposta})
+    except Exception as e:
+        logger.error("[IA-auto] Falha ao responder %s: %s", numero, e)
+
+
+@app.route("/api/whatsapp/ia-auto", methods=["GET", "POST"])
+def api_wa_ia_auto():
+    """Liga/desliga e configura a IA que responde sozinha no WhatsApp.
+    GET  -> {ativo, prompt}
+    POST {ativo: bool, prompt?: str} -> salva."""
+    if request.method == "GET":
+        return jsonify({
+            "ativo":  _ia_auto_ativa(),
+            "prompt": (get_config("ia_system_prompt", "") or ""),
+        })
+    dados = request.get_json(silent=True) or {}
+    webhook_msg = None
+    if "ativo" in dados:
+        set_config("ia_auto_resposta", "on" if dados.get("ativo") else "off")
+        # Ao ligar, garante que a Evolution enviará as mensagens recebidas p/ o app.
+        if dados.get("ativo"):
+            ok, info = _wa_registrar_webhook(_app_base_url())
+            webhook_msg = ("Webhook registrado: " + info) if ok else ("Falha ao registrar webhook: " + info)
+    if "prompt" in dados:
+        set_config("ia_system_prompt", (dados.get("prompt") or "").strip())
+    return jsonify({
+        "ok":      True,
+        "ativo":   _ia_auto_ativa(),
+        "prompt":  (get_config("ia_system_prompt", "") or ""),
+        "webhook": webhook_msg,
+    })
 
 
 # ── Webhook Evolution API (rastreamento de respostas) ─────────────────────────
@@ -2150,6 +2319,29 @@ def api_wa_webhook():
             })
             logger.info("[webhook] Resposta recebida de %s (%s)", empresa.get("nome"), numero)
 
+        # ── Auto-resposta IA ──────────────────────────────────────────────────
+        # Ignora grupos, status, listas de difusão. Só texto. Anti-duplicata por id.
+        pular = (not jid) or jid.endswith("@g.us") or "status@broadcast" in jid or "@lid" in jid
+        if _ia_auto_ativa() and not pular:
+            p = _parse_msg(data.get("message", {}) or {})
+            texto_in = (p.get("texto") or "").strip()
+            msg_id   = key.get("id", "")
+            nova = False
+            if texto_in and msg_id:
+                with _IA_LOCK:
+                    if msg_id not in _IA_MSGS_TRATADAS:
+                        _IA_MSGS_TRATADAS.add(msg_id)
+                        if len(_IA_MSGS_TRATADAS) > 2000:
+                            _IA_MSGS_TRATADAS.clear()
+                        nova = True
+            if nova:
+                nome_contato = data.get("pushName") or (empresa.get("nome") if empresa else "")
+                threading.Thread(
+                    target=_ia_responder_async,
+                    args=(numero, jid, texto_in, nome_contato, empresa),
+                    daemon=True,
+                ).start()
+
     return jsonify({"ok": True})
 
 
@@ -2177,12 +2369,12 @@ def api_wa_gerar_mensagem():
         f"a seguinte empresa: {contexto}.\n"
         "Regras:\n"
         "- Português brasileiro, tom amigável e direto\n"
-        "- Mencione que a empresa não tem presença digital (site)\n"
+        "- CURTA: máximo 70 palavras\n"
+        "- Tom 100% positivo: enquadre como oportunidade de fortalecer/ampliar a presença digital. NUNCA aponte falhas nem diga que 'não tem site' ou 'não tem presença digital'\n"
         "- Ofereça criação de site profissional e automação de processos\n"
         "- Mencione que só cobra após entrega finalizada\n"
         "- Incentive o prospecto a responder\n"
         "- Use formatação WhatsApp (*negrito*)\n"
-        "- Máximo 200 palavras\n"
         "Escreva APENAS a mensagem, sem comentários."
     )
 

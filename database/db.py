@@ -218,6 +218,13 @@ def inicializar_banco():
         )
     """)
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS configuracoes (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        )
+    """)
+
     c.execute("CREATE INDEX IF NOT EXISTS idx_preview_slug ON paginas_preview(slug)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_telefone ON empresas(telefone)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_empresas_status   ON empresas(status)")
@@ -764,6 +771,30 @@ def marcar_respondeu(empresa_id):
         SET status='respondeu', ultimo_contato=CURRENT_TIMESTAMP
         WHERE id=%s AND status NOT IN ('interessado', 'fechado')
     """, (empresa_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Configurações (kv genérico) ───────────────────────────────────────────────
+
+def get_config(chave, default=None):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT valor FROM configuracoes WHERE chave=%s", (chave,))
+    row = _one(c)
+    conn.close()
+    if not row:
+        return default
+    return row["valor"] if isinstance(row, dict) else row[0]
+
+
+def set_config(chave, valor):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO configuracoes (chave, valor) VALUES (%s, %s)
+        ON CONFLICT (chave) DO UPDATE SET valor=EXCLUDED.valor
+    """, (chave, str(valor)))
     conn.commit()
     conn.close()
 
