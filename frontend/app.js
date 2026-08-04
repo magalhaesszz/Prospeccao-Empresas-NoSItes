@@ -250,8 +250,11 @@ function filtrarTabela() {
 
 function _aplicarFiltro() {
   const soSemSite = document.getElementById("chk-sem-site").checked;
-  // Empresas já contatadas saem da tela de resultados (ficam no CRM).
-  let base = APP.empresas.filter(e => !e.mensagem_enviada);
+  // Mostra TODAS, inclusive já disparadas (marcadas com selo) — evita re-disparo.
+  let base = [...APP.empresas];
+  if (document.getElementById("chk-ocultar-enviadas")?.checked) {
+    base = base.filter(e => !e.mensagem_enviada);
+  }
   APP.filtradas = soSemSite ? base.filter(e => !e.tem_site) : base;
   renderizarCards();
   renderizarPaginacao();
@@ -297,7 +300,7 @@ function renderizarCards() {
 
     const card = document.createElement("div");
     card.id        = `card-${emp.id}`;
-    card.className = "empresa-card";
+    card.className = "empresa-card" + (enviado ? " empresa-card-enviada" : "");
     card.innerHTML = `
       <div style="display:flex;gap:12px;align-items:flex-start">
         <div style="padding-top:3px;flex-shrink:0">
@@ -375,7 +378,8 @@ function renderizarCards() {
 }
 
 function _badgeStatus(status, enviado, duplicado) {
-  if (enviado || status === "contatado") return '<span class="badge badge-azul" style="font-size:.68rem">Contatado</span>';
+  if (enviado) return '<span class="badge" style="font-size:.68rem;background:#10B981;color:#fff;font-weight:700">✓ JÁ DISPARADA</span>';
+  if (status === "contatado") return '<span class="badge badge-azul" style="font-size:.68rem">Contatado</span>';
   if (status === "interessado")          return '<span class="badge badge-roxo" style="font-size:.68rem">Interessado</span>';
   if (status === "fechado")              return '<span class="badge badge-verde" style="font-size:.68rem">Fechado</span>';
   if (status === "perdido")              return '<span class="badge badge-vermelho" style="font-size:.68rem">Perdido</span>';

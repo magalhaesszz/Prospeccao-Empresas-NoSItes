@@ -1409,3 +1409,7 @@ a,button,summary,label,select,input[type=checkbox],input[type=radio],
 .ritmo-item{display:flex;flex-direction:column;gap:5px;font-size:.8rem;color:var(--muted)}
 .ritmo-item input{padding:8px 10px;border:1px solid var(--border,#cbd5e1);border-radius:8px;font:inherit;background:var(--card-bg,#fff);color:inherit}
 .ritmo-item input:focus{outline:none;border-color:var(--brand)}
+
+/* Card de empresa já disparada — apagado, com faixa verde à esquerda */
+.empresa-card-enviada{opacity:.62;border-left:4px solid #10B981;background:rgba(16,185,129,.05)}
+.empresa-card-enviada:hover{opacity:.8}
