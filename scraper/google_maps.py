@@ -33,6 +33,13 @@ def criar_driver():
         "--window-size=1280,900", "--lang=pt-BR,pt",
         "--disable-blink-features=AutomationControlled",
         "--disable-extensions", "--disable-infobars",
+        # Reduz uso de memória — evita "tab crashed" (renderer OOM) no Railway.
+        "--single-process", "--no-zygote",
+        "--disable-dev-tools", "--disable-application-cache",
+        "--disable-background-networking", "--disable-default-apps",
+        "--disable-sync", "--memory-pressure-off",
+        "--js-flags=--max-old-space-size=256",
+        "--blink-settings=imagesEnabled=false",
     ]
 
     if CONFIG.get("headless"):
@@ -94,6 +101,16 @@ def criar_driver():
 
 
 # ── Busca principal ───────────────────────────────────────────────────────────
+
+def _driver_morto(exc):
+    """True se a exceção indica que o Chrome/aba morreu e o driver ficou inutilizável."""
+    s = str(exc).lower()
+    return any(k in s for k in (
+        "tab crashed", "target crashed", "session deleted", "invalid session id",
+        "disconnected", "not connected to devtools", "chrome not reachable",
+        "no such window", "web view not found", "unable to receive message from renderer",
+    ))
+
 
 def _fechar_consentimento(driver):
     """Google Maps headless às vezes abre um muro de consentimento de cookies
@@ -182,33 +199,58 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None, sta
         n_dedup = 0
         logger.info("Fase 2: processando até %d URLs para obter %d empresas.", total_urls, max_itens)
 
+        PLACES_POR_DRIVER = 6  # recicla o Chrome a cada N páginas (evita crash de memória)
+        desde_reinicio = 0
+
         for i, item in enumerate(itens_feed):
             if len(empresas) >= max_itens:
                 break
-            try:
-                emp = _extrair_de_url(driver, item["url"], item["nome_hint"])
-                if not emp:
-                    n_none += 1
-                    logger.warning("[%d/%d] extração retornou None — URL ignorada.", i + 1, total_urls)
-                    continue
-                emp["score"] = _calcular_score(emp, categoria)
-                tel = emp.get("telefone")
-                if tel and tel in telefones_vistos:
-                    n_dedup += 1
-                    logger.info("[%d/%d] %s — telefone duplicado, ignorada.", i + 1, total_urls, emp["nome"])
-                    continue
-                if tel:
-                    telefones_vistos.add(tel)
-                empresas.append(emp)
-                logger.info("[%d/%d] %s | Tel:%s Site:%s Score:%d",
-                    len(empresas), max_itens, emp["nome"],
-                    emp["telefone"] or "—",
-                    "S" if emp["tem_site"] else "N",
-                    emp["score"])
-                if callback_progresso:
-                    callback_progresso({"atual": len(empresas), "total": max_itens, "empresa": emp["nome"]})
-            except Exception as exc:
-                logger.error("Erro item %d (%s): %s", i, item.get("url", "?")[:60], exc)
+
+            # Reciclagem proativa: fecha e reabre o Chrome antes de acumular memória.
+            if desde_reinicio >= PLACES_POR_DRIVER:
+                logger.info("Reciclando Chrome após %d páginas.", desde_reinicio)
+                try: driver.quit()
+                except Exception: pass
+                driver = criar_driver()
+                desde_reinicio = 0
+
+            emp = None
+            for tentativa in range(2):
+                try:
+                    emp = _extrair_de_url(driver, item["url"], item["nome_hint"])
+                    break
+                except Exception as exc:
+                    if _driver_morto(exc) and tentativa == 0:
+                        logger.warning("[%d/%d] aba crashou — recriando Chrome e tentando de novo.", i + 1, total_urls)
+                        try: driver.quit()
+                        except Exception: pass
+                        driver = criar_driver()
+                        desde_reinicio = 0
+                        continue
+                    logger.error("Erro item %d (%s): %s", i, item.get("url", "?")[:60], exc)
+                    break
+            desde_reinicio += 1
+
+            if not emp:
+                n_none += 1
+                logger.warning("[%d/%d] extração retornou None — URL ignorada.", i + 1, total_urls)
+                continue
+            emp["score"] = _calcular_score(emp, categoria)
+            tel = emp.get("telefone")
+            if tel and tel in telefones_vistos:
+                n_dedup += 1
+                logger.info("[%d/%d] %s — telefone duplicado, ignorada.", i + 1, total_urls, emp["nome"])
+                continue
+            if tel:
+                telefones_vistos.add(tel)
+            empresas.append(emp)
+            logger.info("[%d/%d] %s | Tel:%s Site:%s Score:%d",
+                len(empresas), max_itens, emp["nome"],
+                emp["telefone"] or "—",
+                "S" if emp["tem_site"] else "N",
+                emp["score"])
+            if callback_progresso:
+                callback_progresso({"atual": len(empresas), "total": max_itens, "empresa": emp["nome"]})
 
     except Exception as exc:
         logger.error("Erro geral: %s", exc)
