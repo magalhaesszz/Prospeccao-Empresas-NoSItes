@@ -732,26 +732,18 @@ def api_wa_qrcode():
         return qr, cr_data, cr
 
     def _apagar_instancia():
-        """Logout + delete e ESPERA a instância sumir (delete é assíncrono na Evolution)."""
-        for ep in (f"{base_url}/instance/logout/{instance}",
-                   f"{base_url}/instance/delete/{instance}"):
-            try:
-                req.delete(ep, headers={"apikey": api_key}, timeout=10)
-            except Exception:
-                pass
-        # Poll até connectionState devolver 404 (sumiu) — senão o create seguinte dá 403.
-        for _ in range(8):
-            try:
-                rs = req.get(
-                    f"{base_url}/instance/connectionState/{instance}",
-                    headers={"apikey": api_key},
-                    timeout=8,
-                )
-                if rs.status_code == 404:
-                    return
-            except Exception:
+        """Apaga a instância e ESPERA ela sumir (delete é assíncrono na Evolution).
+        Instrumentado via _hit p/ ver status real de logout/delete no diag."""
+        _hit("DELETE", f"/instance/logout/{instance}")  # ignora 400 (não conectada)
+        _hit("DELETE", f"/instance/delete/{instance}")
+        # Poll: qualquer status != 200 em connectionState = instância sumiu → pode recriar.
+        for i in range(10):
+            r = _hit("GET", f"/instance/connectionState/{instance}")
+            if r is not None and r.status_code != 200:
+                diag[f"delete_gone_after_{i}"] = True
                 return
             time.sleep(1.0)
+        diag["delete_gone"] = False
 
     def _connect_qr():
         """Chama connect e tenta extrair QR. Retorna (qr, conectado, data)."""
@@ -784,15 +776,6 @@ def api_wa_qrcode():
         except Exception as e:
             diag[f"{metodo} {path}"] = {"erro": str(e)}
             return None
-
-    def _restart():
-        """Reinicia instância presa — Baileys reabre o socket e emite QR fresco."""
-        _hit("PUT", f"/instance/restart/{instance}")
-
-    def _logout():
-        """Derruba a sessão WA da instância EXISTENTE (não apaga o registro).
-        Move o estado p/ 'close', o que faz o connect seguinte reemitir QR fresco."""
-        _hit("DELETE", f"/instance/logout/{instance}")
 
     # 0. Se já está conectado, NÃO recria (evita derrubar sessão viva).
     try:
@@ -833,22 +816,11 @@ def api_wa_qrcode():
             time.sleep(1.4)
         return None
 
-    # 3. Instância presa (create=403, connect={count:0}). Derruba a sessão WA da
-    #    instância EXISTENTE — logout move o estado p/ 'close' e o connect reemite QR.
-    _logout()
-    time.sleep(2.0)
-    if (r := _loop_connect()):
-        return r
-
-    # 4. Logout não bastou — reinicia a instância (reabre o socket Baileys).
-    _restart()
-    time.sleep(2.0)
-    if (r := _loop_connect()):
-        return r
-
-    # 5. Último recurso: apaga e recria do zero.
+    # 3. Instância presa (create=403, connect={count:0}). logout/restart são becos
+    #    sem saída nesta versão da Evolution (logout=400 não-conectada, restart=404
+    #    inexistente). Único caminho: apagar e recriar do zero.
     _apagar_instancia()
-    time.sleep(1.5)
+    time.sleep(2.0)
     qr, cr_data, cr = _criar_e_pegar_qr()
     if qr:
         return jsonify({"base64": qr})
