@@ -19,10 +19,41 @@ let _empresaAbertaObj = null;
 async function carregarKanban() {
   try {
     _dados = await fetch("/api/crm/kanban").then(r => r.json());
+    popularFiltrosCrm();
     renderizarKanban();
   } catch (e) {
     console.error("Erro ao carregar CRM:", e);
   }
+}
+
+function _todasEmpresas() {
+  return COLUNAS.flatMap(col => _dados[col.id] || []);
+}
+
+// Preenche os selects de cidade e segmento com os valores presentes nos dados.
+function popularFiltrosCrm() {
+  const emps = _todasEmpresas();
+  const cidades = [...new Set(emps.map(e => e.cidade).filter(Boolean))].sort();
+  const cats    = [...new Set(emps.map(e => e.categoria).filter(Boolean))].sort();
+  _preencherSelect("filtro-cidade", cidades, "Todas as cidades");
+  _preencherSelect("filtro-categoria", cats, "Todos os segmentos");
+}
+
+function _preencherSelect(id, valores, labelTodos) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const atual = sel.value;
+  sel.innerHTML = `<option value="">${labelTodos}</option>` +
+    valores.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  if (valores.includes(atual)) sel.value = atual;   // preserva seleção após refresh
+}
+
+function limparFiltrosCrm() {
+  ["filtro-crm","filtro-cidade","filtro-categoria","filtro-site"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  filtrarCards();
 }
 
 function filtrarCards() {
@@ -34,16 +65,26 @@ function renderizarKanban() {
   const board = document.getElementById("kanban-board");
   board.innerHTML = "";
 
+  const fCidade = (document.getElementById("filtro-cidade")||{}).value || "";
+  const fCat    = (document.getElementById("filtro-categoria")||{}).value || "";
+  const fSite   = (document.getElementById("filtro-site")||{}).value || "";
+
   COLUNAS.forEach(col => {
     let empresas = (_dados[col.id] || []);
 
-    // Aplica filtro de texto
+    // Filtro de texto (nome, telefone, cidade, segmento)
     if (_filtro) {
       empresas = empresas.filter(e =>
         (e.nome||"").toLowerCase().includes(_filtro) ||
-        (e.telefone||"").includes(_filtro)
+        (e.telefone||"").includes(_filtro) ||
+        (e.cidade||"").toLowerCase().includes(_filtro) ||
+        (e.categoria||"").toLowerCase().includes(_filtro)
       );
     }
+    if (fCidade) empresas = empresas.filter(e => e.cidade === fCidade);
+    if (fCat)    empresas = empresas.filter(e => e.categoria === fCat);
+    if (fSite === "sem") empresas = empresas.filter(e => !e.tem_site);
+    if (fSite === "com") empresas = empresas.filter(e => e.tem_site);
 
     const colEl = document.createElement("div");
     colEl.className = "kanban-col";

@@ -191,13 +191,15 @@ _FIM_LISTA_TEXTOS = [
 
 
 def _fim_de_lista(driver):
-    """Retorna True se Google Maps sinalizou que não há mais resultados."""
+    """Retorna True se Google Maps sinalizou que não há mais resultados.
+    Só considera fim quando o TEXTO bate com um marcador conhecido — antes bastava
+    ter qualquer texto no seletor, o que parava o scroll cedo (30 vinham 3)."""
     try:
         for sel in _FIM_LISTA_SELETORES:
             els = driver.find_elements(By.CSS_SELECTOR, sel)
             for el in els:
                 txt = (el.text or "").lower()
-                if txt:
+                if txt and any(m in txt for m in _FIM_LISTA_TEXTOS):
                     return True
     except Exception:
         pass

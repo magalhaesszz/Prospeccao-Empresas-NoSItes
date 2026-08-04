@@ -144,7 +144,11 @@
           <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           Selecionar todos
         </button>
-        <button class="btn btn-whatsapp" onclick="enviarSelecionados()">
+        <button class="btn btn-whatsapp" onclick="dispararComIA()" title="Gera uma mensagem IA única para cada empresa e dispara">
+          <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v3h1a2 2 0 0 1 0 4h-1v3a2 2 0 0 1-2 2h-3v-1a2 2 0 0 0-4 0v1H7a2 2 0 0 1-2-2v-3H4a2 2 0 0 1 0-4h1V7a2 2 0 0 1 2-2h3V4a2 2 0 0 1 2-2z"/></svg>
+          Disparar com IA
+        </button>
+        <button class="btn btn-secondary" onclick="enviarSelecionados()">
           <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
           WhatsApp (lote)
         </button>
@@ -196,8 +200,9 @@
     <p id="modal-msg-nome" style="font-size:.8rem;color:var(--muted);margin-bottom:14px"></p>
     <textarea id="modal-msg-texto" rows="10" style="width:100%;box-sizing:border-box;resize:vertical;font-size:.875rem;border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--surface-2);color:var(--text);font-family:inherit"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-whatsapp btn-sm" id="modal-btn-enviar" onclick="enviarMsgModal()">📤 Enviar agora (IA)</button>
       <button class="btn btn-primary btn-sm" onclick="copiarMsgModal()">Copiar</button>
-      <button class="btn btn-whatsapp btn-sm" id="modal-btn-wa">Abrir no WhatsApp</button>
+      <button class="btn btn-secondary btn-sm" id="modal-btn-wa">Abrir no WhatsApp</button>
       <button class="btn btn-secondary btn-sm" onclick="fecharModalMsg()">Fechar</button>
     </div>
   </div>

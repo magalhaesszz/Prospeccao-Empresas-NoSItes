@@ -238,7 +238,9 @@ function filtrarTabela() {
 
 function _aplicarFiltro() {
   const soSemSite = document.getElementById("chk-sem-site").checked;
-  APP.filtradas = soSemSite ? APP.empresas.filter(e => !e.tem_site) : [...APP.empresas];
+  // Empresas já contatadas saem da tela de resultados (ficam no CRM).
+  let base = APP.empresas.filter(e => !e.mensagem_enviada);
+  APP.filtradas = soSemSite ? base.filter(e => !e.tem_site) : base;
   renderizarCards();
   renderizarPaginacao();
   atualizarContador();
@@ -537,6 +539,57 @@ async function enviarUm(id) {
   await _enviarIds([id]);
 }
 
+// Gera uma mensagem IA ÚNICA por empresa (as que faltam) e dispara o lote.
+async function dispararComIA() {
+  // Alvos: selecionados; se nada marcado, todas sem site + com telefone + não enviadas.
+  let alvos = [...APP.selecionados];
+  if (!alvos.length) {
+    alvos = APP.empresas
+      .filter(e => !e.tem_site && e.telefone && !e.mensagem_enviada)
+      .map(e => e.id);
+  }
+  if (!alvos.length) { mostrarToast("Nenhuma empresa elegível para disparo.", "warning"); return; }
+  if (!confirm(`Gerar mensagem IA única para ${alvos.length} empresa(s) e disparar?`)) return;
+
+  const faltam = alvos.filter(id => {
+    const e = APP.empresas.find(x => x.id === id);
+    return e && !e.gemini_mensagem;
+  });
+
+  let feitos = 0;
+  for (const id of faltam) {
+    const e = APP.empresas.find(x => x.id === id);
+    mostrarToast(`🤖 Gerando IA ${++feitos}/${faltam.length}${e ? " — " + e.nome : ""}...`, "info");
+    try {
+      const r = await fetch("/api/ai/gerar-mensagem-empresa", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ empresa_id: id }),
+      });
+      const d = await r.json();
+      if (r.ok && d.mensagem && e) e.gemini_mensagem = d.mensagem;
+    } catch (_) {}
+  }
+
+  // Mapa id -> mensagem IA (usa o que temos local; o backend também lê do banco).
+  const mensagens = {};
+  alvos.forEach(id => {
+    const e = APP.empresas.find(x => x.id === id);
+    if (e && e.gemini_mensagem) mensagens[id] = e.gemini_mensagem;
+  });
+
+  try {
+    const r = await fetch("/api/enviar", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ ids: alvos, mensagens }),
+    });
+    const d = await r.json();
+    if (!r.ok) { mostrarToast("Erro: " + d.erro, "error"); return; }
+    mostrarToast("📤 " + d.mensagem, "success");
+  } catch (e) {
+    mostrarToast("Erro de rede: " + e.message, "error");
+  }
+}
+
 async function _enviarIds(ids) {
   try {
     const r = await fetch("/api/enviar", {
@@ -681,8 +734,11 @@ async function iniciarEnriquecimento() {
 
 // ── Modal Mensagem IA ─────────────────────────────────────────────────────────
 
+let _msgModalEmpId = null;   // empresa aberta no modal de Mensagem IA
+
 async function gerarMensagemEmpresa(empresaId, telefone) {
   empresaId = parseInt(empresaId, 10);
+  _msgModalEmpId = empresaId;
   const modal   = document.getElementById("modal-msg-ia");
   const txtArea = document.getElementById("modal-msg-texto");
   const nomePar = document.getElementById("modal-msg-nome");
@@ -733,6 +789,32 @@ async function gerarMensagemEmpresa(empresaId, telefone) {
 function copiarMsgModal() {
   const txt = document.getElementById("modal-msg-texto").value;
   navigator.clipboard.writeText(txt).then(() => mostrarToast("Mensagem copiada!", "success"));
+}
+
+// Envia a mensagem IA do modal (texto editável) direto pela Evolution.
+async function enviarMsgModal() {
+  const id  = _msgModalEmpId;
+  const txt = (document.getElementById("modal-msg-texto").value || "").trim();
+  if (!id)  { mostrarToast("Empresa não identificada.", "error"); return; }
+  if (!txt) { mostrarToast("Mensagem vazia.", "warning"); return; }
+  const emp = APP.empresas.find(e => e.id === id);
+  if (emp && emp.mensagem_enviada) { mostrarToast("Já enviada para esta empresa.", "warning"); return; }
+  const btn = document.getElementById("modal-btn-enviar");
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch("/api/enviar", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ ids: [id], mensagens: { [id]: txt } }),
+    });
+    const d = await r.json();
+    if (!r.ok) { mostrarToast("Erro: " + d.erro, "error"); return; }
+    mostrarToast("📤 " + d.mensagem, "success");
+    fecharModalMsg();
+  } catch (e) {
+    mostrarToast("Erro de rede: " + e.message, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function fecharModalMsg() {

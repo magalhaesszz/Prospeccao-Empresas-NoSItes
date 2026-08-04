@@ -7,7 +7,15 @@
   <div class="page-header">
     <h1 class="page-title">CRM — Funil de Vendas</h1>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input id="filtro-crm" type="text" placeholder="Filtrar por nome..." class="input-filtro" oninput="filtrarCards()"/>
+      <input id="filtro-crm" type="text" placeholder="Nome, telefone, cidade..." class="input-filtro" oninput="filtrarCards()"/>
+      <select id="filtro-cidade" class="input-filtro" onchange="filtrarCards()"><option value="">Todas as cidades</option></select>
+      <select id="filtro-categoria" class="input-filtro" onchange="filtrarCards()"><option value="">Todos os segmentos</option></select>
+      <select id="filtro-site" class="input-filtro" onchange="filtrarCards()">
+        <option value="">Site: todos</option>
+        <option value="sem">Sem site</option>
+        <option value="com">Com site</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" onclick="limparFiltrosCrm()">Limpar</button>
       <button class="btn btn-secondary btn-sm" onclick="carregarKanban()">↻ Atualizar</button>
     </div>
   </div>

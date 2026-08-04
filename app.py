@@ -446,6 +446,8 @@ def api_enviar():
 
     dados = request.get_json(silent=True) or {}
     ids   = dados.get("ids", [])
+    # Mensagens IA por empresa (id -> texto). Sobrepõe a mensagem no envio.
+    mensagens = dados.get("mensagens") or {}
     if not ids:
         return jsonify({"erro": "Nenhuma empresa selecionada."}), 400
 
@@ -453,6 +455,9 @@ def api_enviar():
     for eid in ids:
         emp = buscar_empresa_por_id(eid)
         if emp and emp.get("telefone") and not emp.get("mensagem_enviada"):
+            custom = mensagens.get(str(eid)) or mensagens.get(eid)
+            if custom and str(custom).strip():
+                emp["gemini_mensagem"] = str(custom).strip()
             empresas.append(emp)
 
     if not empresas:
