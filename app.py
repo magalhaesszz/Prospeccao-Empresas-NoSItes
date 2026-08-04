@@ -732,18 +732,11 @@ def api_wa_qrcode():
         return qr, cr_data, cr
 
     def _apagar_instancia():
-        """Apaga a instância e ESPERA ela sumir (delete é assíncrono na Evolution).
-        Instrumentado via _hit p/ ver status real de logout/delete no diag."""
+        """Apaga a instância. NÃO consulta connectionState depois: nesta Evolution
+        consultar um nome inexistente RECRIA o registro (state 'close'), fazendo o
+        create seguinte dar 403. Só deleta e deixa a Evolution limpar assíncrono."""
         _hit("DELETE", f"/instance/logout/{instance}")  # ignora 400 (não conectada)
         _hit("DELETE", f"/instance/delete/{instance}")
-        # Poll: qualquer status != 200 em connectionState = instância sumiu → pode recriar.
-        for i in range(10):
-            r = _hit("GET", f"/instance/connectionState/{instance}")
-            if r is not None and r.status_code != 200:
-                diag[f"delete_gone_after_{i}"] = True
-                return
-            time.sleep(1.0)
-        diag["delete_gone"] = False
 
     def _connect_qr():
         """Chama connect e tenta extrair QR. Retorna (qr, conectado, data)."""
@@ -816,16 +809,40 @@ def api_wa_qrcode():
             time.sleep(1.4)
         return None
 
-    # 3. Instância presa (create=403, connect={count:0}). logout/restart são becos
-    #    sem saída nesta versão da Evolution (logout=400 não-conectada, restart=404
-    #    inexistente). Único caminho: apagar e recriar do zero.
+    # 3. Instância presa (create=403, connect={count:0}). Apaga e recria do zero.
+    #    NÃO consultar connectionState entre delete e create — recria o registro
+    #    e o create volta a dar 403.
     _apagar_instancia()
-    time.sleep(2.0)
+    time.sleep(3.0)
     qr, cr_data, cr = _criar_e_pegar_qr()
     if qr:
         return jsonify({"base64": qr})
+    diag["recreate_status"] = getattr(cr, "status_code", None)
+
+    # 4. Recriou mas sem QR no corpo — puxa via connect.
     if (r := _loop_connect()):
         return r
+
+    # 5. Delete não liberou o nome (Evolution mantém o registro). Cria instância
+    #    com nome único e passa a usá-la neste processo — o QR vem no corpo do create.
+    novo = f"{instance}-{int(time.time())}"
+    try:
+        cr2 = req.post(
+            f"{base_url}/instance/create",
+            headers=headers,
+            json={"instanceName": novo, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
+            timeout=20,
+        )
+        cr2_data = cr2.json()
+    except Exception as e:
+        cr2_data = {"erro": str(e)}
+    diag["novo_nome"] = novo
+    diag["create_novo"] = {"status": getattr(cr2, "status_code", None), "body": str(cr2_data)[:160]}
+    qr2 = _extrai_qr(cr2_data) or _extrai_qr(cr2_data.get("qrcode") if isinstance(cr2_data, dict) else None)
+    if qr2:
+        CONFIG["evolution_instance"] = novo  # resto do app passa a usar o novo nome
+        logger.warning("Instância '%s' presa; migrado para '%s'", instance, novo)
+        return jsonify({"base64": qr2})
 
     return jsonify({"erro": (
         "QR ainda não disponível — clique em Novo QR Code. "
