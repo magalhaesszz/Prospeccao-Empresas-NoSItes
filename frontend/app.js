@@ -54,6 +54,14 @@ function processarEvento(ev) {
       document.getElementById("btn-buscar").disabled = false;
       const reclass = ev.reclassificadas ? ` · ${ev.reclassificadas} tinham site falso` : "";
       setProgresso(`Concluído! ${ev.total} empresas (${ev.sem_site} sem site${reclass}).`, ev.total, ev.total, "", 100);
+      if (ev.funil) {
+        const f = ev.funil;
+        console.log("Funil scraping:", f);
+        // Se raspou bem menos que o pedido, mostra onde perdeu (feed/URLs/extração).
+        if ((f.extraidas || 0) < (f.pedidas || 0)) {
+          mostrarToast(`Funil: pediu ${f.pedidas}, feed ${f.cards} cards, ${f.urls} URLs, ${f.extraidas} extraídas (${f.sem_dados} sem dados, ${f.dup_tel} tel. duplicado).`, "info");
+        }
+      }
       carregarHistorico();
       APP._prontosDisparo = ev.prontos_disparo || [];
       // Mostra painel IA e auto-inicia geração de mensagens + análise

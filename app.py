@@ -376,7 +376,8 @@ def _executar_busca(cidade, categoria, quantidade=None):
                 _estado["empresa_atual"] = info["empresa"]
             _broadcast({"tipo": "progresso", **info})
 
-        empresas = buscar_empresas(cidade, categoria, _cb, limite=quantidade)
+        stats_funil = {}
+        empresas = buscar_empresas(cidade, categoria, _cb, limite=quantidade, stats=stats_funil)
 
         # ── Validação real: confirma via HTTP quem tem/não tem site ──────────
         from scraper.verificar_site import validar_flags_site
@@ -427,6 +428,7 @@ def _executar_busca(cidade, categoria, quantidade=None):
             "prontos_disparo": prontos,
             "empresas": empresas,
             "busca_id": busca_id,
+            "funil": stats_funil,
         })
         logger.info("Busca OK: %d empresas, %d sem site.", len(empresas), sem_site)
 

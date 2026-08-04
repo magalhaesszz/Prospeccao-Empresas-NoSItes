@@ -95,7 +95,29 @@ def criar_driver():
 
 # ── Busca principal ───────────────────────────────────────────────────────────
 
-def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
+def _fechar_consentimento(driver):
+    """Google Maps headless às vezes abre um muro de consentimento de cookies
+    que impede o feed de carregar. Tenta aceitar/fechar para liberar os resultados."""
+    textos = ("aceitar tudo", "aceito tudo", "accept all", "concordo",
+              "i agree", "aceitar", "reject all", "rejeitar tudo")
+    try:
+        botoes = driver.find_elements(By.CSS_SELECTOR, "button, form [role='button'], div[role='button']")
+        for b in botoes:
+            try:
+                t = (b.text or b.get_attribute("aria-label") or "").strip().lower()
+                if t and any(x in t for x in textos):
+                    b.click()
+                    logger.info("Consentimento fechado (botão '%s').", t[:30])
+                    time.sleep(2)
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None, stats=None):
     """
     Ponto de entrada público.
     Usa estratégia em 2 fases:
@@ -103,9 +125,12 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
       Fase 2 — navega diretamente a cada URL com driver.get() e extrai dados reais
     Isso evita o bug onde click no headless Railway não muda a URL e o scraper
     lê dados genéricos ("Results") da página de busca.
+    stats: dict opcional preenchido com o funil (cards, urls, extraidas, etc.).
     """
     driver = None
     empresas = []
+    if stats is None:
+        stats = {}
 
     try:
         logger.info("Buscando '%s' em '%s'", categoria, cidade)
@@ -115,6 +140,9 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
         driver.get("https://www.google.com/maps/search/" + query.replace(" ", "+"))
         time.sleep(3)
 
+        # Fecha muro de consentimento se aparecer (senão o feed vem vazio/curto).
+        _fechar_consentimento(driver)
+
         try:
             WebDriverWait(driver, 15).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="feed"]'))
@@ -123,7 +151,7 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
             logger.warning("Feed demorou — continuando.")
 
         max_itens = limite or CONFIG["max_resultados"]
-        _rolar_feed(driver, max_itens)
+        cards_final = _rolar_feed(driver, max_itens)
 
         # ── Fase 1: coleta URLs e nomes do feed sem clicar ────────────────────
         itens_feed = _coletar_itens_feed(driver)
@@ -132,6 +160,8 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
         # ── Fase 2: navega direto a cada URL e extrai dados reais ─────────────
         telefones_vistos = set()
         total_urls = len(itens_feed)
+        n_none = 0
+        n_dedup = 0
         logger.info("Fase 2: processando até %d URLs para obter %d empresas.", total_urls, max_itens)
 
         for i, item in enumerate(itens_feed):
@@ -140,11 +170,13 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
             try:
                 emp = _extrair_de_url(driver, item["url"], item["nome_hint"])
                 if not emp:
+                    n_none += 1
                     logger.warning("[%d/%d] extração retornou None — URL ignorada.", i + 1, total_urls)
                     continue
                 emp["score"] = _calcular_score(emp, categoria)
                 tel = emp.get("telefone")
                 if tel and tel in telefones_vistos:
+                    n_dedup += 1
                     logger.info("[%d/%d] %s — telefone duplicado, ignorada.", i + 1, total_urls, emp["nome"])
                     continue
                 if tel:
@@ -172,7 +204,17 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None):
             except Exception:
                 pass
 
-    logger.info("Concluído: %d empresas.", len(empresas))
+    stats.update({
+        "pedidas":   (limite or CONFIG["max_resultados"]),
+        "cards":     locals().get("cards_final", 0),
+        "urls":      locals().get("total_urls", 0),
+        "extraidas": len(empresas),
+        "sem_dados": locals().get("n_none", 0),
+        "dup_tel":   locals().get("n_dedup", 0),
+    })
+    logger.info("Funil: pedidas=%s cards=%s urls=%s extraidas=%s sem_dados=%s dup_tel=%s",
+                stats["pedidas"], stats["cards"], stats["urls"],
+                stats["extraidas"], stats["sem_dados"], stats["dup_tel"])
     return empresas
 
 
