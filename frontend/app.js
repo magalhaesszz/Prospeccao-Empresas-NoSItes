@@ -96,7 +96,11 @@ function processarEvento(ev) {
 
     case "envio_fim":
       APP._enviandoAtivo = false;
-      mostrarToast("✅ Envios concluídos!", "success");
+      if (ev.falhas) {
+        mostrarToast(`⚠️ ${ev.enviados||0} enviada(s), ${ev.falhas} falha(s). ${ev.ultimo_erro ? "Erro: " + ev.ultimo_erro : ""}`, "error");
+      } else {
+        mostrarToast(`✅ ${ev.enviados||0} mensagem(ns) enviada(s)!`, "success");
+      }
       // Recarrega empresas da busca ativa para atualizar status
       if (APP.buscaId) verBusca(APP.buscaId);
       break;

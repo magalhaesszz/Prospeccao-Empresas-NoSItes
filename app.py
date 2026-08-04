@@ -472,6 +472,7 @@ def _executar_envio(empresas):
         _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
     _broadcast({"tipo": "envio_inicio", "total": len(empresas)})
 
+    contagem = {"ok": 0, "falha": 0, "ultimo_erro": ""}
     try:
         def _cb(info):
             with _lock:
@@ -479,15 +480,23 @@ def _executar_envio(empresas):
             _broadcast({"tipo": "envio_progresso", **info})
 
             if info.get("sucesso") and info.get("id"):
+                contagem["ok"] += 1
                 tid = info.get("template_id")
                 marcar_mensagem_enviada(info["id"], tid)
                 if tid:
                     incrementar_enviados_template(tid)
+            elif not info.get("sucesso"):
+                contagem["falha"] += 1
+                # Busca o erro real gravado no banco p/ mostrar ao usuário.
+                emp_err = buscar_empresa_por_id(info.get("id")) if info.get("id") else None
+                if emp_err and emp_err.get("erro_envio"):
+                    contagem["ultimo_erro"] = emp_err["erro_envio"]
 
-        disparar_lote(empresas, _cb)
+        disparar_lote(empresas, _cb, ignorar_horario=True)
 
     except Exception as exc:
         logger.error("Erro no envio: %s", exc)
+        contagem["ultimo_erro"] = str(exc)[:200]
 
     finally:
         busca_id = None
@@ -502,7 +511,12 @@ def _executar_envio(empresas):
         with _lock:
             _estado["enviando"] = False
 
-        _broadcast({"tipo": "envio_fim"})
+        _broadcast({
+            "tipo":        "envio_fim",
+            "enviados":    contagem["ok"],
+            "falhas":      contagem["falha"],
+            "ultimo_erro": contagem["ultimo_erro"],
+        })
 
 
 # ── Export ────────────────────────────────────────────────────────────────────

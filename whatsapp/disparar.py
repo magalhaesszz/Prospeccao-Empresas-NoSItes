@@ -54,12 +54,9 @@ def _enviar_via_webhook(numero, mensagem):
             digitos = "55" + digitos
         url     = f"{base_url.rstrip('/')}/message/sendText/{instance}"
         headers = {"apikey": api_key, "Content-Type": "application/json"}
-        # Tenta payload v2 (textMessage); fallback p/ v1 (text) em caso de 400
-        payload = {
-            "number": digitos,
-            "options": {"delay": 1200, "presence": "composing"},
-            "textMessage": {"text": mensagem},
-        }
+        # Payload flat {number,text} — mesmo formato do chat, que funciona nesta
+        # versão da Evolution (2.3.x). O formato antigo {textMessage:{text}} falhava.
+        payload = {"number": digitos, "text": mensagem}
     else:
         # Webhook genérico (Z-API ou customizado)
         url     = base_url
@@ -67,12 +64,6 @@ def _enviar_via_webhook(numero, mensagem):
         payload = {"numero": numero, "mensagem": mensagem}
 
     resp = http_requests.post(url, json=payload, headers=headers, timeout=30)
-
-    # Se v2 falhou com 400, tenta payload v1 simples
-    if resp.status_code == 400 and api_key and instance:
-        logger.warning("payload v2 retornou 400 (%s) — tentando payload v1", resp.text[:200])
-        payload_v1 = {"number": digitos, "text": mensagem}
-        resp = http_requests.post(url, json=payload_v1, headers=headers, timeout=30)
 
     if not resp.ok:
         raise Exception(f"{resp.status_code} {resp.reason} — {resp.text[:300]}")
@@ -98,10 +89,12 @@ def _enviar_via_pywhatkit(numero, mensagem):
     return True
 
 
-def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None, mensagem_custom=None):
+def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
+                             mensagem_custom=None, ignorar_horario=False):
     """
     Ponto de entrada para envio individual.
     mensagem_custom: se fornecida (ex: Gemini), usa diretamente (ignora template).
+    ignorar_horario: envio manual — não bloqueia fora do horário comercial.
     Retorna (sucesso: bool, template_id_usado: int|None)
     """
     if not _numero_valido(numero):
@@ -113,7 +106,7 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
         logger.info("Número na blacklist: %s — pulando.", numero)
         return False, None
 
-    if not _dentro_horario_comercial():
+    if not ignorar_horario and not _dentro_horario_comercial():
         logger.warning("Fora do horário comercial — envio bloqueado.")
         registrar_erro_envio(empresa_id, "Fora do horário comercial")
         return False, None
@@ -142,10 +135,11 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
         return False, None
 
 
-def disparar_lote(empresas, callback_progresso=None):
+def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     """
     Envia para lista de empresas com intervalo anti-ban.
     callback_progresso recebe dict: {atual, total, empresa, sucesso, id, template_id}
+    ignorar_horario: envio manual — não bloqueia fora do horário comercial.
     """
     resultados = []
     total = len(empresas)
@@ -157,7 +151,8 @@ def disparar_lote(empresas, callback_progresso=None):
         tmpl_id   = emp.get("template_id")
         msg_gemini = emp.get("gemini_mensagem")
 
-        sucesso, tid = enviar_mensagem_whatsapp(emp_id, numero, nome, tmpl_id, msg_gemini)
+        sucesso, tid = enviar_mensagem_whatsapp(
+            emp_id, numero, nome, tmpl_id, msg_gemini, ignorar_horario=ignorar_horario)
 
         resultados.append({"id": emp_id, "nome": nome, "sucesso": sucesso, "template_id": tid})
 
