@@ -763,6 +763,59 @@ def buscar_empresa_por_telefone(telefone):
     return row
 
 
+def upsert_lead_whatsapp(telefone, nome=None):
+    """Garante que um contato do WhatsApp esteja no CRM ao responder.
+    - Se já existe (por telefone): promove para 'interessado' (não rebaixa
+      'fechado'/'perdido'/'interessado'); atualiza ultimo_contato e nome se vazio.
+    - Se não existe: cria um lead novo já como 'interessado'.
+    Retorna (empresa_id, criado_novo: bool).
+    """
+    digitos = "".join(ch for ch in str(telefone or "") if ch.isdigit())
+    if len(digitos) < 8:
+        return None, False
+    sufixo = digitos[-10:] if len(digitos) >= 10 else digitos
+    nome = (nome or "").strip()
+
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute("""
+            SELECT id, status, nome FROM empresas
+            WHERE regexp_replace(telefone, '[^0-9]', '', 'g') LIKE %s
+            ORDER BY id DESC LIMIT 1
+        """, (f"%{sufixo}",))
+        row = _one(c)
+
+        if row:
+            eid    = row["id"]
+            status = (row["status"] or "novo")
+            novo_status = status if status in ("interessado", "fechado", "perdido") else "interessado"
+            c.execute("""
+                UPDATE empresas
+                SET status=%s,
+                    ultimo_contato=CURRENT_TIMESTAMP,
+                    nome = CASE WHEN (nome IS NULL OR TRIM(nome)='' OR LOWER(nome) IN ('results','google maps'))
+                                AND %s <> '' THEN %s ELSE nome END
+                WHERE id=%s
+            """, (novo_status, nome, nome, eid))
+            conn.commit()
+            return eid, False
+
+        c.execute("""
+            INSERT INTO empresas (nome, telefone, status, ultimo_contato)
+            VALUES (%s, %s, 'interessado', CURRENT_TIMESTAMP)
+            RETURNING id
+        """, (nome or ("+" + digitos), telefone))
+        novo = _one(c)
+        conn.commit()
+        return (novo["id"] if novo else None), True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def marcar_respondeu(empresa_id):
     conn = get_connection()
     c = conn.cursor()

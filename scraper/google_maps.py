@@ -136,15 +136,33 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None, sta
         logger.info("Buscando '%s' em '%s'", categoria, cidade)
         driver = criar_driver()
 
+        # Planta o cookie de consentimento ANTES de abrir o Maps — pula o muro de
+        # cookies do Google (que em servidor/headless trunca os resultados a poucos).
+        try:
+            driver.get("https://www.google.com/")
+            time.sleep(1)
+            for dom in (".google.com", ".google.com.br"):
+                try:
+                    driver.add_cookie({
+                        "name": "CONSENT",
+                        "value": "YES+cb.20210328-17-p0.en+FX+000",
+                        "domain": dom,
+                    })
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning("Não consegui plantar cookie de consentimento: %s", e)
+
         query = f"{categoria} em {cidade}"
-        driver.get("https://www.google.com/maps/search/" + query.replace(" ", "+"))
+        # hl/gl força PT-BR e resultados do Brasil (evita layout reduzido).
+        driver.get("https://www.google.com/maps/search/" + query.replace(" ", "+") + "?hl=pt-BR&gl=BR")
         time.sleep(3)
 
-        # Fecha muro de consentimento se aparecer (senão o feed vem vazio/curto).
+        # Rede de segurança: se ainda houver muro visível, tenta clicar/aceitar.
         _fechar_consentimento(driver)
 
         try:
-            WebDriverWait(driver, 15).until(
+            WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="feed"]'))
             )
         except TimeoutException:

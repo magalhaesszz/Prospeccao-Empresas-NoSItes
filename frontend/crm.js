@@ -366,4 +366,28 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("input-nota").addEventListener("keydown", e => {
     if (e.key === "Enter" && e.ctrlKey) adicionarNota();
   });
+  // Atualiza o board em tempo real quando a IA adiciona/promove um lead.
+  ligarSseCrm();
 });
+
+let _sseCrm = null;
+let _sseCrmTimer = null;
+function ligarSseCrm() {
+  try {
+    _sseCrm = new EventSource("/api/events");
+    _sseCrm.onmessage = (e) => {
+      let ev; try { ev = JSON.parse(e.data); } catch { return; }
+      if (ev.tipo === "crm_atualizado" || ev.tipo === "prospect_respondeu") {
+        if (ev.novo_lead) mostrarToastCrm(`Novo lead no CRM: ${ev.nome || ev.numero}`);
+        // Debounce: agrupa várias respostas em um recarregamento só.
+        clearTimeout(_sseCrmTimer);
+        _sseCrmTimer = setTimeout(carregarKanban, 1200);
+      }
+    };
+  } catch (_) {}
+}
+
+function mostrarToastCrm(msg) {
+  if (typeof mostrarToast === "function") { mostrarToast(msg, "success"); return; }
+  console.log(msg);
+}

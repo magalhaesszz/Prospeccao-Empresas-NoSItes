@@ -17,7 +17,7 @@ from database.db import (
     ativar_template, get_template_ativo, incrementar_enviados_template,
     listar_blacklist, adicionar_blacklist, remover_blacklist,
     listar_notas, adicionar_nota, deletar_nota,
-    buscar_empresa_por_telefone, marcar_respondeu,
+    buscar_empresa_por_telefone, marcar_respondeu, upsert_lead_whatsapp,
     get_config, set_config,
     criar_agendamento, listar_agendamentos, ativar_agendamento,
     deletar_agendamento, atualizar_ultima_execucao, contagem_enviadas_hoje,
@@ -2375,6 +2375,22 @@ def api_wa_webhook():
                         nova = True
             if nova:
                 nome_contato = data.get("pushName") or (empresa.get("nome") if empresa else "")
+                # Adiciona/atualiza no CRM junto com a resposta da IA.
+                try:
+                    eid, criado = upsert_lead_whatsapp(numero, nome_contato)
+                    if eid:
+                        _broadcast({
+                            "tipo":       "crm_atualizado",
+                            "empresa_id": eid,
+                            "nome":       nome_contato or numero,
+                            "numero":     numero,
+                            "novo_lead":  criado,
+                            "status":     "interessado",
+                        })
+                        logger.info("[IA-auto] CRM %s: %s (%s) -> interessado",
+                                    "novo lead" if criado else "atualizado", nome_contato or "", numero)
+                except Exception as e:
+                    logger.error("[IA-auto] Falha ao adicionar no CRM: %s", e)
                 threading.Thread(
                     target=_ia_responder_async,
                     args=(numero, jid, texto_in, nome_contato, empresa),
