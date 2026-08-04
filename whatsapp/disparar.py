@@ -29,6 +29,31 @@ except ImportError:
         return bool(numero) and len(''.join(filter(str.isdigit, numero or ''))) >= 10
 
 
+def _config_disparo():
+    """Lê a configuração de ritmo do disparo do banco (kv), com fallback seguro.
+    Chaves: envio_intervalo_min/max (segundos entre envios),
+            envio_pausa_cada (contatos), envio_pausa_seg (descanso)."""
+    from database.db import get_config
+
+    def _int(chave, padrao):
+        try:
+            v = get_config(chave, None)
+            return int(v) if v not in (None, "") else padrao
+        except Exception:
+            return padrao
+
+    imin = _int("envio_intervalo_min", CONFIG.get("intervalo_min", 40))
+    imax = _int("envio_intervalo_max", CONFIG.get("intervalo_max", 90))
+    if imax < imin:
+        imax = imin
+    return {
+        "intervalo_min": max(1, imin),
+        "intervalo_max": max(1, imax),
+        "pausa_cada":    max(0, _int("envio_pausa_cada", 20)),
+        "pausa_seg":     max(0, _int("envio_pausa_seg", 300)),
+    }
+
+
 def _dentro_horario_comercial():
     """Verifica se está dentro do horário permitido para envio."""
     agora = datetime.now()
@@ -143,6 +168,9 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     """
     resultados = []
     total = len(empresas)
+    cfg = _config_disparo()
+    imin, imax = cfg["intervalo_min"], cfg["intervalo_max"]
+    pausa_cada, pausa_seg = cfg["pausa_cada"], cfg["pausa_seg"]
 
     for i, emp in enumerate(empresas):
         nome      = emp.get("nome", "Empresa")
@@ -166,11 +194,22 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
                 "template_id": tid,
             })
 
-        # Intervalo aleatório — só entre envios (não após o último)
-        if i < total - 1:
-            seg = random.randint(CONFIG["intervalo_min"], CONFIG["intervalo_max"])
-            logger.info("Aguardando %ds...", seg)
-            time.sleep(seg)
+        if i < total - 1:  # nada após o último
+            enviados_ate_agora = i + 1
+            # Pausa longa a cada X contatos (descanso anti-ban, estilo WaSeller).
+            if pausa_cada > 0 and pausa_seg > 0 and enviados_ate_agora % pausa_cada == 0:
+                logger.info("Pausa de descanso: %ds após %d contatos.", pausa_seg, enviados_ate_agora)
+                if callback_progresso:
+                    callback_progresso({
+                        "atual": enviados_ate_agora, "total": total,
+                        "empresa": f"Pausa de {pausa_seg}s (descanso anti-ban)...",
+                        "sucesso": None, "id": None, "template_id": None, "pausa": pausa_seg,
+                    })
+                time.sleep(pausa_seg)
+            else:
+                seg = random.randint(imin, imax)
+                logger.info("Aguardando %ds...", seg)
+                time.sleep(seg)
 
     enviados = sum(1 for r in resultados if r["sucesso"])
     logger.info("Lote concluído: %d/%d enviados.", enviados, total)

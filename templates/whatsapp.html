@@ -25,6 +25,37 @@
     </div>
   </div>
 
+  <!-- Ritmo do disparo (anti-ban) -->
+  <div class="card" id="card-ritmo">
+    <h2 class="card-title">
+      <svg class="icon-card" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+      Ritmo do disparo (anti-ban)
+    </h2>
+    <p style="font-size:.82rem;color:var(--muted);margin:-4px 0 14px">
+      Intervalo entre cada envio e uma pausa longa a cada X contatos. Números maiores = mais seguro contra bloqueio.
+    </p>
+    <div class="ritmo-grid">
+      <label class="ritmo-item">
+        <span>Intervalo mínimo (s)</span>
+        <input type="number" id="ritmo-min" min="1" class="input-filtro"/>
+      </label>
+      <label class="ritmo-item">
+        <span>Intervalo máximo (s)</span>
+        <input type="number" id="ritmo-max" min="1" class="input-filtro"/>
+      </label>
+      <label class="ritmo-item">
+        <span>Pausar a cada (contatos)</span>
+        <input type="number" id="ritmo-cada" min="0" class="input-filtro"/>
+      </label>
+      <label class="ritmo-item">
+        <span>Duração da pausa (s)</span>
+        <input type="number" id="ritmo-pausa" min="0" class="input-filtro"/>
+      </label>
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="salvarRitmo()">Salvar ritmo</button>
+    <div id="ritmo-msg" style="font-size:.8rem;color:var(--muted);margin-top:8px"></div>
+  </div>
+
   <!-- IA responde sozinha -->
   <div class="card" id="card-ia-auto">
     <h2 class="card-title">

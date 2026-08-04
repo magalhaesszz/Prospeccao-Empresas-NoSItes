@@ -1403,3 +1403,9 @@ a,button,summary,label,select,input[type=checkbox],input[type=radio],
 .wa-switch input:checked + .wa-switch-slider:before{transform:translateX(22px)}
 .wa-textarea{width:100%;margin-top:10px;padding:10px 12px;border:1px solid var(--border,#cbd5e1);border-radius:8px;font:inherit;font-size:.9rem;resize:vertical;background:var(--card-bg,#fff);color:inherit;box-sizing:border-box}
 .wa-textarea:focus{outline:none;border-color:var(--brand)}
+
+/* ── Ritmo do disparo ── */
+.ritmo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.ritmo-item{display:flex;flex-direction:column;gap:5px;font-size:.8rem;color:var(--muted)}
+.ritmo-item input{padding:8px 10px;border:1px solid var(--border,#cbd5e1);border-radius:8px;font:inherit;background:var(--card-bg,#fff);color:inherit}
+.ritmo-item input:focus{outline:none;border-color:var(--brand)}

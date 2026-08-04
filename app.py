@@ -2299,6 +2299,37 @@ Retorne APENAS o texto da resposta, sem aspas nem prefácio."""
         logger.error("[IA-auto] Falha ao responder %s: %s", numero, e)
 
 
+@app.route("/api/whatsapp/config-disparo", methods=["GET", "POST"])
+def api_wa_config_disparo():
+    """Configura o ritmo do disparo (anti-ban, estilo WaSeller).
+    GET  -> {intervalo_min, intervalo_max, pausa_cada, pausa_seg}
+    POST salva os que vierem."""
+    campos = {
+        "intervalo_min": ("envio_intervalo_min", 40),
+        "intervalo_max": ("envio_intervalo_max", 90),
+        "pausa_cada":    ("envio_pausa_cada",    20),
+        "pausa_seg":     ("envio_pausa_seg",     300),
+    }
+    if request.method == "POST":
+        dados = request.get_json(silent=True) or {}
+        for campo, (chave, _) in campos.items():
+            if campo in dados:
+                try:
+                    set_config(chave, max(0, int(dados[campo])))
+                except (TypeError, ValueError):
+                    pass
+    out = {}
+    for campo, (chave, padrao) in campos.items():
+        v = get_config(chave, None)
+        try:
+            out[campo] = int(v) if v not in (None, "") else padrao
+        except (TypeError, ValueError):
+            out[campo] = padrao
+    if out["intervalo_max"] < out["intervalo_min"]:
+        out["intervalo_max"] = out["intervalo_min"]
+    return jsonify(out)
+
+
 @app.route("/api/whatsapp/ia-auto", methods=["GET", "POST"])
 def api_wa_ia_auto():
     """Liga/desliga e configura a IA que responde sozinha no WhatsApp.

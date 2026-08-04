@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   carregarPendentes();
   carregarAgendamentos();
   carregarIaAuto();
+  carregarRitmo();
   _pollTimer = setInterval(() => atualizarStatus(true), 8000);
 });
 
@@ -1184,5 +1185,40 @@ async function salvarIaAuto() {
     }
   } catch (e) {
     mostrarToast("Erro ao salvar IA: " + e.message, "error");
+  }
+}
+
+// ── Ritmo do disparo (anti-ban) ──────────────────────────────────────────────
+async function carregarRitmo() {
+  try {
+    const d = await fetch("/api/whatsapp/config-disparo").then(r => r.json());
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+    set("ritmo-min", d.intervalo_min);
+    set("ritmo-max", d.intervalo_max);
+    set("ritmo-cada", d.pausa_cada);
+    set("ritmo-pausa", d.pausa_seg);
+  } catch (_) {}
+}
+
+async function salvarRitmo() {
+  const num = id => parseInt(document.getElementById(id).value || "0", 10);
+  const min = num("ritmo-min"), max = num("ritmo-max");
+  const msg = document.getElementById("ritmo-msg");
+  if (min < 1 || max < 1) { mostrarToast("Intervalos devem ser ≥ 1s.", "warning"); return; }
+  if (max < min)          { mostrarToast("Máximo não pode ser menor que o mínimo.", "warning"); return; }
+  try {
+    const d = await fetch("/api/whatsapp/config-disparo", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        intervalo_min: min, intervalo_max: max,
+        pausa_cada: num("ritmo-cada"), pausa_seg: num("ritmo-pausa"),
+      }),
+    }).then(r => r.json());
+    if (msg) msg.textContent =
+      `Salvo: ${d.intervalo_min}-${d.intervalo_max}s entre envios` +
+      (d.pausa_cada ? `, pausa de ${d.pausa_seg}s a cada ${d.pausa_cada} contatos.` : ".");
+    mostrarToast("Ritmo do disparo salvo.", "success");
+  } catch (e) {
+    mostrarToast("Erro ao salvar ritmo: " + e.message, "error");
   }
 }
