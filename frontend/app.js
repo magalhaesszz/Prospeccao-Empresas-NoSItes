@@ -154,12 +154,30 @@ async function _dispararBusca(cidade, categoria, quantidade = 50) {
     });
     const d = await r.json();
     if (!r.ok) {
-      mostrarToast("Erro: " + d.erro, "error");
       document.getElementById("btn-buscar").disabled = false;
+      // Busca presa? Oferece destravar e tentar de novo.
+      if ((d.erro || "").includes("em andamento")) {
+        if (confirm("Uma busca parece presa. Destravar e iniciar de novo?")) {
+          await destravarBusca(false);
+          return _dispararBusca(cidade, categoria, quantidade);
+        }
+        return;
+      }
+      mostrarToast("Erro: " + d.erro, "error");
     }
   } catch (e) {
     mostrarToast("Erro de rede: " + e.message, "error");
     document.getElementById("btn-buscar").disabled = false;
+  }
+}
+
+async function destravarBusca(avisar = true) {
+  try {
+    await fetch("/api/buscar/reset", { method: "POST" });
+    document.getElementById("btn-buscar").disabled = false;
+    if (avisar) mostrarToast("Busca destravada. Pode iniciar de novo.", "success");
+  } catch (e) {
+    if (avisar) mostrarToast("Erro ao destravar: " + e.message, "error");
   }
 }
 

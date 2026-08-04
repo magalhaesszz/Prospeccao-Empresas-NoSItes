@@ -2,7 +2,7 @@
 Servidor Flask — Prospector de Empresas.
 Inclui: SSE em tempo real, CRM, Dashboard, Templates, Blacklist, Login.
 """
-import os, socket, json, logging, threading, queue, uuid
+import os, socket, json, logging, threading, queue, uuid, time
 from flask import (
     Flask, jsonify, request, send_file, render_template,
     session, redirect, url_for, Response, stream_with_context
@@ -68,6 +68,7 @@ if not CONFIG.get("app_url", "").strip():
 # ── Estado global (thread-safe) ───────────────────────────────────────────────
 _estado = {
     "scraping":          False,
+    "scraping_inicio":   0,
     "progresso":         0,
     "total":             0,
     "empresa_atual":     "",
@@ -316,11 +317,19 @@ def api_status():
 
 
 # ── Busca ─────────────────────────────────────────────────────────────────────
+_SCRAPING_TIMEOUT = 300  # segundos — busca presa mais que isso é considerada morta
+
+
 @app.route("/api/buscar", methods=["POST"])
 def api_buscar():
     with _lock:
         if _estado["scraping"]:
-            return jsonify({"erro": "Busca já em andamento."}), 400
+            travada = (time.time() - _estado.get("scraping_inicio", 0)) > _SCRAPING_TIMEOUT
+            if not travada:
+                return jsonify({"erro": "Busca já em andamento."}), 400
+            # Busca antiga presa (chromium pendurado): libera e deixa iniciar outra.
+            logger.warning("Busca anterior presa há >%ds — resetando flag.", _SCRAPING_TIMEOUT)
+            _estado["scraping"] = False
 
     dados      = request.get_json(silent=True) or {}
     cidade     = (dados.get("cidade")    or "").strip()
@@ -335,12 +344,21 @@ def api_buscar():
     return jsonify({"mensagem": f"Busca iniciada: {categoria} em {cidade} ({quantidade} empresas)"})
 
 
+@app.route("/api/buscar/reset", methods=["POST"])
+def api_buscar_reset():
+    """Destrava uma busca presa (chromium pendurado) sem reiniciar o servidor."""
+    with _lock:
+        _estado.update({"scraping": False, "empresa_atual": "", "erro": None})
+    _broadcast({"tipo": "scraping_reset"})
+    return jsonify({"ok": True, "mensagem": "Busca destravada. Pode iniciar de novo."})
+
+
 def _executar_busca(cidade, categoria, quantidade=None):
     if quantidade is None:
         quantidade = CONFIG.get("max_resultados", 50)
     with _lock:
         _estado.update({
-            "scraping": True, "progresso": 0, "total": 0,
+            "scraping": True, "scraping_inicio": time.time(), "progresso": 0, "total": 0,
             "empresa_atual": "Iniciando Chrome...", "empresas": [], "erro": None,
         })
 
