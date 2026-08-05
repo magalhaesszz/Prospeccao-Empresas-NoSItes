@@ -945,6 +945,7 @@ def api_wa_desconectar():
 def api_wa_teste():
     """Envia mensagem de teste."""
     from whatsapp.disparar import _enviar_via_webhook
+    from whatsapp.humanizar import humanizar_mensagem, delay_digitacao
     dados    = request.get_json(silent=True) or {}
     numero   = (dados.get("numero") or "").strip()
     mensagem = (dados.get("mensagem") or "Olá! Teste do Prospector. 🚀").strip()
@@ -953,7 +954,8 @@ def api_wa_teste():
         return jsonify({"ok": False, "erro": "Número obrigatório."})
 
     try:
-        _enviar_via_webhook(numero, mensagem)
+        mensagem = humanizar_mensagem(mensagem)
+        _enviar_via_webhook(numero, mensagem, delay_ms=delay_digitacao(mensagem))
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "erro": str(e)})
@@ -1297,8 +1299,11 @@ def _wa_send_text(numero, texto, quoted=None):
     base, instance, api_key = _wa_config()
     if base and instance and api_key:
         import requests as req
+        from whatsapp.humanizar import delay_digitacao
         headers = {"apikey": api_key, "Content-Type": "application/json"}
-        payload = {"number": _wa_numero_e2(numero), "text": texto}
+        # Simulação de digitação: mostra "digitando..." antes de enviar (humano).
+        payload = {"number": _wa_numero_e2(numero), "text": texto,
+                   "delay": delay_digitacao(texto), "presence": "composing"}
         if quoted and (quoted.get("key") or {}).get("id"):
             payload["quoted"] = {"key": quoted["key"]}
             if quoted.get("message"):
@@ -2189,6 +2194,24 @@ def _ia_auto_ativa():
     return (get_config("ia_auto_resposta", "off") or "off").lower() == "on"
 
 
+# Frases curtas de descadastro. Só considera opt-out quando a mensagem é curta e
+# bate uma dessas — evita blacklistar quem só usou a palavra numa frase normal.
+_OPTOUT_FRASES = {
+    "parar", "pare", "para", "sair", "stop", "cancelar", "descadastrar",
+    "descadastro", "remover", "me remove", "me tira", "nao quero", "não quero",
+    "nao perturbe", "não perturbe", "para de mandar", "pare de mandar",
+    "nao envie mais", "não envie mais", "sair da lista", "me tira da lista",
+}
+
+
+def _eh_optout(texto):
+    """True se a mensagem é um pedido claro de descadastro."""
+    t = (texto or "").strip().lower().rstrip("!.").strip()
+    if not t or len(t) > 30:
+        return False
+    return t in _OPTOUT_FRASES
+
+
 def _wa_registrar_webhook(base_url):
     """Aponta o webhook da instância na Evolution p/ este app, com messages.upsert.
     Sem isso a Evolution não envia as mensagens recebidas e a IA nunca é acionada."""
@@ -2309,6 +2332,7 @@ def api_wa_config_disparo():
         "intervalo_max": ("envio_intervalo_max", 90),
         "pausa_cada":    ("envio_pausa_cada",    20),
         "pausa_seg":     ("envio_pausa_seg",     300),
+        "limite_dia":    ("envio_limite_dia",    200),
     }
     if request.method == "POST":
         dados = request.get_json(silent=True) or {}
@@ -2318,6 +2342,8 @@ def api_wa_config_disparo():
                     set_config(chave, max(0, int(dados[campo])))
                 except (TypeError, ValueError):
                     pass
+        if "warmup" in dados:
+            set_config("envio_warmup", "on" if dados.get("warmup") else "off")
     out = {}
     for campo, (chave, padrao) in campos.items():
         v = get_config(chave, None)
@@ -2327,6 +2353,7 @@ def api_wa_config_disparo():
             out[campo] = padrao
     if out["intervalo_max"] < out["intervalo_min"]:
         out["intervalo_max"] = out["intervalo_min"]
+    out["warmup"] = (get_config("envio_warmup", "on") or "on").lower() != "off"
     return jsonify(out)
 
 
@@ -2392,10 +2419,24 @@ def api_wa_webhook():
         # ── Auto-resposta IA ──────────────────────────────────────────────────
         # Ignora grupos, status, listas de difusão. Só texto. Anti-duplicata por id.
         pular = (not jid) or jid.endswith("@g.us") or "status@broadcast" in jid or "@lid" in jid
-        if _ia_auto_ativa() and not pular:
+        if not pular:
             p = _parse_msg(data.get("message", {}) or {})
             texto_in = (p.get("texto") or "").strip()
             msg_id   = key.get("id", "")
+
+            # ── Opt-out automático (compliance anti-ban) ──────────────────────
+            # Se o contato pede para parar, entra na blacklist e não recebe mais.
+            # Denúncias de spam banem o número; respeitar opt-out evita isso.
+            if _eh_optout(texto_in):
+                try:
+                    adicionar_blacklist(numero, "opt-out automático (pediu para parar)")
+                    logger.info("[opt-out] %s entrou na blacklist (msg: %s)", numero, texto_in[:40])
+                    _broadcast({"tipo": "optout", "numero": numero})
+                except Exception as e:
+                    logger.error("[opt-out] Falha ao blacklistar %s: %s", numero, e)
+                return jsonify({"ok": True, "optout": True})
+
+        if _ia_auto_ativa() and not pular:
             nova = False
             if texto_in and msg_id:
                 with _IA_LOCK:

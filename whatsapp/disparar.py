@@ -52,7 +52,45 @@ def _config_disparo():
         "intervalo_max": max(1, imax),
         "pausa_cada":    max(0, _int("envio_pausa_cada", 20)),
         "pausa_seg":     max(0, _int("envio_pausa_seg", 300)),
+        "limite_dia":    max(0, _int("envio_limite_dia", 200)),
+        "warmup":        (get_config("envio_warmup", "on") or "on").lower() != "off",
     }
+
+
+# Rampa de aquecimento (warm-up): teto de envios por dia conforme a idade do
+# número no disparo. Número novo que dispara 300 no dia 1 é banido na hora —
+# WhatsApp espera crescimento gradual. Dia 7+ libera o limite configurado.
+_WARMUP_RAMPA = {1: 30, 2: 60, 3: 90, 4: 120, 5: 170, 6: 220}
+
+
+def _limite_diario_efetivo(cfg):
+    """Teto de envios para HOJE. Combina o limite configurado com a rampa de
+    aquecimento (se ligada). Retorna 0 = sem limite."""
+    from database.db import get_config, set_config
+
+    limite = cfg.get("limite_dia", 0)
+    if not cfg.get("warmup"):
+        return limite
+
+    # Marca o primeiro dia de disparo na primeira vez que roda.
+    primeiro = get_config("wa_primeiro_disparo", None)
+    hoje = datetime.now().date()
+    if not primeiro:
+        set_config("wa_primeiro_disparo", hoje.isoformat())
+        dias = 1
+    else:
+        try:
+            d0 = datetime.fromisoformat(primeiro).date()
+            dias = max(1, (hoje - d0).days + 1)
+        except Exception:
+            dias = 1
+
+    teto_rampa = _WARMUP_RAMPA.get(dias)  # None = dia 7+ (sem teto de rampa)
+    if teto_rampa is None:
+        return limite
+    if limite <= 0:
+        return teto_rampa
+    return min(limite, teto_rampa)
 
 
 def _dentro_horario_comercial():
@@ -187,6 +225,27 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     # Anti-ban: embaralha a ordem para não enviar numa sequência previsível.
     empresas = list(empresas)
     random.shuffle(empresas)
+
+    # Anti-ban: respeita o teto de envios do dia (limite + rampa de aquecimento).
+    from database.db import contagem_enviadas_hoje
+    cap = _limite_diario_efetivo(cfg)
+    if cap > 0:
+        enviados_hoje = contagem_enviadas_hoje()
+        restante = cap - enviados_hoje
+        if restante <= 0:
+            logger.warning("Limite diário atingido (%d/%d) — disparo bloqueado.", enviados_hoje, cap)
+            if callback_progresso:
+                callback_progresso({
+                    "atual": 0, "total": total,
+                    "empresa": f"Limite diário atingido ({enviados_hoje}/{cap}). Envio adiado.",
+                    "sucesso": None, "id": None, "template_id": None, "limite": cap,
+                })
+            return []
+        if len(empresas) > restante:
+            logger.info("Limite diário: enviando %d de %d (restam %d hoje).",
+                        restante, total, restante)
+            empresas = empresas[:restante]
+            total = len(empresas)
 
     for i, emp in enumerate(empresas):
         nome      = emp.get("nome", "Empresa")
