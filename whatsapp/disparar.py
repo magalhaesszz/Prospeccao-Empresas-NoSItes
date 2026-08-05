@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CONFIG
 from database.db import esta_na_blacklist, registrar_erro_envio
 from whatsapp.templates import obter_mensagem
+from whatsapp.humanizar import humanizar_mensagem, delay_digitacao
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,10 @@ def _dentro_horario_comercial():
     return CONFIG["horario_inicio"] <= hora < CONFIG["horario_fim"]
 
 
-def _enviar_via_webhook(numero, mensagem):
-    """Envia via Evolution API ou webhook genérico."""
+def _enviar_via_webhook(numero, mensagem, delay_ms=None):
+    """Envia via Evolution API ou webhook genérico.
+    delay_ms: tempo de 'digitando...' que a Evolution mostra antes de enviar
+    (simulação humana anti-ban). Ignorado no webhook genérico."""
     base_url = CONFIG.get("webhook_whatsapp", "").strip()
     if not base_url:
         raise ValueError("webhook_whatsapp não configurado")
@@ -81,7 +84,12 @@ def _enviar_via_webhook(numero, mensagem):
         headers = {"apikey": api_key, "Content-Type": "application/json"}
         # Payload flat {number,text} — mesmo formato do chat, que funciona nesta
         # versão da Evolution (2.3.x). O formato antigo {textMessage:{text}} falhava.
+        # delay + presence: Evolution mostra "digitando..." pelo tempo do delay
+        # antes de enviar. Faz o envio parecer digitação humana (anti-ban).
         payload = {"number": digitos, "text": mensagem}
+        if delay_ms and delay_ms > 0:
+            payload["delay"] = int(delay_ms)
+            payload["presence"] = "composing"
     else:
         # Webhook genérico (Z-API ou customizado)
         url     = base_url
@@ -142,10 +150,14 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
     else:
         mensagem, tid_usado = obter_mensagem(nome_empresa, template_id)
 
+    # Anti-ban: resolve spintax e injeta variação invisível para que nenhuma
+    # mensagem saia idêntica a outra (esconde o padrão de disparo em massa).
+    mensagem = humanizar_mensagem(mensagem)
+
     try:
         webhook = CONFIG.get("webhook_whatsapp", "").strip()
         if webhook:
-            _enviar_via_webhook(numero, mensagem)
+            _enviar_via_webhook(numero, mensagem, delay_ms=delay_digitacao(mensagem))
         else:
             _enviar_via_pywhatkit(numero, mensagem)
 
@@ -171,6 +183,10 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     cfg = _config_disparo()
     imin, imax = cfg["intervalo_min"], cfg["intervalo_max"]
     pausa_cada, pausa_seg = cfg["pausa_cada"], cfg["pausa_seg"]
+
+    # Anti-ban: embaralha a ordem para não enviar numa sequência previsível.
+    empresas = list(empresas)
+    random.shuffle(empresas)
 
     for i, emp in enumerate(empresas):
         nome      = emp.get("nome", "Empresa")
