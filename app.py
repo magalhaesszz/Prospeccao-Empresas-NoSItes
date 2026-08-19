@@ -1576,7 +1576,7 @@ def api_gemini_enriquecer():
     """
     params = []
     if busca_id:
-        query += " AND e.busca_id=%s"
+        query += " AND EXISTS (SELECT 1 FROM busca_empresas be WHERE be.empresa_id=e.id AND be.busca_id=%s)"
         params.append(busca_id)
     query += f" ORDER BY e.score DESC LIMIT {limite}"
     c.execute(query, params)
