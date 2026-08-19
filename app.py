@@ -33,6 +33,7 @@ from scraper.google_maps import buscar_empresas
 from whatsapp.disparar import disparar_lote
 from export.excel import exportar_excel
 from export.csv_export import exportar_csv
+from ai.provider import get_api_key as _provider_api_key, gerar_texto as _provider_gerar
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -340,6 +341,12 @@ def api_buscar():
     if not cidade or not categoria:
         return jsonify({"erro": "Cidade e categoria são obrigatórios."}), 400
 
+    with _lock:
+        if _estado["scraping"]:
+            return jsonify({"erro": "Busca já em andamento."}), 400
+        _estado["scraping"] = True
+        _estado["scraping_inicio"] = time.time()
+
     threading.Thread(target=_executar_busca, args=(cidade, categoria, quantidade), daemon=True).start()
     return jsonify({"mensagem": f"Busca iniciada: {categoria} em {cidade} ({quantidade} empresas)"})
 
@@ -454,7 +461,12 @@ def api_enviar():
         return jsonify({"erro": "Nenhuma empresa selecionada."}), 400
 
     empresas = []
+    ids_vistos = set()
     for eid in ids:
+        chave_id = str(eid)
+        if chave_id in ids_vistos:
+            continue
+        ids_vistos.add(chave_id)
         emp = buscar_empresa_por_id(eid)
         if emp and emp.get("telefone") and not emp.get("mensagem_enviada"):
             custom = mensagens.get(str(eid)) or mensagens.get(eid)
@@ -464,6 +476,11 @@ def api_enviar():
 
     if not empresas:
         return jsonify({"erro": "Nenhuma empresa válida (sem telefone ou já enviada)."}), 400
+
+    with _lock:
+        if _estado["enviando"]:
+            return jsonify({"erro": "Envio já em andamento."}), 400
+        _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
 
     threading.Thread(target=_executar_envio, args=(empresas,), daemon=True).start()
     return jsonify({"mensagem": f"Envio iniciado para {len(empresas)} empresa(s)."})
@@ -487,7 +504,7 @@ def _executar_envio(empresas):
                 marcar_mensagem_enviada(info["id"], tid)
                 if tid:
                     incrementar_enviados_template(tid)
-            elif not info.get("sucesso"):
+            elif info.get("sucesso") is False:
                 contagem["falha"] += 1
                 # Busca o erro real gravado no banco p/ mostrar ao usuário.
                 emp_err = buscar_empresa_por_id(info.get("id")) if info.get("id") else None
@@ -1290,6 +1307,11 @@ def api_wa_disparar_pendentes():
     if not empresas:
         return jsonify({"erro": "Nenhuma empresa pendente."}), 400
 
+    with _lock:
+        if _estado["enviando"]:
+            return jsonify({"erro": "Envio já em andamento."}), 400
+        _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
+
     threading.Thread(target=_executar_envio, args=(empresas,), daemon=True).start()
     return jsonify({"mensagem": f"Disparo iniciado para {len(empresas)} empresa(s) pendente(s)."})
 
@@ -1929,36 +1951,11 @@ def api_admin_limpar_lixo():
 # ── AI Hub (Groq / OpenRouter) ────────────────────────────────────────────────
 
 def _ai_api_key():
-    provider = CONFIG.get("ai_provider", "groq").lower()
-    if provider == "openrouter":
-        return CONFIG.get("openrouter_api_key", "").strip()
-    return CONFIG.get("groq_api_key", "").strip()
+    return _provider_api_key()
 
 
 def _ai_gerar(prompt):
-    provider = CONFIG.get("ai_provider", "groq").lower()
-    api_key  = _ai_api_key()
-    if not api_key:
-        raise ValueError(f"API key não configurada para provider '{provider}'.")
-
-    if provider == "openrouter":
-        from openai import OpenAI
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
-        resp = client.chat.completions.create(
-            model="google/gemini-2.5-flash-lite",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        return resp.choices[0].message.content.strip()
-    else:
-        from groq import Groq
-        client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        return resp.choices[0].message.content.strip()
+    return _provider_gerar(prompt)
 
 
 # Job store para geração assíncrona de páginas (in-memory, TTL simples por tamanho)
@@ -2638,6 +2635,11 @@ def _verificar_agendamentos():
 
         if not empresas:
             continue
+
+        with _lock:
+            if _estado["enviando"]:
+                continue
+            _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
 
         atualizar_ultima_execucao(ag["id"], enviados_hoje + len(empresas))
         logger.info("[agendador] Agendamento '%s': %d empresas para disparar", ag["nome"], len(empresas))

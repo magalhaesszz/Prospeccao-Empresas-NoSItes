@@ -8,63 +8,14 @@ import secrets, logging, re, json
 logger = logging.getLogger(__name__)
 
 
-_MODELO_GROQ       = "llama-3.3-70b-versatile"
-_MODELO_OPENROUTER = "google/gemini-2.5-flash-lite"
+from ai.provider import gerar_texto as _provider_gerar
 
 
 def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0, temperature=0.7, system=None):
-    import time
-    from config import CONFIG
-    provider = CONFIG.get("ai_provider", "groq").lower()
-
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-
-    if provider == "openrouter":
-        from openai import OpenAI
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=timeout)
-        for tentativa in range(3):
-            try:
-                resp = client.chat.completions.create(
-                    model=_MODELO_OPENROUTER,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                return resp.choices[0].message.content.strip()
-            except Exception as e:
-                err = str(e).lower()
-                if ("429" in err or "rate" in err) and tentativa < 2:
-                    espera = (tentativa + 1) * 10
-                    logger.warning("[OpenRouter] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
-                    time.sleep(espera)
-                    continue
-                raise
-        raise Exception("Rate limit OpenRouter após 3 tentativas — tente novamente em alguns minutos")
-
-    else:  # groq (padrão)
-        from groq import Groq
-        client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
-        for tentativa in range(3):
-            try:
-                resp = client.chat.completions.create(
-                    model=_MODELO_GROQ,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                return resp.choices[0].message.content.strip()
-            except Exception as e:
-                err = str(e).lower()
-                if ("429" in err or "rate_limit" in err or "rate limit" in err) and tentativa < 2:
-                    espera = (tentativa + 1) * 10
-                    logger.warning("[Groq] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
-                    time.sleep(espera)
-                    continue
-                raise
-        raise Exception("Rate limit Groq após 3 tentativas — tente novamente em alguns minutos")
+    return _provider_gerar(
+        prompt, api_key=api_key, max_tokens=max_tokens, timeout=timeout,
+        temperature=temperature, system=system,
+    )
 
 
 def _strip_markdown(text):

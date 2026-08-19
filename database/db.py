@@ -364,7 +364,12 @@ def _buscar_existente(c, tel, maps_url):
         if row:
             return row
     if maps_url:
-        c.execute("SELECT id, mensagem_enviada, status FROM empresas WHERE maps_url=%s", (maps_url,))
+        c.execute(
+            "SELECT id, mensagem_enviada, status FROM empresas "
+            "WHERE maps_url=%s OR split_part(maps_url, '?', 1)=split_part(%s, '?', 1) "
+            "ORDER BY id LIMIT 1",
+            (maps_url, maps_url),
+        )
         row = c.fetchone()
         if row:
             return row

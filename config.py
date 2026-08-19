@@ -37,6 +37,8 @@ CONFIG = {
     "ai_provider":        os.environ.get("AI_PROVIDER",        "groq"),
     "groq_api_key":       os.environ.get("GROQ_API_KEY",       ""),
     "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
+    "groq_model":         os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+    "openrouter_model":   os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash-lite"),
     # URL pública do app (Railway) — usada nos links de preview
     "app_url":            os.environ.get("APP_URL",            ""),
 

@@ -3,7 +3,7 @@ Disparo de mensagens WhatsApp.
 Suporta pywhatkit (padrão) ou webhook externo (Evolution API / Z-API).
 Respeita blacklist, horário comercial e intervalo anti-ban.
 """
-import os, re, sys, time, random, logging
+import os, re, sys, time, random, logging, threading
 from datetime import datetime
 
 import requests as http_requests
@@ -221,10 +221,9 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     cfg = _config_disparo()
     imin, imax = cfg["intervalo_min"], cfg["intervalo_max"]
     pausa_cada, pausa_seg = cfg["pausa_cada"], cfg["pausa_seg"]
+    falhas_consecutivas = 0
 
-    # Anti-ban: embaralha a ordem para não enviar numa sequência previsível.
     empresas = list(empresas)
-    random.shuffle(empresas)
 
     # Anti-ban: respeita o teto de envios do dia (limite + rampa de aquecimento).
     from database.db import contagem_enviadas_hoje
@@ -259,6 +258,11 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
 
         resultados.append({"id": emp_id, "nome": nome, "sucesso": sucesso, "template_id": tid})
 
+        if sucesso:
+            falhas_consecutivas = 0
+        else:
+            falhas_consecutivas += 1
+
         if callback_progresso:
             callback_progresso({
                 "atual":       i + 1,
@@ -268,6 +272,16 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
                 "id":          emp_id,
                 "template_id": tid,
             })
+
+        if falhas_consecutivas >= 2:
+            logger.error("Circuit breaker: %d falhas consecutivas; lote interrompido.", falhas_consecutivas)
+            if callback_progresso:
+                callback_progresso({
+                    "atual": i + 1, "total": total,
+                    "empresa": "Lote interrompido após falhas consecutivas. Verifique a conexão/API.",
+                    "sucesso": None, "id": None, "template_id": None, "interrompido": True,
+                })
+            break
 
         if i < total - 1:  # nada após o último
             enviados_ate_agora = i + 1
@@ -289,3 +303,57 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     enviados = sum(1 for r in resultados if r["sucesso"])
     logger.info("Lote concluído: %d/%d enviados.", enviados, total)
     return resultados
+
+
+# ── Guard de idempotência de lote ─────────────────────────────────────────────
+_DISPARO_LOCK = threading.Lock()
+_disparar_lote_base = disparar_lote
+
+
+def _chave_empresa_lote(emp):
+    if emp.get("id") is not None:
+        return ("id", str(emp.get("id")))
+    digitos = re.sub(r"\D", "", emp.get("telefone") or "")
+    return ("telefone", digitos) if digitos else ("obj", id(emp))
+
+
+def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
+    """Serializa lotes e remove/revalida duplicatas antes de qualquer envio."""
+    from database.db import buscar_empresa_por_id
+
+    with _DISPARO_LOCK:
+        filtradas = []
+        vistos = set()
+        for original in empresas:
+            chave = _chave_empresa_lote(original)
+            if chave in vistos:
+                logger.warning("Lote: duplicata ignorada (%s).", chave)
+                continue
+            vistos.add(chave)
+
+            emp_id = original.get("id")
+            if emp_id is not None:
+                atual = buscar_empresa_por_id(emp_id)
+                if not atual:
+                    logger.warning("Lote: empresa id=%s não existe mais; ignorando.", emp_id)
+                    continue
+                if atual.get("mensagem_enviada"):
+                    logger.info("Lote: empresa id=%s já enviada; ignorando re-disparo.", emp_id)
+                    continue
+                # Preserva overrides da chamada atual (mensagem/template manual).
+                if original.get("gemini_mensagem"):
+                    atual["gemini_mensagem"] = original["gemini_mensagem"]
+                if original.get("template_id") is not None:
+                    atual["template_id"] = original["template_id"]
+                filtradas.append(atual)
+            else:
+                filtradas.append(original)
+
+        if not filtradas:
+            logger.info("Lote sem empresas elegíveis após deduplicação/revalidação.")
+            return []
+
+        return _disparar_lote_base(
+            filtradas, callback_progresso=callback_progresso,
+            ignorar_horario=ignorar_horario,
+        )
