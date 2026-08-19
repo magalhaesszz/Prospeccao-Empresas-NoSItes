@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - agent/reorganiza-nucleo-prospector
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python syntax
+        run: python -m compileall -q app.py config.py ai database scraper whatsapp crm dashboard export
+      - name: Validate diff whitespace
+        run: git diff --check HEAD~1 HEAD || true
