@@ -1,0 +1,40 @@
+name: Repair Prospector Phase 1
+
+on:
+  push:
+    branches:
+      - agent/reorganiza-nucleo-prospector
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: agent/reorganiza-nucleo-prospector
+          fetch-depth: 0
+
+      - name: Apply deterministic migration
+        run: python scripts/repair_phase1.py
+
+      - name: Validate Python syntax
+        run: |
+          python -m compileall -q app.py config.py ai database scraper whatsapp crm dashboard export
+          git diff --check
+
+      - name: Commit repaired code
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.py config.py .env.example ai/enricher.py database/db.py scraper/google_maps.py whatsapp/disparar.py whatsapp/humanizar.py
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "fix: estabiliza prospeccao disparos e IA"
+            git push origin HEAD:agent/reorganiza-nucleo-prospector
+          fi
