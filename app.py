@@ -686,42 +686,11 @@ def api_templates_ativar(tid):
 
 # ── WhatsApp Management ───────────────────────────────────────────────────────
 @app.route("/api/whatsapp/status")
+@app.route("/api/whatsapp/diagnostico")
 def api_wa_status():
-    """Checa estado da conexão com a Evolution API."""
-    import requests as req
-    webhook = CONFIG.get("webhook_whatsapp", "").strip()
-    instance = CONFIG.get("evolution_instance", "").strip()
-    api_key  = CONFIG.get("evolution_api_key",  "").strip()
-
-    cfg = {
-        "webhook_url":   webhook or None,
-        "instance":      instance or None,
-        "api_key_mask":  (api_key[:4] + "****" + api_key[-2:]) if len(api_key) > 6 else ("****" if api_key else None),
-    }
-
-    if not (webhook and instance and api_key):
-        return jsonify({"configurado": False, "conectado": False, "config": cfg})
-
-    try:
-        r = req.get(
-            f"{webhook.rstrip('/')}/instance/connectionState/{instance}",
-            headers={"apikey": api_key},
-            timeout=8,
-        )
-        data   = r.json()
-        state  = (data.get("instance", {}).get("state") or
-                  data.get("state") or "").lower()
-        numero = data.get("instance", {}).get("profilePictureUrl") and data.get("instance", {}).get("profileName")
-        conectado = state in ("open", "connected")
-        return jsonify({
-            "configurado": True,
-            "conectado":   conectado,
-            "state":       state,
-            "numero":      data.get("instance", {}).get("profileName") or "",
-            "config":      cfg,
-        })
-    except Exception as e:
-        return jsonify({"configurado": True, "conectado": False, "erro": str(e), "config": cfg})
+    """Diagnóstico sem efeito colateral da instância Evolution."""
+    from whatsapp.evolution import EvolutionClient
+    return jsonify(EvolutionClient().diagnostico())
 
 
 @app.route("/api/whatsapp/qrcode")
@@ -1317,22 +1286,14 @@ def api_wa_disparar_pendentes():
 
 
 def _wa_send_text(numero, texto, quoted=None):
-    """Envia texto via Evolution (com suporte a `quoted`). Fallback p/ webhook genérico."""
+    """Envia texto pelo cliente Evolution central, com fallback genérico."""
     base, instance, api_key = _wa_config()
     if base and instance and api_key:
-        import requests as req
+        from whatsapp.evolution import EvolutionClient
         from whatsapp.humanizar import delay_digitacao
-        headers = {"apikey": api_key, "Content-Type": "application/json"}
-        # Simulação de digitação: mostra "digitando..." antes de enviar (humano).
-        payload = {"number": _wa_numero_e2(numero), "text": texto,
-                   "delay": delay_digitacao(texto), "presence": "composing"}
-        if quoted and (quoted.get("key") or {}).get("id"):
-            payload["quoted"] = {"key": quoted["key"]}
-            if quoted.get("message"):
-                payload["quoted"]["message"] = quoted["message"]
-        r = req.post(f"{base}/message/sendText/{instance}", headers=headers, json=payload, timeout=60)
-        if not r.ok:
-            raise Exception(f"HTTP {r.status_code}: {r.text[:200]}")
+        EvolutionClient(base_url=base, instance=instance, api_key=api_key).send_text(
+            numero, texto, delay_ms=delay_digitacao(texto), quoted=quoted,
+        )
         return True
     from whatsapp.disparar import _enviar_via_webhook
     return _enviar_via_webhook(numero, texto)
@@ -1429,10 +1390,8 @@ def api_wa_marcar_lida():
 
 def _wa_numero_e2(numero):
     """Normaliza número para o formato da Evolution (55 + dígitos)."""
-    dig = _so_digitos(numero)
-    if dig and not dig.startswith("55"):
-        dig = "55" + dig
-    return dig
+    from whatsapp.evolution import EvolutionClient
+    return EvolutionClient.normalizar_numero(numero)
 
 
 def _strip_data_uri(b64):

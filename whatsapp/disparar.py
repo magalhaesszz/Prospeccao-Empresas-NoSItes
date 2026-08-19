@@ -103,39 +103,28 @@ def _dentro_horario_comercial():
 
 
 def _enviar_via_webhook(numero, mensagem, delay_ms=None):
-    """Envia via Evolution API ou webhook genérico.
-    delay_ms: tempo de 'digitando...' que a Evolution mostra antes de enviar
-    (simulação humana anti-ban). Ignorado no webhook genérico."""
+    """Envia via Evolution API ou webhook genérico."""
     base_url = CONFIG.get("webhook_whatsapp", "").strip()
     if not base_url:
         raise ValueError("webhook_whatsapp não configurado")
 
-    api_key  = CONFIG.get("evolution_api_key",  "").strip()
+    api_key = CONFIG.get("evolution_api_key", "").strip()
     instance = CONFIG.get("evolution_instance", "").strip()
 
     if api_key and instance:
-        # Extrai só dígitos; garante código 55 (Brasil)
-        digitos = re.sub(r"\D", "", numero)
-        if not digitos.startswith("55"):
-            digitos = "55" + digitos
-        url     = f"{base_url.rstrip('/')}/message/sendText/{instance}"
-        headers = {"apikey": api_key, "Content-Type": "application/json"}
-        # Payload flat {number,text} — mesmo formato do chat, que funciona nesta
-        # versão da Evolution (2.3.x). O formato antigo {textMessage:{text}} falhava.
-        # delay + presence: Evolution mostra "digitando..." pelo tempo do delay
-        # antes de enviar. Faz o envio parecer digitação humana (anti-ban).
-        payload = {"number": digitos, "text": mensagem}
-        if delay_ms and delay_ms > 0:
-            payload["delay"] = int(delay_ms)
-            payload["presence"] = "composing"
-    else:
-        # Webhook genérico (Z-API ou customizado)
-        url     = base_url
-        headers = {"Content-Type": "application/json"}
-        payload = {"numero": numero, "mensagem": mensagem}
+        from whatsapp.evolution import EvolutionClient
+        EvolutionClient(base_url=base_url, instance=instance, api_key=api_key).send_text(
+            numero, mensagem, delay_ms=delay_ms,
+        )
+        return True
 
-    resp = http_requests.post(url, json=payload, headers=headers, timeout=30)
-
+    # Webhook genérico (Z-API/customizado) permanece compatível.
+    resp = http_requests.post(
+        base_url,
+        json={"numero": numero, "mensagem": mensagem},
+        headers={"Content-Type": "application/json"},
+        timeout=30,
+    )
     if not resp.ok:
         raise Exception(f"{resp.status_code} {resp.reason} — {resp.text[:300]}")
     return True
@@ -166,21 +155,21 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
     Ponto de entrada para envio individual.
     mensagem_custom: se fornecida (ex: Gemini), usa diretamente (ignora template).
     ignorar_horario: envio manual — não bloqueia fora do horário comercial.
-    Retorna (sucesso: bool, template_id_usado: int|None)
+    Retorna (sucesso: bool, template_id_usado: int|None, falha_tipo: str|None)
     """
     if not _numero_valido(numero):
         logger.warning("Número inválido para '%s': %s", nome_empresa, numero)
         registrar_erro_envio(empresa_id, "Número inválido")
-        return False, None
+        return False, None, "numero_invalido"
 
     if esta_na_blacklist(numero):
         logger.info("Número na blacklist: %s — pulando.", numero)
-        return False, None
+        return False, None, "blacklist"
 
     if not ignorar_horario and not _dentro_horario_comercial():
         logger.warning("Fora do horário comercial — envio bloqueado.")
         registrar_erro_envio(empresa_id, "Fora do horário comercial")
-        return False, None
+        return False, None, "fora_horario"
 
     if mensagem_custom:
         mensagem  = mensagem_custom
@@ -188,8 +177,7 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
     else:
         mensagem, tid_usado = obter_mensagem(nome_empresa, template_id)
 
-    # Anti-ban: resolve spintax e injeta variação invisível para que nenhuma
-    # mensagem saia idêntica a outra (esconde o padrão de disparo em massa).
+    # Variação editorial explícita do template (spintax); sem caracteres ocultos.
     mensagem = humanizar_mensagem(mensagem)
 
     try:
@@ -201,13 +189,13 @@ def enviar_mensagem_whatsapp(empresa_id, numero, nome_empresa, template_id=None,
 
         logger.info("✓ Enviado para %s (%s)%s", nome_empresa, numero,
                     " [Gemini]" if mensagem_custom else "")
-        return True, tid_usado
+        return True, tid_usado, None
 
     except Exception as exc:
         msg_erro = str(exc)[:200]
         logger.error("✗ Falha para %s: %s", nome_empresa, msg_erro)
         registrar_erro_envio(empresa_id, msg_erro)
-        return False, None
+        return False, None, "api"
 
 
 def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
@@ -225,7 +213,7 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
 
     empresas = list(empresas)
 
-    # Anti-ban: respeita o teto de envios do dia (limite + rampa de aquecimento).
+    # Limite operacional diário + rampa conservadora para contas novas.
     from database.db import contagem_enviadas_hoje
     cap = _limite_diario_efetivo(cfg)
     if cap > 0:
@@ -253,15 +241,15 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
         tmpl_id   = emp.get("template_id")
         msg_gemini = emp.get("gemini_mensagem")
 
-        sucesso, tid = enviar_mensagem_whatsapp(
+        sucesso, tid, falha_tipo = enviar_mensagem_whatsapp(
             emp_id, numero, nome, tmpl_id, msg_gemini, ignorar_horario=ignorar_horario)
 
-        resultados.append({"id": emp_id, "nome": nome, "sucesso": sucesso, "template_id": tid})
+        resultados.append({"id": emp_id, "nome": nome, "sucesso": sucesso, "template_id": tid, "falha_tipo": falha_tipo})
 
-        if sucesso:
-            falhas_consecutivas = 0
-        else:
+        if falha_tipo == "api":
             falhas_consecutivas += 1
+        else:
+            falhas_consecutivas = 0
 
         if callback_progresso:
             callback_progresso({
@@ -322,6 +310,20 @@ def disparar_lote(empresas, callback_progresso=None, ignorar_horario=False):
     from database.db import buscar_empresa_por_id
 
     with _DISPARO_LOCK:
+        if (CONFIG.get("webhook_whatsapp") and CONFIG.get("evolution_api_key") and CONFIG.get("evolution_instance")):
+            from whatsapp.evolution import EvolutionClient
+            estado = EvolutionClient().connection_state()
+            if not estado.get("conectado"):
+                msg = f"Evolution indisponível antes do lote (state={estado.get('state') or '?'}): {estado.get('erro') or 'instância não conectada'}"
+                logger.error(msg)
+                if callback_progresso:
+                    callback_progresso({
+                        "atual": 0, "total": len(empresas), "empresa": msg,
+                        "sucesso": None, "id": None, "template_id": None,
+                        "interrompido": True, "motivo": "evolution_offline",
+                    })
+                return []
+
         filtradas = []
         vistos = set()
         for original in empresas:

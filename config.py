@@ -22,8 +22,8 @@ CONFIG = {
     "supabase_anon_key": os.environ.get("SUPABASE_ANON_KEY", ""),
 
     # ── WhatsApp ─────────────────────────────────────────────────────────────
-    "intervalo_min":    int(os.environ.get("WA_INTERVALO_MIN", "8")),
-    "intervalo_max":    int(os.environ.get("WA_INTERVALO_MAX", "15")),
+    "intervalo_min":    int(os.environ.get("WA_INTERVALO_MIN", "40")),
+    "intervalo_max":    int(os.environ.get("WA_INTERVALO_MAX", "90")),
     "horario_inicio":   int(os.environ.get("WA_HORA_INICIO",  "9")),
     "horario_fim":      int(os.environ.get("WA_HORA_FIM",     "18")),
     "apenas_dias_uteis": os.environ.get("WA_DIAS_UTEIS", "true").lower() == "true",
