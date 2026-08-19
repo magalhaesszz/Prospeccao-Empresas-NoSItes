@@ -33,6 +33,7 @@ from scraper.google_maps import buscar_empresas
 from whatsapp.disparar import disparar_lote
 from export.excel import exportar_excel
 from export.csv_export import exportar_csv
+from ai.provider import get_api_key as _provider_api_key, gerar_texto as _provider_gerar
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -340,6 +341,12 @@ def api_buscar():
     if not cidade or not categoria:
         return jsonify({"erro": "Cidade e categoria são obrigatórios."}), 400
 
+    with _lock:
+        if _estado["scraping"]:
+            return jsonify({"erro": "Busca já em andamento."}), 400
+        _estado["scraping"] = True
+        _estado["scraping_inicio"] = time.time()
+
     threading.Thread(target=_executar_busca, args=(cidade, categoria, quantidade), daemon=True).start()
     return jsonify({"mensagem": f"Busca iniciada: {categoria} em {cidade} ({quantidade} empresas)"})
 
@@ -454,7 +461,12 @@ def api_enviar():
         return jsonify({"erro": "Nenhuma empresa selecionada."}), 400
 
     empresas = []
+    ids_vistos = set()
     for eid in ids:
+        chave_id = str(eid)
+        if chave_id in ids_vistos:
+            continue
+        ids_vistos.add(chave_id)
         emp = buscar_empresa_por_id(eid)
         if emp and emp.get("telefone") and not emp.get("mensagem_enviada"):
             custom = mensagens.get(str(eid)) or mensagens.get(eid)
@@ -464,6 +476,11 @@ def api_enviar():
 
     if not empresas:
         return jsonify({"erro": "Nenhuma empresa válida (sem telefone ou já enviada)."}), 400
+
+    with _lock:
+        if _estado["enviando"]:
+            return jsonify({"erro": "Envio já em andamento."}), 400
+        _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
 
     threading.Thread(target=_executar_envio, args=(empresas,), daemon=True).start()
     return jsonify({"mensagem": f"Envio iniciado para {len(empresas)} empresa(s)."})
@@ -487,7 +504,7 @@ def _executar_envio(empresas):
                 marcar_mensagem_enviada(info["id"], tid)
                 if tid:
                     incrementar_enviados_template(tid)
-            elif not info.get("sucesso"):
+            elif info.get("sucesso") is False:
                 contagem["falha"] += 1
                 # Busca o erro real gravado no banco p/ mostrar ao usuário.
                 emp_err = buscar_empresa_por_id(info.get("id")) if info.get("id") else None
@@ -669,42 +686,11 @@ def api_templates_ativar(tid):
 
 # ── WhatsApp Management ───────────────────────────────────────────────────────
 @app.route("/api/whatsapp/status")
+@app.route("/api/whatsapp/diagnostico")
 def api_wa_status():
-    """Checa estado da conexão com a Evolution API."""
-    import requests as req
-    webhook = CONFIG.get("webhook_whatsapp", "").strip()
-    instance = CONFIG.get("evolution_instance", "").strip()
-    api_key  = CONFIG.get("evolution_api_key",  "").strip()
-
-    cfg = {
-        "webhook_url":   webhook or None,
-        "instance":      instance or None,
-        "api_key_mask":  (api_key[:4] + "****" + api_key[-2:]) if len(api_key) > 6 else ("****" if api_key else None),
-    }
-
-    if not (webhook and instance and api_key):
-        return jsonify({"configurado": False, "conectado": False, "config": cfg})
-
-    try:
-        r = req.get(
-            f"{webhook.rstrip('/')}/instance/connectionState/{instance}",
-            headers={"apikey": api_key},
-            timeout=8,
-        )
-        data   = r.json()
-        state  = (data.get("instance", {}).get("state") or
-                  data.get("state") or "").lower()
-        numero = data.get("instance", {}).get("profilePictureUrl") and data.get("instance", {}).get("profileName")
-        conectado = state in ("open", "connected")
-        return jsonify({
-            "configurado": True,
-            "conectado":   conectado,
-            "state":       state,
-            "numero":      data.get("instance", {}).get("profileName") or "",
-            "config":      cfg,
-        })
-    except Exception as e:
-        return jsonify({"configurado": True, "conectado": False, "erro": str(e), "config": cfg})
+    """Diagnóstico sem efeito colateral da instância Evolution."""
+    from whatsapp.evolution import EvolutionClient
+    return jsonify(EvolutionClient().diagnostico())
 
 
 @app.route("/api/whatsapp/qrcode")
@@ -1290,27 +1276,24 @@ def api_wa_disparar_pendentes():
     if not empresas:
         return jsonify({"erro": "Nenhuma empresa pendente."}), 400
 
+    with _lock:
+        if _estado["enviando"]:
+            return jsonify({"erro": "Envio já em andamento."}), 400
+        _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
+
     threading.Thread(target=_executar_envio, args=(empresas,), daemon=True).start()
     return jsonify({"mensagem": f"Disparo iniciado para {len(empresas)} empresa(s) pendente(s)."})
 
 
 def _wa_send_text(numero, texto, quoted=None):
-    """Envia texto via Evolution (com suporte a `quoted`). Fallback p/ webhook genérico."""
+    """Envia texto pelo cliente Evolution central, com fallback genérico."""
     base, instance, api_key = _wa_config()
     if base and instance and api_key:
-        import requests as req
+        from whatsapp.evolution import EvolutionClient
         from whatsapp.humanizar import delay_digitacao
-        headers = {"apikey": api_key, "Content-Type": "application/json"}
-        # Simulação de digitação: mostra "digitando..." antes de enviar (humano).
-        payload = {"number": _wa_numero_e2(numero), "text": texto,
-                   "delay": delay_digitacao(texto), "presence": "composing"}
-        if quoted and (quoted.get("key") or {}).get("id"):
-            payload["quoted"] = {"key": quoted["key"]}
-            if quoted.get("message"):
-                payload["quoted"]["message"] = quoted["message"]
-        r = req.post(f"{base}/message/sendText/{instance}", headers=headers, json=payload, timeout=60)
-        if not r.ok:
-            raise Exception(f"HTTP {r.status_code}: {r.text[:200]}")
+        EvolutionClient(base_url=base, instance=instance, api_key=api_key).send_text(
+            numero, texto, delay_ms=delay_digitacao(texto), quoted=quoted,
+        )
         return True
     from whatsapp.disparar import _enviar_via_webhook
     return _enviar_via_webhook(numero, texto)
@@ -1407,10 +1390,8 @@ def api_wa_marcar_lida():
 
 def _wa_numero_e2(numero):
     """Normaliza número para o formato da Evolution (55 + dígitos)."""
-    dig = _so_digitos(numero)
-    if dig and not dig.startswith("55"):
-        dig = "55" + dig
-    return dig
+    from whatsapp.evolution import EvolutionClient
+    return EvolutionClient.normalizar_numero(numero)
 
 
 def _strip_data_uri(b64):
@@ -1595,7 +1576,7 @@ def api_gemini_enriquecer():
     """
     params = []
     if busca_id:
-        query += " AND e.busca_id=%s"
+        query += " AND EXISTS (SELECT 1 FROM busca_empresas be WHERE be.empresa_id=e.id AND be.busca_id=%s)"
         params.append(busca_id)
     query += f" ORDER BY e.score DESC LIMIT {limite}"
     c.execute(query, params)
@@ -1929,36 +1910,11 @@ def api_admin_limpar_lixo():
 # ── AI Hub (Groq / OpenRouter) ────────────────────────────────────────────────
 
 def _ai_api_key():
-    provider = CONFIG.get("ai_provider", "groq").lower()
-    if provider == "openrouter":
-        return CONFIG.get("openrouter_api_key", "").strip()
-    return CONFIG.get("groq_api_key", "").strip()
+    return _provider_api_key()
 
 
 def _ai_gerar(prompt):
-    provider = CONFIG.get("ai_provider", "groq").lower()
-    api_key  = _ai_api_key()
-    if not api_key:
-        raise ValueError(f"API key não configurada para provider '{provider}'.")
-
-    if provider == "openrouter":
-        from openai import OpenAI
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
-        resp = client.chat.completions.create(
-            model="google/gemini-2.5-flash-lite",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        return resp.choices[0].message.content.strip()
-    else:
-        from groq import Groq
-        client = Groq(api_key=api_key, timeout=90.0, max_retries=0)
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        return resp.choices[0].message.content.strip()
+    return _provider_gerar(prompt)
 
 
 # Job store para geração assíncrona de páginas (in-memory, TTL simples por tamanho)
@@ -2638,6 +2594,11 @@ def _verificar_agendamentos():
 
         if not empresas:
             continue
+
+        with _lock:
+            if _estado["enviando"]:
+                continue
+            _estado.update({"enviando": True, "envio_progresso": 0, "envio_total": len(empresas)})
 
         atualizar_ultima_execucao(ag["id"], enviados_hoje + len(empresas))
         logger.info("[agendador] Agendamento '%s': %d empresas para disparar", ag["nome"], len(empresas))

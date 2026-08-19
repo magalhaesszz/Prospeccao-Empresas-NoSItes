@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - agent/reorganiza-nucleo-prospector
+
+permissions:
+  contents: write
+
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply guarded complete reorganization
+        run: python scripts/apply_reorganization.py
+      - name: Validate Python syntax
+        run: python -m compileall -q app.py config.py core services ai database scraper whatsapp crm dashboard export tests
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run unit tests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          APP_TIMEZONE: America/Sao_Paulo
+        run: pytest -q
+      - name: Validate whitespace
+        run: git diff --check
+      - name: Commit generated recovery
+        run: |
+          git config user.name "prospector-repair-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+            exit 0
+          fi
+          git commit -m "refactor: harden reliability, security and runtime"
+          git push

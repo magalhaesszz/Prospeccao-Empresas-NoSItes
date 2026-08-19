@@ -194,6 +194,8 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None, sta
 
         # ── Fase 2: navega direto a cada URL e extrai dados reais ─────────────
         telefones_vistos = set()
+        places_vistos = set()
+        fingerprints_vistos = set()
         total_urls = len(itens_feed)
         n_none = 0
         n_dedup = 0
@@ -237,12 +239,26 @@ def buscar_empresas(cidade, categoria, callback_progresso=None, limite=None, sta
                 continue
             emp["score"] = _calcular_score(emp, categoria)
             tel = emp.get("telefone")
-            if tel and tel in telefones_vistos:
+            maps_key = (emp.get("maps_url") or "").split("?", 1)[0].rstrip("/").lower()
+            fp_nome = re.sub(r"\W+", "", (emp.get("nome") or "").lower(), flags=re.UNICODE)
+            fp_end = re.sub(r"\W+", "", (emp.get("endereco") or "").lower(), flags=re.UNICODE)
+            fingerprint = f"{fp_nome}|{fp_end}" if fp_nome and fp_end else ""
+
+            duplicada = (
+                (tel and tel in telefones_vistos)
+                or (maps_key and maps_key in places_vistos)
+                or (fingerprint and fingerprint in fingerprints_vistos)
+            )
+            if duplicada:
                 n_dedup += 1
-                logger.info("[%d/%d] %s — telefone duplicado, ignorada.", i + 1, total_urls, emp["nome"])
+                logger.info("[%d/%d] %s — place duplicado, ignorado.", i + 1, total_urls, emp["nome"])
                 continue
             if tel:
                 telefones_vistos.add(tel)
+            if maps_key:
+                places_vistos.add(maps_key)
+            if fingerprint:
+                fingerprints_vistos.add(fingerprint)
             empresas.append(emp)
             logger.info("[%d/%d] %s | Tel:%s Site:%s Score:%d",
                 len(empresas), max_itens, emp["nome"],
@@ -639,7 +655,7 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
         "descricao_google": descricao_google,
         "nota":             nota,
         "avaliacoes":       avaliacoes,
-        "maps_url":         maps_url,  # URL específica do card (Fase 1) — não usa current_url que pode redirecionar
+        "maps_url":         (maps_url or "").split("?", 1)[0].rstrip("/"),  # canônica para dedupe
         "foto_url":         foto_url,
         "fotos_urls":       json.dumps(fotos_lista),
     }

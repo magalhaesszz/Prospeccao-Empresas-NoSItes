@@ -150,6 +150,22 @@ def inicializar_banco():
     ]:
         c.execute(f"ALTER TABLE empresas ADD COLUMN IF NOT EXISTS {col} {defn}")
 
+    # Relação N:N: empresa única, mas presente em várias buscas.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS busca_empresas (
+            busca_id      INTEGER NOT NULL REFERENCES buscas(id) ON DELETE CASCADE,
+            empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            encontrado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (busca_id, empresa_id)
+        )
+    """)
+    c.execute("""
+        INSERT INTO busca_empresas (busca_id, empresa_id)
+        SELECT busca_id, id FROM empresas WHERE busca_id IS NOT NULL
+        ON CONFLICT DO NOTHING
+    """)
+    c.execute("CREATE INDEX IF NOT EXISTS idx_busca_empresas_empresa ON busca_empresas(empresa_id)")
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS templates (
             id        SERIAL PRIMARY KEY,
@@ -272,9 +288,17 @@ def _dedup_por_coluna(c, coluna):
     perdedores para o vencedor antes de apagar. `coluna` é confiável (hardcoded)."""
     if coluna not in ("telefone", "maps_url"):
         raise ValueError("coluna inválida para dedup")
+    chave = "split_part(maps_url, '?', 1)" if coluna == "maps_url" else coluna
     ranked = (
-        f"(SELECT id, MIN(id) OVER (PARTITION BY {coluna}) AS keep_id "
+        f"(SELECT id, MIN(id) OVER (PARTITION BY {chave}) AS keep_id "
         f"FROM empresas WHERE {coluna} IS NOT NULL AND {coluna} <> '')"
+    )
+    # Preserva a presença do registro perdedor em todas as buscas históricas.
+    c.execute(
+        f"INSERT INTO busca_empresas (busca_id, empresa_id) "
+        f"SELECT DISTINCT be.busca_id, r.keep_id "
+        f"FROM busca_empresas be JOIN {ranked} r ON be.empresa_id = r.id "
+        f"WHERE r.id <> r.keep_id ON CONFLICT DO NOTHING"
     )
     # Repointa filhos do perdedor -> vencedor (evita perder notas por CASCADE)
     c.execute(
@@ -364,11 +388,26 @@ def _buscar_existente(c, tel, maps_url):
         if row:
             return row
     if maps_url:
-        c.execute("SELECT id, mensagem_enviada, status FROM empresas WHERE maps_url=%s", (maps_url,))
+        c.execute(
+            "SELECT id, mensagem_enviada, status FROM empresas "
+            "WHERE maps_url=%s OR split_part(maps_url, '?', 1)=split_part(%s, '?', 1) "
+            "ORDER BY id LIMIT 1",
+            (maps_url, maps_url),
+        )
         row = c.fetchone()
         if row:
             return row
     return None
+
+
+def _associar_empresa_busca(c, busca_id, empresa_id):
+    if not busca_id or not empresa_id:
+        return
+    c.execute(
+        "INSERT INTO busca_empresas (busca_id, empresa_id) VALUES (%s, %s) "
+        "ON CONFLICT DO NOTHING",
+        (busca_id, empresa_id),
+    )
 
 
 def salvar_empresa(empresa, busca_id):
@@ -383,6 +422,8 @@ def salvar_empresa(empresa, busca_id):
     # 1) Já existe? (telefone OU maps_url)
     existente = _buscar_existente(c, tel, maps_url)
     if existente:
+        _associar_empresa_busca(c, busca_id, existente[0])
+        conn.commit()
         conn.close()
         empresa["_duplicado"]       = True
         empresa["mensagem_enviada"] = existente[1]
@@ -415,6 +456,7 @@ def salvar_empresa(empresa, busca_id):
     ))
     row = c.fetchone()
     if row:
+        _associar_empresa_busca(c, busca_id, row[0])
         conn.commit()
         conn.close()
         return row[0]
@@ -422,6 +464,9 @@ def salvar_empresa(empresa, busca_id):
     # 3) Conflito (outra busca inseriu no meio do caminho) -> retorna o existente
     conn.commit()
     existente = _buscar_existente(c, tel, maps_url)
+    if existente:
+        _associar_empresa_busca(c, busca_id, existente[0])
+        conn.commit()
     conn.close()
     if existente:
         empresa["_duplicado"]       = True
@@ -443,10 +488,10 @@ def buscar_empresa_por_id(empresa_id):
 def buscar_todas_empresas(busca_id=None, apenas_sem_mensagem=False, status=None):
     conn = get_connection()
     c = conn.cursor()
-    query = "SELECT * FROM empresas WHERE 1=1"
+    query = "SELECT e.* FROM empresas e WHERE 1=1"
     params = []
     if busca_id:
-        query += " AND busca_id=%s"
+        query += " AND EXISTS (SELECT 1 FROM busca_empresas be WHERE be.empresa_id=e.id AND be.busca_id=%s)"
         params.append(busca_id)
     if apenas_sem_mensagem:
         query += " AND mensagem_enviada=0"
