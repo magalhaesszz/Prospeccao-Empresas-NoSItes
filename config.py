@@ -10,6 +10,13 @@ CONFIG = {
     "usar_undetected": os.environ.get("USAR_UNDETECTED", "false").lower() == "true",
     "max_resultados":  int(os.environ.get("MAX_RESULTADOS", "50")),
 
+    # Cobertura territorial incremental. Não substitui o scraper legado: se a
+    # extensão falhar, a busca antiga é executada automaticamente.
+    "prospect_coverage_enabled": os.environ.get("PROSPECT_COVERAGE_ENABLED", "true").lower() == "true",
+    "prospect_max_cells":        int(os.environ.get("PROSPECT_MAX_CELLS", "25")),
+    "prospect_cell_spacing_km":  float(os.environ.get("PROSPECT_CELL_SPACING_KM", "3.5")),
+    "prospect_per_cell":         int(os.environ.get("PROSPECT_PER_CELL", "18")),
+
     # ── Servidor ─────────────────────────────────────────────────────────────
     # Replit usa porta 8080 por padrão; localmente usa 5000
     "porta":       int(os.environ.get("PORT", "8080")),
@@ -33,10 +40,17 @@ CONFIG = {
     "evolution_api_key":  os.environ.get("EVOLUTION_API_KEY",  ""),
     # IA — Anthropic (opcional)
     "anthropic_api_key":  os.environ.get("ANTHROPIC_API_KEY",  ""),
-    # IA — Provider: "groq" ou "openrouter" (define via AI_PROVIDER no Railway)
-    "ai_provider":        os.environ.get("AI_PROVIDER",        "groq"),
-    "groq_api_key":       os.environ.get("GROQ_API_KEY",       ""),
-    "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
+    # IA — mantém Groq/OpenRouter existentes e adiciona modelos configuráveis + fallback.
+    "ai_provider":          os.environ.get("AI_PROVIDER", "groq").lower(),
+    "ai_fallback_order":    os.environ.get("AI_FALLBACK_ORDER", "openrouter,xai,groq"),
+    "ai_timeout":           int(os.environ.get("AI_TIMEOUT", "90")),
+    "groq_api_key":         os.environ.get("GROQ_API_KEY", ""),
+    "groq_model":           os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+    "groq_fallback_models": os.environ.get("GROQ_FALLBACK_MODELS", "qwen/qwen3.6-27b,openai/gpt-oss-20b"),
+    "openrouter_api_key":   os.environ.get("OPENROUTER_API_KEY", ""),
+    "openrouter_model":     os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash-lite"),
+    "xai_api_key":          os.environ.get("XAI_API_KEY", ""),
+    "xai_model":            os.environ.get("XAI_MODEL", "grok-4.5"),
     # URL pública do app (Railway) — usada nos links de preview
     "app_url":            os.environ.get("APP_URL",            ""),
 
@@ -60,3 +74,13 @@ CONFIG = {
         "Gostaria de ver um modelo antes? Me responda aqui! 🚀"
     ),
 }
+
+# O app antigo possui alguns usos diretos do SDK Groq com IDs de modelo fixos.
+# Ativa uma camada de compatibilidade que preserva essas funções e redireciona
+# modelos aposentados para o modelo configurado, com fallback automático.
+try:
+    from ai.groq_compat import install_groq_compat
+    install_groq_compat(CONFIG)
+except Exception:
+    # Configuração nunca deve impedir o restante da ferramenta de iniciar.
+    pass

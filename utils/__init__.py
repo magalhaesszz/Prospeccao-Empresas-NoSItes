@@ -1,0 +1,1 @@
+"""Utilitários compartilhados pelo Prospector."""
