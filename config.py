@@ -69,12 +69,18 @@ CONFIG = {
     "mensagem_whatsapp": "Oi, tudo certo? Tô falando com o pessoal da {NOME_DA_EMPRESA}?",
 }
 
-# O app antigo possui alguns usos diretos do SDK Groq com IDs de modelo fixos.
-# Ativa uma camada de compatibilidade que preserva essas funções e redireciona
-# modelos aposentados para o modelo configurado, com fallback automático.
+# O app antigo possui alguns usos diretos dos SDKs Groq/OpenAI. As camadas de
+# compatibilidade preservam essas funções, respeitam os modelos configurados e
+# aplicam as mesmas regras de WhatsApp aos prompts legados.
 try:
     from ai.groq_compat import install_groq_compat
     install_groq_compat(CONFIG)
+except Exception:
+    pass
+
+try:
+    from ai.openai_compat import install_openrouter_compat
+    install_openrouter_compat(CONFIG)
 except Exception:
     # Configuração nunca deve impedir o restante da ferramenta de iniciar.
     pass
