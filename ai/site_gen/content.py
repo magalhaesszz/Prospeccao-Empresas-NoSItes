@@ -1,12 +1,30 @@
 """
-Geração de conteúdo (copy) via IA — retorna JSON estruturado, nunca HTML.
-Pequeno, rápido, barato e confiável. Se a IA falhar, usa fallback derivado
-dos dados reais, de modo que a página SEMPRE renderiza.
+Geração de conteúdo textual para as landing pages.
+
+A IA retorna somente JSON estruturado. Campos que poderiam virar fatos falsos
+(serviços, números, depoimentos, preços e informações operacionais) são
+montados exclusivamente a partir dos dados reais disponíveis no contexto.
 """
 import json
 import logging
 
+from ai.copy_rules import SITE_SYSTEM
+
 logger = logging.getLogger(__name__)
+
+
+_CLICHES_SITE = (
+    "excelência",
+    "qualidade e confiança",
+    "atendimento que faz a diferença",
+    "compromisso com você",
+    "profissionais experientes",
+    "satisfação garantida",
+    "referência em",
+    "resultados que conquistam",
+    "pronto para dar o próximo passo",
+    "atendimento personalizado",
+)
 
 
 def _extrair_json(texto):
@@ -26,156 +44,161 @@ def _extrair_json(texto):
         return None
 
 
+def _local(c):
+    return f" em {c['cidade']}" if c.get("cidade") else ""
+
+
 def _fallback(c):
-    """Conteúdo genérico porém preenchido com dados reais — página nunca quebra."""
-    nome, cat, cidade = c["nome"], c["categoria"], c["cidade"]
-    local = f" em {cidade}" if cidade else ""
-    servs = [
-        {"titulo": "Atendimento de Qualidade", "descricao": f"Serviço profissional de {cat} com foco total na sua satisfação."},
-        {"titulo": "Profissionais Experientes", "descricao": "Equipe qualificada e dedicada a entregar o melhor resultado."},
-        {"titulo": "Compromisso com Você", "descricao": f"Referência em {cat}{local}, com clientes que voltam sempre."},
-        {"titulo": "Praticidade e Confiança", "descricao": "Facilidade no agendamento e transparência em tudo que fazemos."},
-    ]
-    difs = [
-        {"titulo": "Experiência comprovada", "descricao": f"Anos de dedicação em {cat}{local}."},
-        {"titulo": "Clientes satisfeitos", "descricao": "Avaliações positivas de quem já é nosso cliente."},
-        {"titulo": "Atendimento próximo", "descricao": "Você é tratado como prioridade do início ao fim."},
-    ]
-    deps = [
-        {"nome": "Ana Paula", "meta": "Cliente desde 2023", "texto": f"Melhor {cat}{local}! Atendimento nota 10, super recomendo."},
-        {"nome": "Carlos Silva", "meta": "Cliente", "texto": "Profissionais atenciosos e resultado excelente. Voltarei com certeza."},
-        {"nome": "Juliana Mendes", "meta": "Cliente desde 2024", "texto": "Fui muito bem atendida, ambiente ótimo e serviço de qualidade."},
-    ]
+    """Conteúdo conservador: só fatos recebidos do scraping/banco."""
+    nome = (c.get("nome") or "").strip() or "Empresa"
+    cat = (c.get("categoria") or "Negócio local").strip()
+    local = _local(c)
+    telefone = (c.get("telefone") or "").strip()
+    endereco = (c.get("endereco") or "").strip()
+
+    # Sem uma lista real de serviços, não adivinhamos itens do catálogo.
+    servs = [{
+        "titulo": cat,
+        "descricao": f"Fale com a {nome} para confirmar os serviços disponíveis, valores e disponibilidade.",
+    }]
+
+    difs = []
     if c.get("tem_nota"):
-        nums = [
-            {"valor": c["nota_fmt"], "rotulo": "Nota no Google"},
-            {"valor": f"+{c['avaliacoes']}", "rotulo": "Avaliações reais"},
-            {"valor": "+500", "rotulo": "Clientes atendidos"},
-            {"valor": "100%", "rotulo": "Compromisso com você"},
-        ]
-    else:
-        nums = [
-            {"valor": "+10", "rotulo": "Anos de experiência"},
-            {"valor": "+500", "rotulo": "Clientes atendidos"},
-            {"valor": "100%", "rotulo": "Satisfação garantida"},
-            {"valor": "5.0", "rotulo": "Nota dos clientes"},
-        ]
-    faq = [
-        {"pergunta": f"Como faço para agendar/contratar?", "resposta": f"É simples: fale com a gente pelo WhatsApp ou telefone e a {nome} cuida de todo o resto."},
-        {"pergunta": "Qual o horário de atendimento?", "resposta": "Atendemos em horário comercial. Entre em contato e encontramos o melhor horário para você."},
-        {"pergunta": "Onde vocês ficam?", "resposta": f"Estamos{local}. Chame no WhatsApp que enviamos a localização e tiramos todas as suas dúvidas."},
-        {"pergunta": "Quais formas de pagamento?", "resposta": "Aceitamos as principais formas de pagamento. Fale conosco para mais detalhes."},
-    ]
+        difs.append({
+            "titulo": "Avaliações no Google",
+            "descricao": f"Nota {c['nota_fmt']} com {c.get('avaliacoes') or 0} avaliações no Google.",
+        })
+    if endereco:
+        difs.append({"titulo": "Localização", "descricao": endereco})
+    elif c.get("cidade"):
+        difs.append({"titulo": "Localização", "descricao": c["cidade"]})
+    if telefone:
+        difs.append({"titulo": "Contato", "descricao": telefone})
+
+    nums = []
+    if c.get("tem_nota"):
+        nums.append({"valor": c["nota_fmt"], "rotulo": "Nota no Google"})
+        if c.get("avaliacoes") is not None:
+            nums.append({"valor": str(c.get("avaliacoes") or 0), "rotulo": "Avaliações"})
+
+    faq = [{
+        "pergunta": "Quais serviços estão disponíveis?",
+        "resposta": f"Fale com a {nome} para confirmar os serviços, valores e disponibilidade.",
+    }]
+    if telefone:
+        faq.append({
+            "pergunta": f"Como falar com a {nome}?",
+            "resposta": "Use o telefone ou o WhatsApp informado nesta página.",
+        })
+    if endereco:
+        faq.append({"pergunta": "Onde fica?", "resposta": endereco})
+
+    sobre_partes = [f"{nome} — {cat}{local}."]
+    if endereco:
+        sobre_partes.append(f"Endereço informado: {endereco}.")
+    if c.get("tem_nota"):
+        sobre_partes.append(
+            f"No Google, a empresa aparece com nota {c['nota_fmt']} em {c.get('avaliacoes') or 0} avaliações."
+        )
+
     return {
-        "hero_titulo": f"{nome}",
-        "hero_subtitulo": f"{cat}{local} com qualidade, confiança e atendimento que faz a diferença.",
-        "hero_badge": "Qualidade e confiança",
+        "hero_titulo": nome,
+        "hero_subtitulo": f"{cat}{local}.",
+        "hero_badge": c.get("cidade") or cat,
         "servicos": servs,
-        "diferenciais": difs,
-        "sobre": (f"A {nome} é referência em {cat}{local}. Com uma equipe dedicada e apaixonada "
-                  f"pelo que faz, oferecemos um atendimento personalizado e resultados que "
-                  f"conquistam a confiança de cada cliente. Nosso compromisso é entregar sempre "
-                  f"o melhor, unindo experiência, cuidado e atenção aos detalhes. Venha nos "
-                  f"conhecer e descubra por que tantos clientes escolhem a gente."),
-        "depoimentos": deps,
-        "numeros": nums,
+        "diferenciais": difs[:3],
+        "sobre": " ".join(sobre_partes),
+        "depoimentos": [],
+        "numeros": nums[:2],
         "faq": faq,
-        "cta_titulo": "Pronto para dar o próximo passo?",
-        "cta_texto": f"Fale com a {nome} agora mesmo e agende seu atendimento sem compromisso.",
-        "meta_description": f"{nome} — {cat}{local}. Atendimento de qualidade e clientes satisfeitos.",
+        "cta_titulo": f"Fale com a {nome}",
+        "cta_texto": "Entre em contato para tirar dúvidas e confirmar as informações que você precisa.",
+        "meta_description": f"{nome} — {cat}{local}. Informações e contato.",
     }
 
 
-def _garantir(conteudo, fb, n_serv):
-    """Mescla o retorno da IA com o fallback, garantindo todos os campos e tamanhos."""
+def _texto_seguro(valor):
+    if not isinstance(valor, str):
+        return False
+    baixo = valor.lower()
+    return not any(cliche in baixo for cliche in _CLICHES_SITE)
+
+
+def _garantir(conteudo, fb, n_serv=None):
+    """Mescla apenas copy escalar segura; fatos estruturados vêm do contexto real."""
     out = dict(fb)
     if isinstance(conteudo, dict):
-        for k, v in conteudo.items():
-            if v:
-                out[k] = v
-    # normaliza listas
-    def _lista(campo, minimo):
-        val = out.get(campo)
-        if not isinstance(val, list) or len(val) < 1:
-            out[campo] = fb[campo]
-        else:
-            # completa se vier curto
-            while len(out[campo]) < minimo:
-                out[campo].append(fb[campo][len(out[campo]) % len(fb[campo])])
-    _lista("servicos", 4)
-    _lista("diferenciais", 3)
-    _lista("depoimentos", 3)
-    _lista("numeros", 4)
-    _lista("faq", 4)
-    out["servicos"] = out["servicos"][:n_serv]
-    out["diferenciais"] = out["diferenciais"][:3]
-    out["depoimentos"] = out["depoimentos"][:3]
-    out["numeros"] = out["numeros"][:4]
-    out["faq"] = out["faq"][:6]
+        for campo in (
+            "hero_titulo", "hero_subtitulo", "hero_badge", "sobre",
+            "cta_titulo", "cta_texto", "meta_description",
+        ):
+            valor = conteudo.get(campo)
+            if valor and _texto_seguro(valor):
+                out[campo] = valor.strip()
+
+    # Não aceitamos fatos que o modelo tenha criado sem fonte no scraping.
+    out["servicos"] = list(fb["servicos"])
+    out["diferenciais"] = list(fb["diferenciais"])
+    out["depoimentos"] = []
+    out["numeros"] = list(fb["numeros"])
+    out["faq"] = list(fb["faq"])
     return out
 
 
 def gerar_conteudo(c, api_key, gerar_fn):
     """
-    c: contexto (dict) da empresa + tema.
-    gerar_fn: função (prompt, api_key, **kw) -> str (o _gerar do enricher).
+    c: contexto factual da empresa + tema.
+    gerar_fn: função (prompt, api_key, **kw) -> str.
     Retorna dict de conteúdo pronto para os layouts.
     """
     fb = _fallback(c)
-    nome, cat = c["nome"], c["categoria"]
-    local = f" em {c['cidade']}" if c["cidade"] else ""
-    preco_regra = (
-        'Inclua "preco" plausível em reais (ex: "R$ 45") em cada serviço.'
-        if c["mostra_preco"] else
-        'NÃO inclua campo "preco".'
-    )
-    dados = [f"Nome: {nome}", f"Segmento: {cat}"]
-    if c["cidade"]:
-        dados.append(f"Cidade: {c['cidade']}")
-    if c["endereco"]:
-        dados.append(f"Endereço: {c['endereco']}")
-    if c.get("tem_nota"):
-        dados.append(f"Nota Google: {c['nota_fmt']} ({c['avaliacoes']} avaliações)")
+    nome = c["nome"]
+    cat = c["categoria"]
 
-    system = (
-        "Você é copywriter de conversão especializado em negócios locais brasileiros. "
-        "Escreve textos persuasivos, específicos e nada genéricos. "
-        "Responde SOMENTE com JSON válido, sem markdown, sem comentários."
-    )
-    prompt = f"""Crie o conteúdo de uma landing page para o negócio abaixo. Português brasileiro, tom {("sofisticado e acolhedor" if c["nicho"] in ("salao","hotel","clinica","advocacia") else "direto e caloroso")}.
+    dados = [f"Nome: {nome}", f"Categoria no Google: {cat}"]
+    if c.get("cidade"):
+        dados.append(f"Cidade: {c['cidade']}")
+    if c.get("endereco"):
+        dados.append(f"Endereço: {c['endereco']}")
+    if c.get("telefone"):
+        dados.append(f"Telefone: {c['telefone']}")
+    if c.get("tem_nota"):
+        dados.append(f"Nota no Google: {c['nota_fmt']} ({c.get('avaliacoes') or 0} avaliações)")
+
+    prompt = f"""Escreva apenas os textos gerais de uma landing page para o negócio abaixo.
 
 DADOS REAIS:
 {chr(10).join(dados)}
 
-Responda EXATAMENTE neste formato JSON (sem texto fora do JSON):
+Responda exatamente com este JSON, sem Markdown e sem texto fora dele:
 {{
-  "hero_titulo": "H1 curto e impactante focado no benefício do cliente (máx 9 palavras, NÃO só o nome)",
-  "hero_subtitulo": "1 frase de valor sobre {cat}{local} (máx 22 palavras)",
-  "hero_badge": "selo curto de 2-4 palavras (ex: 'Referência{local}')",
-  "servicos": [ {{ "titulo": "nome do serviço real de {cat}", "descricao": "1 frase específica (máx 18 palavras)" }} ... exatamente 6 itens ],
-  "diferenciais": [ {{ "titulo": "curto", "descricao": "1 frase" }} ... exatamente 3 itens ],
-  "numeros": [ {{ "valor": "número curto de impacto (ex '+500', '10', '4.9', '100%')", "rotulo": "o que o número representa (2-3 palavras)" }} ... exatamente 4 itens ],
-  "sobre": "texto humanizado de 80-110 palavras posicionando {nome} como autoridade em {cat}{local}",
-  "depoimentos": [ {{ "nome": "nome brasileiro realista", "meta": "Cliente desde 2023", "texto": "depoimento realista sobre {cat}" }} ... exatamente 3 itens ],
-  "faq": [ {{ "pergunta": "dúvida real e comum de clientes de {cat}", "resposta": "1-2 frases claras" }} ... exatamente 4 itens ],
-  "cta_titulo": "chamada curta para ação",
-  "cta_texto": "1 frase incentivando o contato",
-  "meta_description": "frase SEO de até 150 caracteres"
+  "hero_titulo": "título curto e factual",
+  "hero_subtitulo": "uma frase curta explicando o que é o negócio e, se houver, onde fica",
+  "hero_badge": "rótulo curto baseado somente nos dados reais",
+  "sobre": "2 a 4 frases curtas, somente com informações confirmadas acima",
+  "cta_titulo": "convite simples para entrar em contato",
+  "cta_texto": "uma frase curta orientando a pessoa a falar com o negócio",
+  "meta_description": "descrição factual de até 150 caracteres"
 }}
 
-REGRAS:
-- Serviços REAIS e específicos de {cat} — proibido genérico tipo "serviço 1".
-- {preco_regra}
-- Zero Lorem Ipsum. Zero placeholder. Tudo pronto para publicar.
-- Retorne SOMENTE o JSON."""
+Não invente serviços, preços, horários, formas de pagamento, tempo de mercado, equipe, garantias, números, clientes ou depoimentos.
+Não tente transformar poucos dados em elogios ou promessas. Se houver pouco contexto, escreva pouco.
+O nome da empresa pode ser o próprio título; não é necessário criar slogan."""
 
     try:
-        bruto = gerar_fn(prompt, api_key, max_tokens=3400, timeout=110.0, temperature=0.75, system=system)
+        bruto = gerar_fn(
+            prompt,
+            api_key,
+            max_tokens=900,
+            timeout=75.0,
+            temperature=0.35,
+            system=SITE_SYSTEM,
+        )
         parsed = _extrair_json(bruto)
         if parsed:
             logger.info("[site_gen] Conteúdo IA OK para '%s'", nome)
-            return _garantir(parsed, fb, 6)
+            return _garantir(parsed, fb)
         logger.warning("[site_gen] IA não retornou JSON válido para '%s' — usando fallback", nome)
     except Exception as e:
         logger.error("[site_gen] Falha conteúdo IA '%s': %s — usando fallback", nome, e)
-    return _garantir({}, fb, 6)
+    return _garantir({}, fb)
