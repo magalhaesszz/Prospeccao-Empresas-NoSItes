@@ -181,27 +181,28 @@ def gerar_mensagem(empresa, api_key, preview_url=""):
 
     tem_link = bool(preview_url)
 
-    prompt = f"""Você é especialista em vendas consultivas B2B via WhatsApp com taxa de conversão muito alta.
-Crie uma mensagem de prospecção ÚNICA e completamente PERSONALIZADA. Não seja genérico.
+    prompt = f"""Escreva uma primeira mensagem de WhatsApp como uma pessoa real fazendo uma abordagem direta.
 
 DADOS REAIS DA EMPRESA:
 {ctx}
 
-ÂNGULO DE ABORDAGEM (baseado no perfil desta empresa específica):
+CONTEXTO DE PERSONALIZAÇÃO:
 {angulo}
 
 REGRAS OBRIGATÓRIAS:
-- Português brasileiro, tom amigável e natural — não corporativo
-- MÁXIMO 170 palavras — direto ao ponto
-- Use os dados reais (nota, avaliações, segmento, cidade) de forma natural e específica
-- A empresa não tem site — mencione isso como oportunidade, não como crítica
-- Proposta de valor: site profissional + automação de processos → cobra APENAS após entrega
-{"- Mencione naturalmente que você JÁ criou uma prévia do site para eles e compartilhe o link" if tem_link else "- Ao final, pergunte de forma natural e curiosa se a empresa gostaria de ver um site demonstrativo criado especialmente para eles, sem compromisso"}
-- Formatação WhatsApp: *negrito* para 1-2 pontos chave apenas
-- Máximo 2 emojis, estratégicos e relevantes ao segmento
-- Termine com UMA pergunta simples que incentiva resposta
+- Português brasileiro simples e natural
+- Máximo 40 palavras e 2-3 frases curtas
+- Sem emojis, sem Markdown, sem negrito e sem listas
+- Não escreva como IA, assistente, copywriter ou vendedor formal
+- Não use abertura genérica, elogio vazio, urgência artificial ou linguagem corporativa
+- Não use frases como "Espero que esteja bem", "gostaria de apresentar", "solução personalizada", "potencializar", "alavancar", "presença digital" ou "oportunidade incrível"
+- Ignore qualquer orientação acima que sugira apontar falhas, perdas ou concorrentes; não diga que a empresa perde clientes e não diga que ela "não tem site"
+- Use no máximo um dado real da empresa e somente se ele soar natural
+- Diga em linguagem simples que você faz sites e automações e que o pagamento é só depois de receber tudo pronto
+{"- Diga em uma frase curta que já deixou uma prévia pronta e inclua exatamente o link informado" if tem_link else "- Pergunte de forma curta se a pessoa quer ver um exemplo feito para a empresa"}
+- Termine com uma única pergunta simples
 
-Retorne APENAS a mensagem. Zero prefácio ou explicação."""
+Retorne somente a mensagem. Sem prefácio ou explicação."""
 
     return _gerar(prompt, api_key)
 

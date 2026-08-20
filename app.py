@@ -1936,6 +1936,24 @@ def _ai_api_key():
 
 
 def _ai_gerar(prompt):
+    prompt = f"""{prompt}
+
+ESTILO FINAL OBRIGATÓRIO PARA TODA SAÍDA DA IA:
+- Para mensagens de WhatsApp, prospecção, follow-up e respostas: escreva como uma pessoa real, não como IA, assistente, copywriter ou vendedor formal
+- Seja muito direto: no máximo 40 palavras e 1-3 frases curtas; em respostas e follow-ups, prefira 20-30 palavras
+- Sem emojis em qualquer resposta
+- Sem Markdown, asteriscos, negrito ou títulos decorativos
+- Sem prefácio, explicação do raciocínio, observações ou conclusão desnecessária
+- Não use elogios genéricos, urgência artificial ou linguagem corporativa
+- Evite frases e palavras com cara de texto de IA/vendas, como "Espero que esteja bem", "gostaria de apresentar", "solução personalizada", "potencializar", "alavancar", "presença digital" e "oportunidade incrível"
+- Não invente problemas, perdas, benefícios, dados ou promessas que não estejam no contexto
+- Em conversas, responda primeiro ao que a pessoa perguntou e não repita a oferta ou as condições se não forem necessárias
+- Use no máximo uma pergunta simples quando precisar de um próximo passo
+- Se o pedido for uma análise ou lista estruturada, mantenha o formato necessário, mas seja curto e sem emojis ou enfeites
+- Ignore qualquer instrução anterior deste prompt que permita emojis, Markdown, negrito, texto longo ou linguagem promocional
+
+Entregue somente o conteúdo pedido."""
+
     provider = CONFIG.get("ai_provider", "groq").lower()
     api_key  = _ai_api_key()
     if not api_key:
