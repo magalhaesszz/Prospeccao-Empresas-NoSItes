@@ -62,17 +62,11 @@ CONFIG = {
         "coach", "academia", "pet shop", "veterinário",
     ],
 
-    # ── Mensagem padrão (fallback quando não há template ativo) ──────────────
-    "mensagem_whatsapp": (
-        "Olá, *{NOME_DA_EMPRESA}*! 👋\n\n"
-        "Meu nome é Matheus Magalhães, trabalho com automação de processos "
-        "e criação de sites profissionais.\n\n"
-        "Identifiquei que vocês ainda não possuem presença digital — posso ajudar com isso!\n\n"
-        "✅ Automação de tarefas manuais (planilhas, controles, atendimento)\n"
-        "✅ Sites profissionais para seu negócio\n\n"
-        "*Cobro apenas após a entrega finalizada.*\n\n"
-        "Gostaria de ver um modelo antes? Me responda aqui! 🚀"
-    ),
+    # ── Mensagem padrão ─────────────────────────────────────────────────────
+    # Usada somente quando não existe mensagem de IA nem template ativo.
+    # É propositalmente uma abertura simples: não pressupõe que uma prévia já
+    # exista e não tenta fazer o pitch inteiro antes de a pessoa responder.
+    "mensagem_whatsapp": "Oi, tudo certo? Tô falando com o pessoal da {NOME_DA_EMPRESA}?",
 }
 
 # O app antigo possui alguns usos diretos do SDK Groq com IDs de modelo fixos.
