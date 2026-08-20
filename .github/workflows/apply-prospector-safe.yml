@@ -10,13 +10,18 @@ permissions:
 
 jobs:
   apply:
-    if: ${{ hashFiles('.github/prospector_patch.gz.b64') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout protected old-project branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Require temporary patch payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/prospector_patch.gz.b64
 
       - name: Setup Python
         uses: actions/setup-python@v5
