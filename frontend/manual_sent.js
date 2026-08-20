@@ -71,7 +71,7 @@
       if (typeof _aplicarFiltro === "function") {
         _aplicarFiltro();
       } else {
-        card = document.getElementById(`card-${empresaId}`);
+        const card = document.getElementById(`card-${empresaId}`);
         card?.classList.add("empresa-card-enviada");
       }
 
