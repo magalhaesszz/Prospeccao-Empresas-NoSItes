@@ -42,7 +42,7 @@ def _telefone(empresa):
     tel = empresa.get("telefone") or ""
     digits = "".join(d for d in tel if d.isdigit())
     wa_num = f"55{digits}" if digits and not digits.startswith("55") else digits
-    wa_link = f"https://wa.me/{wa_num}" if wa_num else "https://wa.me/"
+    wa_link = f"https://wa.me/{wa_num}" if wa_num else "#"
     tel_link = f"tel:+{wa_num}" if wa_num else "#"
     return wa_link, tel_link
 
@@ -67,9 +67,9 @@ def _contexto(empresa, validar_fotos_fn):
         "cidade":     empresa.get("cidade") or "",
         "endereco":   empresa.get("endereco") or "",
         "telefone":   empresa.get("telefone") or "",
-        "nota":       nota if tem_nota else 5.0,
-        "nota_fmt":   f"{float(nota):.1f}" if tem_nota else "5.0",
-        "avaliacoes": avs or 0,
+        "nota":       float(nota) if tem_nota else None,
+        "nota_fmt":   f"{float(nota):.1f}" if tem_nota else "",
+        "avaliacoes": avs if avs is not None else 0,
         "tem_nota":   tem_nota,
         "maps_url":   empresa.get("maps_url") or "",
         "fotos":      fotos,
