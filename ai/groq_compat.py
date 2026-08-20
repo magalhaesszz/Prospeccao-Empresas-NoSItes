@@ -9,39 +9,16 @@ from __future__ import annotations
 import logging
 from types import SimpleNamespace
 
-from ai.copy_rules import WHATSAPP_SYSTEM
+from ai.copy_rules import is_whatsapp_task, with_whatsapp_system
 from ai.providers import AIProviderError, generate_messages, model_candidates, split_csv
 
 logger = logging.getLogger(__name__)
 
 _RETIRED_MODELS = {"llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"}
-_WHATSAPP_HINTS = (
-    "whatsapp", "prospecção", "prospeccao", "follow-up", "followup",
-    "mensagem de resposta", "responder o cliente", "mensagem personalizada",
-)
 
 
 def _messages_to_fallback(messages):
     return [m for m in (messages or []) if isinstance(m, dict) and isinstance(m.get("content"), str)]
-
-
-def _is_whatsapp_task(messages) -> bool:
-    texto = "\n".join(
-        m.get("content", "") for m in (messages or [])
-        if isinstance(m, dict) and isinstance(m.get("content"), str)
-    ).lower()
-    return any(hint in texto for hint in _WHATSAPP_HINTS)
-
-
-def _with_whatsapp_system(messages):
-    msgs = _messages_to_fallback(messages)
-    if not _is_whatsapp_task(msgs):
-        return msgs
-
-    # Mantém qualquer system prompt específico do chamador, mas coloca a regra
-    # de canal primeiro. Isso corrige prompts legados conflitantes sem alterar
-    # contratos das rotas em app.py.
-    return [{"role": "system", "content": WHATSAPP_SYSTEM}, *msgs]
 
 
 def _status(exc):
@@ -80,8 +57,9 @@ def install_groq_compat(config: dict) -> bool:
                 requested = (config.get("groq_model") or "openai/gpt-oss-120b").strip()
             candidates = split_csv([requested, *model_candidates(config, "groq")])
 
-            messages = _with_whatsapp_system(kwargs.get("messages"))
-            is_whatsapp = _is_whatsapp_task(messages)
+            original_messages = _messages_to_fallback(kwargs.get("messages"))
+            is_whatsapp = is_whatsapp_task(original_messages)
+            messages = with_whatsapp_system(original_messages) if is_whatsapp else original_messages
             last_exc = None
             for model in candidates:
                 attempt = dict(kwargs)
@@ -89,8 +67,6 @@ def install_groq_compat(config: dict) -> bool:
                 if messages:
                     attempt["messages"] = messages
                 if is_whatsapp:
-                    # Mensagens de WhatsApp não precisam de respostas enormes e
-                    # ficam mais consistentes com uma temperatura moderada.
                     attempt["max_tokens"] = min(int(attempt.get("max_tokens") or 220), 220)
                     attempt["temperature"] = min(float(attempt.get("temperature", 0.55)), 0.6)
                 try:
