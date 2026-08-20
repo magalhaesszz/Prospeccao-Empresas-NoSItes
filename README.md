@@ -21,6 +21,7 @@ prospector/
   identity.py              normalização + deduplicação
   coverage.py              grade e prioridade territorial
   db.py                    schema/migração/repositório PostgreSQL
+  migration.py             preflight seguro para bancos legados
   prospecting.py           orquestração das buscas
   ai.py                    Groq/OpenRouter/xAI + failover
   messaging.py             política de saída + providers WhatsApp
@@ -35,7 +36,7 @@ frontend/v2.*               painel SPA
 
 ## Migração sem apagar dados
 
-Na inicialização, `Database.init_schema()` mantém as tabelas legadas `empresas` e `buscas`, adiciona campos V2, faz backfill de telefone/place ID/fingerprint, consolida duplicatas e cria as tabelas auxiliares de cobertura, aparições, permissões e auditoria. Notas e previews são repontados para o registro vencedor durante deduplicação.
+Na inicialização, o preflight em `prospector/migration.py` remove apenas o índice único legado de telefone que poderia colidir durante a normalização e registra as associações originais de busca antes da deduplicação. Em seguida, `Database.init_schema()` mantém as tabelas legadas `empresas` e `buscas`, adiciona campos V2, faz backfill de telefone/place ID/fingerprint, consolida duplicatas e cria as tabelas auxiliares de cobertura, aparições, permissões e auditoria. Notas e previews são repontados para o registro vencedor durante deduplicação.
 
 Faça backup do banco antes do primeiro deploy de qualquer migração estrutural. A migração é idempotente e também é executada pela suíte de integração em PostgreSQL no CI.
 
@@ -60,9 +61,10 @@ O CI executa:
 
 ```bash
 python -m compileall -q app.py prospector scraper
+node --check frontend/v2.js
 pytest
 ```
 
-Os testes incluem identidade/deduplicação, planejamento de cobertura, fallback de IA, política de WhatsApp, landing page, smoke da aplicação e migração/upsert reais em PostgreSQL 16.
+Os testes incluem identidade/deduplicação, planejamento de cobertura, fallback de IA, política de WhatsApp, landing page, smoke da aplicação, upsert entre buscas e migração realista do schema legado em PostgreSQL 16 — inclusive duplicatas que convergem após normalização de telefone e preservação de histórico/notas.
 
 O painel também possui **Diagnóstico**, com validação de banco, Chrome/ChromeDriver, configuração dos providers e testes ao vivo opcionais das APIs configuradas.
