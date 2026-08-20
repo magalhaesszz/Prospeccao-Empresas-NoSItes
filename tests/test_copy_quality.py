@@ -1,0 +1,58 @@
+from ai.copy_rules import fallback_primeiro_contato, limpar_texto_whatsapp
+from ai.site_gen.content import gerar_conteudo
+from whatsapp.humanizar import humanizar_mensagem
+
+
+def test_fallback_primeiro_contato_e_curto_e_nao_inventa_previa():
+    msg = fallback_primeiro_contato("Barbearia Central")
+    assert msg == "Oi, tudo certo? Tô falando com o pessoal da Barbearia Central?"
+    assert "site" not in msg.lower()
+    assert "🚀" not in msg
+
+
+def test_limpeza_remove_caracteres_invisiveis_e_markdown():
+    msg = limpar_texto_whatsapp('**Oi,\u200b tudo certo?**')
+    assert msg == "Oi, tudo certo?"
+    assert "\u200b" not in msg
+
+
+def test_humanizacao_nao_insere_variacao_invisivel():
+    msg = humanizar_mensagem("Oi, tudo certo?", variar_invisivel=True)
+    assert msg == "Oi, tudo certo?"
+
+
+def test_site_descarta_fatos_inventados_pelo_modelo():
+    ctx = {
+        "nome": "Oficina Central",
+        "categoria": "Oficina mecânica",
+        "cidade": "Goiânia",
+        "endereco": "Rua A, 10",
+        "telefone": "62999999999",
+        "tem_nota": True,
+        "nota_fmt": "4.8",
+        "avaliacoes": 137,
+    }
+
+    def gerar_fn(*args, **kwargs):
+        return '''{
+          "hero_titulo": "Oficina Central em Goiânia",
+          "hero_subtitulo": "Oficina mecânica em Goiânia.",
+          "hero_badge": "Goiânia",
+          "sobre": "Oficina Central — oficina mecânica em Goiânia.",
+          "cta_titulo": "Fale com a Oficina Central",
+          "cta_texto": "Entre em contato para tirar dúvidas.",
+          "meta_description": "Oficina Central — oficina mecânica em Goiânia.",
+          "servicos": [{"titulo": "Troca de óleo", "preco": "R$ 89"}],
+          "depoimentos": [{"nome": "Carlos", "texto": "Excelente!"}],
+          "numeros": [{"valor": "+500", "rotulo": "clientes"}],
+          "faq": [{"pergunta": "Horário?", "resposta": "8h às 18h"}]
+        }'''
+
+    conteudo = gerar_conteudo(ctx, "fake-key", gerar_fn)
+
+    assert conteudo["depoimentos"] == []
+    assert all("500" not in item["valor"] for item in conteudo["numeros"])
+    assert {item["valor"] for item in conteudo["numeros"]} == {"4.8", "137"}
+    assert "R$ 89" not in str(conteudo["servicos"])
+    assert "8h às 18h" not in str(conteudo["faq"])
+    assert conteudo["servicos"][0]["titulo"] == "Oficina mecânica"
