@@ -39,7 +39,7 @@ CONFIG = {
     "evolution_instance": os.environ.get("EVOLUTION_INSTANCE", "prospector"),
     "evolution_api_key":  os.environ.get("EVOLUTION_API_KEY",  ""),
     # IA — Anthropic (opcional)
-    "anthropic_api_key":  os.environ.get("ANTHROPIC_API_KEY",  ""),
+    "anthropic_api_key":  os.environ.get("ANTHROPIC_API_KEY", ""),
     # IA — mantém Groq/OpenRouter existentes e adiciona modelos configuráveis + fallback.
     "ai_provider":          os.environ.get("AI_PROVIDER", "groq").lower(),
     "ai_fallback_order":    os.environ.get("AI_FALLBACK_ORDER", "openrouter,xai,groq"),
@@ -64,9 +64,12 @@ CONFIG = {
 
     # ── Mensagem padrão ─────────────────────────────────────────────────────
     # Usada somente quando não existe mensagem de IA nem template ativo.
-    # É propositalmente uma abertura simples: não pressupõe que uma prévia já
-    # exista e não tenta fazer o pitch inteiro antes de a pessoa responder.
-    "mensagem_whatsapp": "Oi, tudo certo? Tô falando com o pessoal da {NOME_DA_EMPRESA}?",
+    # Mesmo nesse último fallback, o primeiro contato oferece o serviço de site.
+    "mensagem_whatsapp": (
+        "Oi, tudo bem? Vi a {NOME_DA_EMPRESA} e trabalho criando sites profissionais para negócios locais. "
+        "Queria oferecer um site pra vocês, pra apresentar bem o negócio e deixar o contato fácil pelo WhatsApp. "
+        "Posso te mostrar uma ideia?"
+    ),
 }
 
 # O app antigo possui alguns usos diretos dos SDKs Groq/OpenAI. As camadas de

@@ -1,12 +1,17 @@
 """
 AI enrichment pipeline.
 Given a company dict (with scraped Google Maps data), generates:
-  - Short WhatsApp first-contact message
+  - Direct WhatsApp first-contact message offering a website
   - Landing page HTML using only available business data
 """
 import logging
 
-from ai.copy_rules import WHATSAPP_SYSTEM, fallback_primeiro_contato, limpar_texto_whatsapp
+from ai.copy_rules import (
+    WHATSAPP_SYSTEM,
+    fallback_primeiro_contato,
+    limpar_texto_whatsapp,
+    mensagem_prospeccao_aceitavel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,12 +101,12 @@ def _contexto(empresa, preview_url=""):
         partes.append(f"Cidade: {cidade}")
     if endereco:
         partes.append(f"Endereço: {endereco}")
-    if nota:
+    if nota not in (None, ""):
         try:
-            partes.append(f"Nota no Google: {float(nota):.1f}")
+            partes.append(f"Nota no Google: {float(str(nota).replace(',', '.')):.1f}")
         except (TypeError, ValueError):
             pass
-    if avs:
+    if avs not in (None, ""):
         partes.append(f"Quantidade de avaliações no Google: {avs}")
     if preview_url:
         partes.append(f"Prévia de site já criada: {preview_url}")
@@ -109,73 +114,68 @@ def _contexto(empresa, preview_url=""):
     return "\n".join(partes)
 
 
-_PROIBIDAS_PROSPECCAO = (
-    "presença digital",
-    "potencializar",
-    "alavancar",
-    "solução personalizada",
-    "oportunidade incrível",
-    "gostaria de apresentar",
-    "venho por meio",
-    "identifiquei que",
-    "analisando sua empresa",
-    "se destacar da concorrência",
-    "maximizar",
-    "revolucionar",
-    "compromisso com a excelência",
-)
-
-
-def _mensagem_aceitavel(texto):
-    baixo = (texto or "").lower()
-    if not texto or len(texto.split()) > 45:
-        return False
-    if any(x in baixo for x in _PROIBIDAS_PROSPECCAO):
-        return False
-    if any(x in texto for x in ("**", "```", "✅", "🚀", "👋", "🎯", "💡")):
-        return False
-    return texto.count("?") <= 1
+def _fallback_mensagem(empresa, preview_url=""):
+    """Monta o fallback usando os mesmos dados reais disponíveis para a IA."""
+    categoria = empresa.get("descricao_google") or empresa.get("categoria") or ""
+    return fallback_primeiro_contato(
+        nome=empresa.get("nome", ""),
+        preview_url=preview_url,
+        categoria=categoria,
+        cidade=empresa.get("cidade", ""),
+        nota=empresa.get("nota"),
+        avaliacoes=empresa.get("avaliacoes"),
+    )
 
 
 # ── Gerador de mensagem personalizada ─────────────────────────────────────────
 
 def gerar_mensagem(empresa, api_key, preview_url=""):
-    """Gera uma primeira mensagem curta, factual e natural para WhatsApp."""
+    """Gera primeira mensagem curta que oferece o site de forma direta e factual."""
     nome = (empresa.get("nome") or "").strip()
     ctx = _contexto(empresa, preview_url)
 
-    tarefa = f"""Escreva a primeira mensagem para este contato.
+    tarefa = f"""Escreva a PRIMEIRA mensagem de prospecção para este contato.
 
-Contexto disponível:
+Contexto real disponível:
 {ctx}
 
-A mensagem deve ter normalmente 1 a 3 frases e poucas palavras.
-Não faça um mini pitch. Não tente vender site e automação ao mesmo tempo.
-Não precisa usar nome, cidade, nota, avaliações ou categoria só porque esses dados existem.
-Não elogie a empresa sem um motivo concreto.
-Varie naturalmente a abertura: pode confirmar se é a empresa, mencionar a prévia ou perguntar se pode enviar uma ideia.
-{"Como já existe uma prévia, você pode mencioná-la e usar exatamente o link informado." if preview_url else "Como não há prévia informada, não diga que já fez ou já deixou um site pronto."}
-Não fale que a empresa perde clientes, não critique o negócio e não diga que ela precisa melhorar.
+OBJETIVO OBRIGATÓRIO:
+- Ofereça criação de site profissional já nesta primeira mensagem. Não deixe a oferta para depois.
+- Diga claramente, em linguagem normal, que você trabalha/cria sites e quer fazer ou mostrar um site para a empresa.
+- Personalize com dados reais. Se houver nota e quantidade de avaliações do Google, priorize esses dados.
+- Se a nota for 4,5 ou maior, pode elogiar de forma concreta dizendo que estão bem ou muito bem avaliados no Google, citando a nota real e, quando houver, a quantidade de avaliações.
+- Se a nota for menor que 4,5, não chame de excelente nem muito bem avaliada; apenas cite o dado ou use categoria/cidade.
+- Use no máximo 1 ou 2 detalhes da empresa. Não despeje todos os dados coletados.
+- Explique o serviço em uma frase curta: um site profissional para apresentar bem o negócio e facilitar o contato. Não prometa vendas, clientes ou resultados.
+- Se existe prévia, diga que você já montou a prévia e inclua exatamente o link fornecido.
+- Se não existe prévia, ofereça criar/mostrar uma ideia de site, sem fingir que já existe uma página pronta.
+- Termine com um CTA curto e leve, com no máximo uma pergunta.
 
-Retorne somente a mensagem."""
+FORMATO:
+- 2 a 4 frases curtas.
+- Normalmente 25 a 65 palavras.
+- Sem emoji, Markdown, lista, linguagem corporativa ou clichê de marketing.
+- Não comece apenas perguntando se é o responsável ou se é a empresa.
+
+Retorne somente a mensagem pronta para envio."""
 
     try:
         bruto = _gerar(
             tarefa,
             api_key,
-            max_tokens=140,
+            max_tokens=220,
             timeout=60.0,
             temperature=0.6,
             system=WHATSAPP_SYSTEM,
         )
         mensagem = limpar_texto_whatsapp(bruto)
-        if _mensagem_aceitavel(mensagem):
+        if mensagem_prospeccao_aceitavel(mensagem, max_palavras=70):
             return mensagem
-        logger.warning("[AI] Mensagem fora do estilo esperado para '%s' — usando fallback", nome)
+        logger.warning("[AI] Mensagem sem oferta direta ou fora do estilo para '%s' — usando fallback", nome)
     except Exception:
         logger.exception("[AI] Falha ao gerar mensagem para '%s' — usando fallback", nome)
 
-    return fallback_primeiro_contato(nome, preview_url)
+    return _fallback_mensagem(empresa, preview_url)
 
 
 # ── Gerador de landing page ───────────────────────────────────────────────────
@@ -248,7 +248,7 @@ def enriquecer(empresa, api_key, app_url="", criar_pagina=True):
         logger.info("[AI] Mensagem gerada para '%s'", empresa.get("nome"))
     except Exception as e:
         logger.error("[AI] Falha mensagem '%s': %s", empresa.get("nome"), e)
-        mensagem = fallback_primeiro_contato(empresa.get("nome", ""), preview_url)
+        mensagem = _fallback_mensagem(empresa, preview_url)
 
     return {
         "empresa_id": empresa.get("id"),

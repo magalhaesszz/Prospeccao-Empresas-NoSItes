@@ -10,13 +10,22 @@ import re
 
 
 WHATSAPP_SYSTEM = """Você escreve como uma pessoa brasileira normal conversando pelo WhatsApp.
-O texto deve soar espontâneo, simples e direto, não como anúncio, e-mail comercial, copy ou resposta de assistente.
-Use português brasileiro comum, frases curtas e pontuação normal.
-Não use emoji, Markdown, listas, slogans, elogios genéricos, urgência, pressão ou linguagem corporativa.
-Não tente encaixar todos os dados disponíveis. Use um detalhe da empresa só quando ele realmente deixar a conversa mais natural.
+Use português brasileiro comum, frases curtas, pontuação normal e tom direto.
+Não use emoji, Markdown, listas, slogans, urgência artificial, pressão ou linguagem corporativa.
 Não invente fatos, problemas, benefícios, números, preços, prazos, garantias ou informações sobre a empresa.
-Evite clichês de prospecção e palavras como solução, potencializar, alavancar, presença digital, oportunidade, estratégia, excelência, referência e resultados.
-Prefira uma ideia por mensagem e no máximo uma pergunta.
+
+Quando a tarefa for PRIMEIRO CONTATO ou PROSPECÇÃO, o objetivo é obrigatório: oferecer criação de site já na primeira mensagem.
+Não mande uma abertura vazia só perguntando se é a empresa e não esconda o serviço para uma mensagem futura.
+Diga de forma simples que você trabalha com criação de sites/sites profissionais e faça a oferta em poucas frases.
+Use 1 ou 2 dados reais da empresa para personalizar. Priorize nome, categoria, cidade e principalmente nota/quantidade de avaliações do Google quando existirem.
+Se a nota for alta, você pode dizer que a empresa está bem ou muito bem avaliada no Google, mas sempre junto do dado real que sustenta esse elogio.
+Se a nota não for alta ou não existir, não invente elogio: apenas use outro dado real.
+Se existir uma prévia pronta, diga que montou a prévia e inclua exatamente o link informado.
+Pode explicar em uma frase curta que o site serve para apresentar melhor o negócio e facilitar o contato, sem prometer aumento de vendas ou resultados.
+A primeira abordagem deve ficar normalmente entre 25 e 65 palavras, em 2 a 4 frases, com no máximo uma pergunta simples no final.
+Evite clichês como solução personalizada, potencializar, alavancar, presença digital, oportunidade incrível, estratégia, excelência e referência.
+
+Quando a tarefa for RESPOSTA ou FOLLOW-UP, responda ao contexto da conversa e não repita o pitch inteiro sem necessidade.
 Retorne somente o texto que seria enviado no WhatsApp."""
 
 
@@ -62,6 +71,7 @@ _ZERO_WIDTH_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
 _WHITESPACE_RE = re.compile(r"\s+")
 _EMOJI_RE = re.compile("[\U0001F1E6-\U0001FAFF\u2600-\u27BF]")
 _LIST_RE = re.compile(r"(^|\n)\s*(?:[-•]|\d+[.)])\s+", re.MULTILINE)
+_SITE_TERMS = ("site", "página", "pagina", "landing page")
 
 
 def is_whatsapp_task(messages) -> bool:
@@ -102,8 +112,8 @@ def limpar_texto_whatsapp(texto: str) -> str:
     return texto.strip()
 
 
-def mensagem_prospeccao_aceitavel(texto: str, max_palavras: int = 50) -> bool:
-    """Barreira final contra copy comercial/automática em primeiro contato."""
+def mensagem_prospeccao_aceitavel(texto: str, max_palavras: int = 70) -> bool:
+    """Barreira final: primeiro contato precisa ser curto, limpo e oferecer site."""
     if not texto:
         return False
     bruto = str(texto).strip()
@@ -118,17 +128,69 @@ def mensagem_prospeccao_aceitavel(texto: str, max_palavras: int = 50) -> bool:
         return False
     if any(cliche in baixo for cliche in PROSPECCAO_CLICHES):
         return False
+    if not any(termo in baixo for termo in _SITE_TERMS):
+        return False
     return True
 
 
-def fallback_primeiro_contato(nome: str = "", preview_url: str = "") -> str:
-    """Fallback curto e factual para quando a geração da primeira mensagem falha."""
+def _nota_float(nota):
+    try:
+        if nota is None or nota == "":
+            return None
+        return float(str(nota).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
+def fallback_primeiro_contato(
+    nome: str = "",
+    preview_url: str = "",
+    categoria: str = "",
+    cidade: str = "",
+    nota=None,
+    avaliacoes=None,
+) -> str:
+    """Fallback factual que oferece o site logo no primeiro contato."""
     nome = (nome or "").strip()
     preview_url = (preview_url or "").strip()
-    if preview_url:
-        if nome:
-            return f"Oi, montei uma prévia de site pra {nome} aqui: {preview_url} Quer que eu te mostre o que pensei?"
-        return f"Oi, montei uma prévia de site pra vocês aqui: {preview_url} Quer que eu te mostre o que pensei?"
+    categoria = (categoria or "").strip()
+    cidade = (cidade or "").strip()
+    nota_num = _nota_float(nota)
+    avs = str(avaliacoes).strip() if avaliacoes not in (None, "") else ""
+
     if nome:
-        return f"Oi, tudo certo? Tô falando com o pessoal da {nome}?"
-    return "Oi, tudo certo? Tô falando com o responsável por aí?"
+        abertura = f"Oi, tudo bem? Vi a {nome}"
+    else:
+        abertura = "Oi, tudo bem? Vi o negócio de vocês"
+
+    if nota_num is not None:
+        nota_txt = f"{nota_num:.1f}".replace(".", ",")
+        if avs and nota_num >= 4.5:
+            abertura += f" no Google: {nota_txt} de nota com {avs} avaliações. Vocês estão muito bem avaliados por lá."
+        elif avs:
+            abertura += f" no Google, com nota {nota_txt} e {avs} avaliações."
+        elif nota_num >= 4.5:
+            abertura += f" no Google, com nota {nota_txt}. É uma avaliação bem forte."
+        else:
+            abertura += f" no Google, com nota {nota_txt}."
+    elif categoria and cidade:
+        abertura += f", {categoria} em {cidade}."
+    elif categoria:
+        abertura += f", na área de {categoria}."
+    elif cidade:
+        abertura += f" em {cidade}."
+    else:
+        abertura += "."
+
+    if preview_url:
+        oferta = (
+            f" Eu trabalho com criação de sites profissionais e montei uma prévia pra vocês: {preview_url} "
+            "A ideia é apresentar bem o negócio e deixar o contato fácil. Quer que eu te explique rapidinho?"
+        )
+    else:
+        oferta = (
+            " Eu trabalho com criação de sites profissionais e queria oferecer um site pra vocês, "
+            "pra apresentar bem o negócio e deixar o contato fácil. Posso te mostrar uma ideia?"
+        )
+
+    return abertura + oferta
