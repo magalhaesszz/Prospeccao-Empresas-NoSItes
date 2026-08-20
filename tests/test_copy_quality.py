@@ -10,11 +10,54 @@ from ai.site_gen.factual_components import contato
 from whatsapp.humanizar import humanizar_mensagem
 
 
-def test_fallback_primeiro_contato_e_curto_e_nao_inventa_previa():
+def test_fallback_primeiro_contato_oferece_site_de_imediato():
     msg = fallback_primeiro_contato("Barbearia Central")
-    assert msg == "Oi, tudo certo? Tô falando com o pessoal da Barbearia Central?"
-    assert "site" not in msg.lower()
+    assert "Barbearia Central" in msg
+    assert "site" in msg.lower()
+    assert "trabalho com criação de sites" in msg.lower()
     assert "🚀" not in msg
+
+
+def test_fallback_usa_nota_e_avaliacoes_reais_para_elogio():
+    msg = fallback_primeiro_contato(
+        nome="Barbearia Central",
+        nota=4.8,
+        avaliacoes=137,
+        categoria="Barbearia",
+        cidade="Goiânia",
+    )
+    baixo = msg.lower()
+    assert "4,8" in msg
+    assert "137 avaliações" in msg
+    assert "muito bem avaliados" in baixo
+    assert "site" in baixo
+
+
+def test_fallback_nao_elogia_nota_baixa_como_excelente():
+    msg = fallback_primeiro_contato(
+        nome="Oficina Central",
+        nota=3.9,
+        avaliacoes=42,
+    )
+    baixo = msg.lower()
+    assert "3,9" in msg
+    assert "42 avaliações" in msg
+    assert "muito bem avaliados" not in baixo
+    assert "avaliação bem forte" not in baixo
+    assert "site" in baixo
+
+
+def test_fallback_com_previa_oferece_site_e_mantem_link_exato():
+    link = "https://exemplo.com/p/barbearia-central"
+    msg = fallback_primeiro_contato(
+        nome="Barbearia Central",
+        preview_url=link,
+        nota=4.9,
+        avaliacoes=220,
+    )
+    assert link in msg
+    assert "montei uma prévia" in msg.lower()
+    assert "site" in msg.lower()
 
 
 def test_limpeza_remove_caracteres_invisiveis_e_markdown():
@@ -28,15 +71,20 @@ def test_humanizacao_nao_insere_variacao_invisivel():
     assert msg == "Oi, tudo certo?"
 
 
-def test_validador_rejeita_template_comercial_legado():
+def test_validador_rejeita_template_comercial_legado_e_abertura_sem_oferta():
     legado = (
         "Olá, Empresa! 👋 Meu nome é Matheus e trabalho com presença digital. "
         "Gostaria de apresentar uma solução personalizada para potencializar seus resultados. 🚀"
     )
-    natural = "Oi, tudo certo? Fiz uma prévia de site pra vocês aqui. Posso te mandar?"
+    sem_oferta = "Oi, tudo certo? Tô falando com o pessoal da Empresa?"
+    direto = (
+        "Oi, vi a Empresa no Google, com nota 4,8 e 120 avaliações. "
+        "Eu trabalho com criação de sites e queria montar um site profissional pra vocês. Posso te mostrar uma ideia?"
+    )
 
     assert mensagem_prospeccao_aceitavel(legado) is False
-    assert mensagem_prospeccao_aceitavel(natural) is True
+    assert mensagem_prospeccao_aceitavel(sem_oferta) is False
+    assert mensagem_prospeccao_aceitavel(direto) is True
 
 
 def test_compat_aplica_system_so_em_tarefa_de_whatsapp():
@@ -44,7 +92,9 @@ def test_compat_aplica_system_so_em_tarefa_de_whatsapp():
     analise = [{"role": "user", "content": "Analise estes prospects e gere um ranking."}]
 
     assert is_whatsapp_task(wa) is True
-    assert with_whatsapp_system(wa)[0]["role"] == "system"
+    system = with_whatsapp_system(wa)[0]
+    assert system["role"] == "system"
+    assert "oferecer criação de site já na primeira mensagem" in system["content"].lower()
     assert is_whatsapp_task(analise) is False
     assert with_whatsapp_system(analise) == analise
 
