@@ -28,9 +28,12 @@ Evite palavras e fórmulas como excelência, referência, qualidade e confiança
 Responda somente no formato solicitado pela tarefa."""
 
 
+# Os prompts legados de mensagens/follow-ups mencionam explicitamente o canal.
+# Não usamos apenas a palavra "prospecção", pois ela também aparece em análises
+# internas que não devem ser tratadas como uma mensagem para cliente.
 WHATSAPP_TASK_HINTS = (
-    "whatsapp", "prospecção", "prospeccao", "follow-up", "followup",
-    "mensagem de resposta", "responder o cliente", "mensagem personalizada",
+    "whatsapp", "follow-up", "followup", "mensagem de resposta",
+    "responder o cliente", "mensagem personalizada",
 )
 
 _ZERO_WIDTH_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
