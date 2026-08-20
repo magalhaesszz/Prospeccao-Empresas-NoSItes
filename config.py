@@ -87,3 +87,13 @@ try:
 except Exception:
     # Configuração nunca deve impedir o restante da ferramenta de iniciar.
     pass
+
+# O CRM já usa status='contatado'. Esta compatibilidade faz esse status também
+# marcar mensagem_enviada=1, incluindo contatos feitos manualmente fora do app.
+try:
+    from database.contact_status import install_contact_status_compat
+    install_contact_status_compat()
+except Exception:
+    # Sem DATABASE_URL, por exemplo em alguns comandos locais, o config ainda
+    # deve poder ser importado normalmente.
+    pass
