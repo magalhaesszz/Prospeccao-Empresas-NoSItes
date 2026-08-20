@@ -1,18 +1,22 @@
 """
 Gerenciamento de templates de mensagem.
-Seleciona template ativo ou fallback do config.
+Seleciona template manual ativo ou usa o fallback curto e factual do sistema.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import CONFIG
+
+from ai.copy_rules import fallback_primeiro_contato, mensagem_prospeccao_aceitavel
 from database.db import get_template_ativo
 
 
 def obter_mensagem(nome_empresa, template_id=None):
     """
     Retorna a mensagem formatada para uma empresa.
-    Prioridade: template_id passado > template ativo no banco > config.py
-    Retorna (mensagem, template_id_usado)
+    Prioridade: template_id passado > template ativo no banco > fallback natural.
+    Retorna (mensagem, template_id_usado).
+
+    Templates legados que ainda contenham pitch longo, emoji, lista ou clichês
+    comerciais não são enviados: caem no mesmo fallback curto da IA.
     """
     template = None
 
@@ -22,7 +26,7 @@ def obter_mensagem(nome_empresa, template_id=None):
         c = conn.cursor()
         c.execute("SELECT * FROM templates WHERE id=%s", (template_id,))
         cols = [d[0] for d in c.description]
-        row  = c.fetchone()
+        row = c.fetchone()
         conn.close()
         if row:
             template = dict(zip(cols, row))
@@ -32,11 +36,10 @@ def obter_mensagem(nome_empresa, template_id=None):
 
     if template:
         mensagem = template["mensagem"].replace("{NOME_DA_EMPRESA}", nome_empresa)
-        return mensagem, template["id"]
+        if mensagem_prospeccao_aceitavel(mensagem):
+            return mensagem, template["id"]
 
-    # Fallback: mensagem do config
-    mensagem = CONFIG["mensagem_whatsapp"].replace("{NOME_DA_EMPRESA}", nome_empresa)
-    return mensagem, None
+    return fallback_primeiro_contato(nome_empresa), None
 
 
 def preview_template(mensagem_raw, nome_exemplo="Barbearia do João"):

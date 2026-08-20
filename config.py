@@ -62,25 +62,25 @@ CONFIG = {
         "coach", "academia", "pet shop", "veterinário",
     ],
 
-    # ── Mensagem padrão (fallback quando não há template ativo) ──────────────
-    "mensagem_whatsapp": (
-        "Olá, *{NOME_DA_EMPRESA}*! 👋\n\n"
-        "Meu nome é Matheus Magalhães, trabalho com automação de processos "
-        "e criação de sites profissionais.\n\n"
-        "Identifiquei que vocês ainda não possuem presença digital — posso ajudar com isso!\n\n"
-        "✅ Automação de tarefas manuais (planilhas, controles, atendimento)\n"
-        "✅ Sites profissionais para seu negócio\n\n"
-        "*Cobro apenas após a entrega finalizada.*\n\n"
-        "Gostaria de ver um modelo antes? Me responda aqui! 🚀"
-    ),
+    # ── Mensagem padrão ─────────────────────────────────────────────────────
+    # Usada somente quando não existe mensagem de IA nem template ativo.
+    # É propositalmente uma abertura simples: não pressupõe que uma prévia já
+    # exista e não tenta fazer o pitch inteiro antes de a pessoa responder.
+    "mensagem_whatsapp": "Oi, tudo certo? Tô falando com o pessoal da {NOME_DA_EMPRESA}?",
 }
 
-# O app antigo possui alguns usos diretos do SDK Groq com IDs de modelo fixos.
-# Ativa uma camada de compatibilidade que preserva essas funções e redireciona
-# modelos aposentados para o modelo configurado, com fallback automático.
+# O app antigo possui alguns usos diretos dos SDKs Groq/OpenAI. As camadas de
+# compatibilidade preservam essas funções, respeitam os modelos configurados e
+# aplicam as mesmas regras de WhatsApp aos prompts legados.
 try:
     from ai.groq_compat import install_groq_compat
     install_groq_compat(CONFIG)
+except Exception:
+    pass
+
+try:
+    from ai.openai_compat import install_openrouter_compat
+    install_openrouter_compat(CONFIG)
 except Exception:
     # Configuração nunca deve impedir o restante da ferramenta de iniciar.
     pass

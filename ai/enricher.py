@@ -1,81 +1,42 @@
 """
-AI enrichment pipeline — suporta Groq e OpenRouter.
+AI enrichment pipeline.
 Given a company dict (with scraped Google Maps data), generates:
-  - Personalized WhatsApp message (unique per company, uses real data)
-  - Landing page HTML (complete, self-contained, uses real data)
+  - Short WhatsApp first-contact message
+  - Landing page HTML using only available business data
 """
-import secrets, logging, re, json
+import logging
+
+from ai.copy_rules import WHATSAPP_SYSTEM, fallback_primeiro_contato, limpar_texto_whatsapp
+
 logger = logging.getLogger(__name__)
 
 
-_MODELO_GROQ       = "llama-3.3-70b-versatile"
-_MODELO_OPENROUTER = "google/gemini-2.5-flash-lite"
-
-
 def _gerar(prompt, api_key, max_tokens=4096, timeout=90.0, temperature=0.7, system=None):
-    import time
+    """Gera texto usando a camada central de providers/modelos e seus fallbacks."""
     from config import CONFIG
+    from ai.runtime import gerar_texto
+
     provider = CONFIG.get("ai_provider", "groq").lower()
-
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-
-    if provider == "openrouter":
-        from openai import OpenAI
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=timeout)
-        for tentativa in range(3):
-            try:
-                resp = client.chat.completions.create(
-                    model=_MODELO_OPENROUTER,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                return resp.choices[0].message.content.strip()
-            except Exception as e:
-                err = str(e).lower()
-                if ("429" in err or "rate" in err) and tentativa < 2:
-                    espera = (tentativa + 1) * 10
-                    logger.warning("[OpenRouter] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
-                    time.sleep(espera)
-                    continue
-                raise
-        raise Exception("Rate limit OpenRouter após 3 tentativas — tente novamente em alguns minutos")
-
-    else:  # groq (padrão)
-        from groq import Groq
-        client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
-        for tentativa in range(3):
-            try:
-                resp = client.chat.completions.create(
-                    model=_MODELO_GROQ,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                return resp.choices[0].message.content.strip()
-            except Exception as e:
-                err = str(e).lower()
-                if ("429" in err or "rate_limit" in err or "rate limit" in err) and tentativa < 2:
-                    espera = (tentativa + 1) * 10
-                    logger.warning("[Groq] Rate limit — aguardando %ds (tentativa %d/3)", espera, tentativa + 1)
-                    time.sleep(espera)
-                    continue
-                raise
-        raise Exception("Rate limit Groq após 3 tentativas — tente novamente em alguns minutos")
+    resultado = gerar_texto(
+        prompt,
+        CONFIG,
+        preferred=provider,
+        legacy_api_key=api_key,
+        max_tokens=max_tokens,
+        timeout=timeout,
+        temperature=temperature,
+        system=system,
+    )
+    return resultado["text"].strip()
 
 
 def _strip_markdown(text):
     """Remove ```html ... ``` wrappers that models sometimes add around HTML."""
     t = text.strip()
-    # Remove fence opening (```html or ```)
     if t.startswith("```"):
         lines = t.split("\n")
         lines = [l for l in lines if not l.strip().startswith("```")]
         t = "\n".join(lines).strip()
-    # Some models prepend a line before DOCTYPE — strip it
     if not t.lower().startswith("<!doctype") and "<!doctype" in t.lower():
         idx = t.lower().index("<!doctype")
         t = t[idx:]
@@ -113,7 +74,6 @@ def _validar_fotos(fotos_lista):
         except TimeoutError:
             logger.warning("[foto] Validação de fotos: timeout 5s — %d válidas coletadas", len(validas))
 
-    # Preserva ordem original
     ordem = {u: i for i, u in enumerate(urls)}
     return sorted(validas, key=lambda u: ordem.get(u, 99))
 
@@ -121,90 +81,101 @@ def _validar_fotos(fotos_lista):
 # ── Contexto da empresa ───────────────────────────────────────────────────────
 
 def _contexto(empresa, preview_url=""):
-    """Build a structured context string from all available company data."""
+    """Monta contexto somente com dados reais disponíveis."""
     partes = [f"Empresa: {empresa.get('nome', '')}"]
 
     categoria = empresa.get("descricao_google") or empresa.get("categoria") or ""
     cidade    = empresa.get("cidade") or ""
     endereco  = empresa.get("endereco") or ""
-    telefone  = empresa.get("telefone") or ""
     nota      = empresa.get("nota")
     avs       = empresa.get("avaliacoes")
 
-    if categoria: partes.append(f"Segmento/Categoria: {categoria}")
-    if cidade:    partes.append(f"Cidade: {cidade}")
-    if endereco:  partes.append(f"Endereço real: {endereco}")
-    if telefone:  partes.append(f"Telefone real: {telefone}")
-    if nota:      partes.append(f"Nota Google Maps: {nota:.1f} ⭐")
-    if avs:       partes.append(f"Total de avaliações Google: {avs}")
+    if categoria:
+        partes.append(f"Categoria: {categoria}")
+    if cidade:
+        partes.append(f"Cidade: {cidade}")
+    if endereco:
+        partes.append(f"Endereço: {endereco}")
+    if nota:
+        try:
+            partes.append(f"Nota no Google: {float(nota):.1f}")
+        except (TypeError, ValueError):
+            pass
+    if avs:
+        partes.append(f"Quantidade de avaliações no Google: {avs}")
     if preview_url:
-        partes.append(f"Link do site criado especialmente para eles: {preview_url}")
+        partes.append(f"Prévia de site já criada: {preview_url}")
 
     return "\n".join(partes)
+
+
+_PROIBIDAS_PROSPECCAO = (
+    "presença digital",
+    "potencializar",
+    "alavancar",
+    "solução personalizada",
+    "oportunidade incrível",
+    "gostaria de apresentar",
+    "venho por meio",
+    "identifiquei que",
+    "analisando sua empresa",
+    "se destacar da concorrência",
+    "maximizar",
+    "revolucionar",
+    "compromisso com a excelência",
+)
+
+
+def _mensagem_aceitavel(texto):
+    baixo = (texto or "").lower()
+    if not texto or len(texto.split()) > 45:
+        return False
+    if any(x in baixo for x in _PROIBIDAS_PROSPECCAO):
+        return False
+    if any(x in texto for x in ("**", "```", "✅", "🚀", "👋", "🎯", "💡")):
+        return False
+    return texto.count("?") <= 1
 
 
 # ── Gerador de mensagem personalizada ─────────────────────────────────────────
 
 def gerar_mensagem(empresa, api_key, preview_url=""):
-    """
-    Generates a unique, personalized WhatsApp message using all real company data.
-    Each company gets a completely different message based on their profile.
-    """
-    nome      = empresa.get("nome", "")
-    categoria = empresa.get("descricao_google") or empresa.get("categoria") or ""
-    nota      = empresa.get("nota")
-    avs       = empresa.get("avaliacoes")
-    ctx       = _contexto(empresa, preview_url)
+    """Gera uma primeira mensagem curta, factual e natural para WhatsApp."""
+    nome = (empresa.get("nome") or "").strip()
+    ctx = _contexto(empresa, preview_url)
 
-    # Build adaptive angle based on available data
-    angulo = ""
-    if nota and nota >= 4.5 and avs and avs > 50:
-        angulo = (
-            "A empresa tem ótimas avaliações online mas sem site perde clientes para concorrentes "
-            "que aparecem primeiro no Google. Mencione isso de forma positiva e motivadora."
-        )
-    elif nota and nota < 4.0:
-        angulo = (
-            "Um site profissional ajuda a construir credibilidade e confiança, "
-            "especialmente quando as avaliações ainda estão crescendo."
-        )
-    elif avs and avs < 10:
-        angulo = (
-            "Com um site profissional a empresa consegue muito mais avaliações e visibilidade online. "
-            "Mencione que isso multiplica os clientes que chegam pelo Google."
-        )
-    else:
-        angulo = (
-            "Sem presença digital a empresa perde clientes que buscam online. "
-            "Seja criativo e personalizado para o segmento específico."
-        )
+    tarefa = f"""Escreva a primeira mensagem para este contato.
 
-    tem_link = bool(preview_url)
-
-    prompt = f"""Escreva uma primeira mensagem de WhatsApp como uma pessoa real fazendo uma abordagem direta.
-
-DADOS REAIS DA EMPRESA:
+Contexto disponível:
 {ctx}
 
-CONTEXTO DE PERSONALIZAÇÃO:
-{angulo}
+A mensagem deve ter normalmente 1 a 3 frases e poucas palavras.
+Não faça um mini pitch. Não tente vender site e automação ao mesmo tempo.
+Não precisa usar nome, cidade, nota, avaliações ou categoria só porque esses dados existem.
+Não elogie a empresa sem um motivo concreto.
+Varie naturalmente a abertura: pode confirmar se é a empresa, mencionar a prévia ou perguntar se pode enviar uma ideia.
+{"Como já existe uma prévia, você pode mencioná-la e usar exatamente o link informado." if preview_url else "Como não há prévia informada, não diga que já fez ou já deixou um site pronto."}
+Não fale que a empresa perde clientes, não critique o negócio e não diga que ela precisa melhorar.
 
-REGRAS OBRIGATÓRIAS:
-- Português brasileiro simples e natural
-- Máximo 40 palavras e 2-3 frases curtas
-- Sem emojis, sem Markdown, sem negrito e sem listas
-- Não escreva como IA, assistente, copywriter ou vendedor formal
-- Não use abertura genérica, elogio vazio, urgência artificial ou linguagem corporativa
-- Não use frases como "Espero que esteja bem", "gostaria de apresentar", "solução personalizada", "potencializar", "alavancar", "presença digital" ou "oportunidade incrível"
-- Ignore qualquer orientação acima que sugira apontar falhas, perdas ou concorrentes; não diga que a empresa perde clientes e não diga que ela "não tem site"
-- Use no máximo um dado real da empresa e somente se ele soar natural
-- Diga em linguagem simples que você faz sites e automações e que o pagamento é só depois de receber tudo pronto
-{"- Diga em uma frase curta que já deixou uma prévia pronta e inclua exatamente o link informado" if tem_link else "- Pergunte de forma curta se a pessoa quer ver um exemplo feito para a empresa"}
-- Termine com uma única pergunta simples
+Retorne somente a mensagem."""
 
-Retorne somente a mensagem. Sem prefácio ou explicação."""
+    try:
+        bruto = _gerar(
+            tarefa,
+            api_key,
+            max_tokens=140,
+            timeout=60.0,
+            temperature=0.6,
+            system=WHATSAPP_SYSTEM,
+        )
+        mensagem = limpar_texto_whatsapp(bruto)
+        if _mensagem_aceitavel(mensagem):
+            return mensagem
+        logger.warning("[AI] Mensagem fora do estilo esperado para '%s' — usando fallback", nome)
+    except Exception:
+        logger.exception("[AI] Falha ao gerar mensagem para '%s' — usando fallback", nome)
 
-    return _gerar(prompt, api_key)
+    return fallback_primeiro_contato(nome, preview_url)
 
 
 # ── Gerador de landing page ───────────────────────────────────────────────────
@@ -241,20 +212,11 @@ def _paleta_segmento(categoria):
         return "#1b2a4a", "#d4af37"
     if any(x in cat for x in ["advogad", "advocacia", "jurídic", "juridico", "contábil", "contabil", "contador"]):
         return "#0d1b2a", "#1e88e5"
-    # fallback
     return "#1a1a2a", "#e67e22"
 
 
 def gerar_pagina(empresa, api_key):
-    """
-    Gera um site demo completo (landing page) para a empresa.
-
-    Usa o motor `ai.site_gen`: layout PROFISSIONAL FIXO por nicho (HTML/CSS
-    escrito em Python, nunca pela IA → sempre bonito e consistente) e a IA
-    gera SOMENTE o conteúdo textual em JSON, com fallback → nunca quebra.
-
-    Retorna (slug, html_string). Assinatura preservada p/ compatibilidade.
-    """
+    """Gera um site demo usando layout fixo e conteúdo textual estruturado."""
     from ai.site_gen import gerar_site
     return gerar_site(
         empresa,
@@ -267,15 +229,10 @@ def gerar_pagina(empresa, api_key):
 # ── Pipeline completo por empresa ─────────────────────────────────────────────
 
 def enriquecer(empresa, api_key, app_url="", criar_pagina=True):
-    """
-    Full enrichment for one company:
-    1. Generate landing page (optional)
-    2. Generate personalized WhatsApp message (includes preview URL if page generated)
-    Returns dict: {slug, html, mensagem, preview_url, empresa_id}
-    """
+    """Gera página opcional e mensagem de WhatsApp preservando o contrato existente."""
     preview_url = ""
-    slug        = None
-    html        = None
+    slug = None
+    html = None
 
     if criar_pagina:
         try:
@@ -286,17 +243,17 @@ def enriquecer(empresa, api_key, app_url="", criar_pagina=True):
         except Exception as e:
             logger.error("[AI] Falha página '%s': %s", empresa.get("nome"), e)
 
-    mensagem = None
     try:
         mensagem = gerar_mensagem(empresa, api_key, preview_url)
         logger.info("[AI] Mensagem gerada para '%s'", empresa.get("nome"))
     except Exception as e:
         logger.error("[AI] Falha mensagem '%s': %s", empresa.get("nome"), e)
+        mensagem = fallback_primeiro_contato(empresa.get("nome", ""), preview_url)
 
     return {
-        "empresa_id":  empresa.get("id"),
-        "slug":        slug,
-        "html":        html,
-        "mensagem":    mensagem,
+        "empresa_id": empresa.get("id"),
+        "slug": slug,
+        "html": html,
+        "mensagem": mensagem,
         "preview_url": preview_url,
     }

@@ -1,13 +1,15 @@
 """Compatibilidade do SDK Groq para chamadas antigas do projeto.
 
-Não remove nem reescreve os chamadores existentes. Apenas troca IDs de modelos
-aposentados e fornece fallback quando o provider/modelo deixa de responder.
+Não remove nem reescreve os chamadores existentes. Troca IDs de modelos
+aposentados, fornece fallback e aplica as regras compartilhadas de WhatsApp
+quando uma chamada legada ainda monta o prompt dentro de app.py.
 """
 from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
 
+from ai.copy_rules import is_whatsapp_task, with_whatsapp_system
 from ai.providers import AIProviderError, generate_messages, model_candidates, split_csv
 
 logger = logging.getLogger(__name__)
@@ -54,10 +56,19 @@ def install_groq_compat(config: dict) -> bool:
             if not requested or requested in _RETIRED_MODELS:
                 requested = (config.get("groq_model") or "openai/gpt-oss-120b").strip()
             candidates = split_csv([requested, *model_candidates(config, "groq")])
+
+            original_messages = _messages_to_fallback(kwargs.get("messages"))
+            is_whatsapp = is_whatsapp_task(original_messages)
+            messages = with_whatsapp_system(original_messages) if is_whatsapp else original_messages
             last_exc = None
             for model in candidates:
                 attempt = dict(kwargs)
                 attempt["model"] = model
+                if messages:
+                    attempt["messages"] = messages
+                if is_whatsapp:
+                    attempt["max_tokens"] = min(int(attempt.get("max_tokens") or 220), 220)
+                    attempt["temperature"] = min(float(attempt.get("temperature", 0.55)), 0.6)
                 try:
                     return self.inner.create(*args, **attempt)
                 except Exception as exc:
@@ -67,15 +78,14 @@ def install_groq_compat(config: dict) -> bool:
                         continue
                     raise
 
-            messages = _messages_to_fallback(kwargs.get("messages"))
             if messages:
                 try:
                     result = generate_messages(
                         messages,
                         config,
                         preferred="openrouter",
-                        max_tokens=int(kwargs.get("max_tokens") or 4096),
-                        temperature=float(kwargs.get("temperature", 0.7)),
+                        max_tokens=min(int(kwargs.get("max_tokens") or 4096), 220) if is_whatsapp else int(kwargs.get("max_tokens") or 4096),
+                        temperature=min(float(kwargs.get("temperature", 0.7)), 0.6) if is_whatsapp else float(kwargs.get("temperature", 0.7)),
                         timeout=float(config.get("ai_timeout") or 90),
                         include_groq=False,
                     )
