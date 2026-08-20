@@ -22,6 +22,7 @@ prospector/
   coverage.py              grade e prioridade territorial
   db.py                    schema/migração/repositório PostgreSQL
   migration.py             preflight seguro para bancos legados
+  runtime_db.py            parser legado de DATABASE_URL + SSL
   prospecting.py           orquestração das buscas
   ai.py                    Groq/OpenRouter/xAI + failover
   messaging.py             política de saída + providers WhatsApp
@@ -37,6 +38,8 @@ frontend/v2.*               painel SPA
 ## Migração sem apagar dados
 
 Na inicialização, o preflight em `prospector/migration.py` remove apenas o índice único legado de telefone que poderia colidir durante a normalização e registra as associações originais de busca antes da deduplicação. Em seguida, `Database.init_schema()` mantém as tabelas legadas `empresas` e `buscas`, adiciona campos V2, faz backfill de telefone/place ID/fingerprint, consolida duplicatas e cria as tabelas auxiliares de cobertura, aparições, permissões e auditoria. Notas e previews são repontados para o registro vencedor durante deduplicação.
+
+O runtime de produção usa `RuntimeDatabase`, que preserva uma compatibilidade importante do projeto antigo: senhas de banco legadas contendo `@` sem percent-encoding continuam sendo interpretadas corretamente. Credenciais percent-encoded também são suportadas; conexões remotas usam SSL por padrão e conexões locais usam `sslmode=prefer`.
 
 Faça backup do banco antes do primeiro deploy de qualquer migração estrutural. A migração é idempotente e também é executada pela suíte de integração em PostgreSQL no CI.
 
@@ -57,14 +60,15 @@ Para IA, selecione `AI_PROVIDER=groq|openrouter|xai`; os fallbacks ficam em `AI_
 
 ## Validação
 
-O CI executa:
+O CI executa compilação Python, validação do JavaScript, a suíte `pytest`, um smoke real do `app.py` contra PostgreSQL e a construção da mesma imagem Docker usada em produção.
 
 ```bash
 python -m compileall -q app.py prospector scraper
 node --check frontend/v2.js
 pytest
+docker build -t prospector-v2 .
 ```
 
-Os testes incluem identidade/deduplicação, planejamento de cobertura, fallback de IA, política de WhatsApp, landing page, smoke da aplicação, upsert entre buscas e migração realista do schema legado em PostgreSQL 16 — inclusive duplicatas que convergem após normalização de telefone e preservação de histórico/notas.
+Os testes incluem identidade/deduplicação, planejamento de cobertura, fallback de IA, política de WhatsApp, landing page, parser de conexão de produção, smoke da aplicação, upsert entre buscas e migração realista do schema legado em PostgreSQL 16 — inclusive duplicatas que convergem após normalização de telefone e preservação de histórico/notas.
 
 O painel também possui **Diagnóstico**, com validação de banco, Chrome/ChromeDriver, configuração dos providers e testes ao vivo opcionais das APIs configuradas.
