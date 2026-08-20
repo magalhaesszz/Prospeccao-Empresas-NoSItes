@@ -2,6 +2,7 @@ from ai.copy_rules import (
     fallback_primeiro_contato,
     is_whatsapp_task,
     limpar_texto_whatsapp,
+    mensagem_prospeccao_aceitavel,
     with_whatsapp_system,
 )
 from ai.site_gen.content import gerar_conteudo
@@ -25,6 +26,17 @@ def test_limpeza_remove_caracteres_invisiveis_e_markdown():
 def test_humanizacao_nao_insere_variacao_invisivel():
     msg = humanizar_mensagem("Oi, tudo certo?", variar_invisivel=True)
     assert msg == "Oi, tudo certo?"
+
+
+def test_validador_rejeita_template_comercial_legado():
+    legado = (
+        "Olá, Empresa! 👋 Meu nome é Matheus e trabalho com presença digital. "
+        "Gostaria de apresentar uma solução personalizada para potencializar seus resultados. 🚀"
+    )
+    natural = "Oi, tudo certo? Fiz uma prévia de site pra vocês aqui. Posso te mandar?"
+
+    assert mensagem_prospeccao_aceitavel(legado) is False
+    assert mensagem_prospeccao_aceitavel(natural) is True
 
 
 def test_compat_aplica_system_so_em_tarefa_de_whatsapp():
