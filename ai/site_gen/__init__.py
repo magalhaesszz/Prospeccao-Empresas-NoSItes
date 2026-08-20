@@ -50,6 +50,11 @@ def _telefone(empresa):
 def _contexto(empresa, validar_fotos_fn):
     categoria = empresa.get("descricao_google") or empresa.get("categoria") or "Negócio Local"
     t = tema(categoria)
+    # O tema visual pode conhecer o nicho, mas não deve presumir que o negócio
+    # aceita agendamento, reservas, pedidos ou orçamento. CTAs permanecem factuais.
+    t["termo_agendar"] = "Falar no WhatsApp"
+    t["rotulo_servicos"] = "Informações"
+
     fotos = _montar_fotos(empresa, validar_fotos_fn)
     wa_link, tel_link = _telefone(empresa)
 
