@@ -1,32 +1,9 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.Python
-*.egg-info/
-venv/
-.venv/
-env/
-
-# Banco de dados — nunca commita
-*.db
-*.sqlite
-*.sqlite3
-
-# Variáveis de ambiente — nunca commita
 .env
-.env.local
-
-# Arquivos exportados
-export/*.xlsx
-export/*.csv
-
-# ChromeDriver cache (webdriver-manager)
-.wdm/
-
-# OS
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
 .DS_Store
-Thumbs.db
-
-# Logs
-*.log

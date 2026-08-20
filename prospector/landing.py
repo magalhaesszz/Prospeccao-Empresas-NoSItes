@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+import html,re,secrets
+from urllib.parse import quote
+
+def _e(value)->str: return html.escape(str(value or ""),quote=True)
+def slug_for(name:str)->str:
+    base=re.sub(r"[^a-z0-9]+","-",(name or "empresa").lower()).strip("-")[:40] or "empresa"; return f"{base}-{secrets.token_hex(3)}"
+
+def build_preview(company:dict,copy:str="")->tuple[str,str]:
+    name=_e(company.get("nome") or "Sua Empresa"); category=_e(company.get("descricao_google") or company.get("categoria") or "Negócio local"); address=_e(company.get("endereco") or "")
+    digits=re.sub(r"\D","",str(company.get("telefone") or "")); rating=company.get("nota"); reviews=company.get("avaliacoes") or 0
+    copy=_e(copy or f"Uma presença digital clara, rápida e profissional para apresentar o melhor de {name} e facilitar o contato com novos clientes.")
+    rating_html=f'<span class="pill">★ {_e(rating)} · {_e(reviews)} avaliações</span>' if rating else ""; whatsapp=f"https://wa.me/{quote(digits)}" if digits else "#contato"; slug=slug_for(company.get("nome") or "empresa")
+    doc=f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{name}</title><style>
+:root{{--bg:#0b1020;--card:#121a30;--text:#f7f9ff;--muted:#aab4cf;--accent:#6ee7b7;--line:#26304b}}*{{box-sizing:border-box}}body{{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:linear-gradient(145deg,#07101f,#10172b);color:var(--text)}}.wrap{{max-width:1080px;margin:auto;padding:28px}}nav{{display:flex;justify-content:space-between;align-items:center;padding:12px 0}}.brand{{font-weight:800;font-size:1.15rem}}a.btn{{color:#062417;background:var(--accent);padding:12px 18px;border-radius:12px;text-decoration:none;font-weight:800}}.hero{{padding:88px 0 54px;display:grid;grid-template-columns:1.35fr .65fr;gap:34px;align-items:center}}h1{{font-size:clamp(2.6rem,7vw,5.8rem);line-height:.96;margin:.15em 0}}.eyebrow{{color:var(--accent);font-weight:800;text-transform:uppercase;letter-spacing:.12em}}.lead{{color:var(--muted);font-size:1.12rem;line-height:1.75;max-width:720px}}.card{{background:rgba(18,26,48,.85);border:1px solid var(--line);border-radius:24px;padding:26px;box-shadow:0 18px 60px rgba(0,0,0,.25)}}.pill{{display:inline-block;padding:8px 12px;border:1px solid var(--line);border-radius:999px;color:#dce5ff;margin:4px 4px 4px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:18px 0 70px}}footer{{border-top:1px solid var(--line);padding:30px 0;color:var(--muted)}}@media(max-width:760px){{.hero,.grid{{grid-template-columns:1fr}}.hero{{padding-top:52px}}}}
+</style></head><body><div class="wrap"><nav><div class="brand">{name}</div><a class="btn" href="{whatsapp}">Falar agora</a></nav><section class="hero"><div><div class="eyebrow">{category}</div><h1>{name}</h1><p class="lead">{copy}</p><p>{rating_html}</p></div><div class="card"><h3>Contato rápido</h3><p>{address or 'Atendimento local e personalizado.'}</p><a class="btn" href="{whatsapp}">Conversar no WhatsApp</a></div></section><section class="grid"><div class="card"><h3>Profissional</h3><p class="lead">Informações organizadas para gerar confiança desde o primeiro acesso.</p></div><div class="card"><h3>Rápido</h3><p class="lead">Layout leve, responsivo e pensado para celular.</p></div><div class="card"><h3>Direto</h3><p class="lead">Chamadas para ação claras para transformar visitas em conversas.</p></div></section><footer>Prévia demonstrativa criada para {name}. Conteúdo pode ser personalizado.</footer></div></body></html>'''
+    return slug,doc
