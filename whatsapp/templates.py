@@ -5,7 +5,7 @@ Seleciona template manual ativo ou usa o fallback curto e factual do sistema.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai.copy_rules import fallback_primeiro_contato
+from ai.copy_rules import fallback_primeiro_contato, mensagem_prospeccao_aceitavel
 from database.db import get_template_ativo
 
 
@@ -15,7 +15,8 @@ def obter_mensagem(nome_empresa, template_id=None):
     Prioridade: template_id passado > template ativo no banco > fallback natural.
     Retorna (mensagem, template_id_usado).
 
-    Templates criados pelo usuário não são reescritos silenciosamente.
+    Templates legados que ainda contenham pitch longo, emoji, lista ou clichês
+    comerciais não são enviados: caem no mesmo fallback curto da IA.
     """
     template = None
 
@@ -35,7 +36,8 @@ def obter_mensagem(nome_empresa, template_id=None):
 
     if template:
         mensagem = template["mensagem"].replace("{NOME_DA_EMPRESA}", nome_empresa)
-        return mensagem, template["id"]
+        if mensagem_prospeccao_aceitavel(mensagem):
+            return mensagem, template["id"]
 
     return fallback_primeiro_contato(nome_empresa), None
 
