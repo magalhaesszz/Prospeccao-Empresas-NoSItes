@@ -28,16 +28,40 @@ Evite palavras e fórmulas como excelência, referência, qualidade e confiança
 Responda somente no formato solicitado pela tarefa."""
 
 
-# Os prompts legados de mensagens/follow-ups mencionam explicitamente o canal.
-# Não usamos apenas a palavra "prospecção", pois ela também aparece em análises
-# internas que não devem ser tratadas como uma mensagem para cliente.
 WHATSAPP_TASK_HINTS = (
     "whatsapp", "follow-up", "followup", "mensagem de resposta",
     "responder o cliente", "mensagem personalizada",
 )
 
+PROSPECCAO_CLICHES = (
+    "solução personalizada",
+    "soluções personalizadas",
+    "potencializar",
+    "alavancar",
+    "presença digital",
+    "transformar seu negócio",
+    "elevar sua marca",
+    "oportunidade incrível",
+    "gostaria de apresentar",
+    "venho por meio",
+    "espero que esteja bem",
+    "identifiquei que",
+    "analisando sua empresa",
+    "se destacar da concorrência",
+    "maximizar",
+    "otimizar sua presença",
+    "revolucionar",
+    "impulsionar",
+    "compromisso com a excelência",
+    "referência no mercado",
+    "ajudar seu negócio a crescer",
+    "aumentar seus resultados",
+)
+
 _ZERO_WIDTH_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
 _WHITESPACE_RE = re.compile(r"\s+")
+_EMOJI_RE = re.compile("[\U0001F1E6-\U0001FAFF\u2600-\u27BF]")
+_LIST_RE = re.compile(r"(^|\n)\s*(?:[-•]|\d+[.)])\s+", re.MULTILINE)
 
 
 def is_whatsapp_task(messages) -> bool:
@@ -76,6 +100,25 @@ def limpar_texto_whatsapp(texto: str) -> str:
     texto = texto.replace("**", "").replace("__", "")
     texto = _WHITESPACE_RE.sub(" ", texto)
     return texto.strip()
+
+
+def mensagem_prospeccao_aceitavel(texto: str, max_palavras: int = 50) -> bool:
+    """Barreira final contra copy comercial/automática em primeiro contato."""
+    if not texto:
+        return False
+    bruto = str(texto).strip()
+    baixo = bruto.lower()
+    if len(_WHITESPACE_RE.split(bruto)) > max_palavras:
+        return False
+    if bruto.count("?") > 1:
+        return False
+    if _EMOJI_RE.search(bruto) or _LIST_RE.search(bruto):
+        return False
+    if any(marca in bruto for marca in ("**", "```")):
+        return False
+    if any(cliche in baixo for cliche in PROSPECCAO_CLICHES):
+        return False
+    return True
 
 
 def fallback_primeiro_contato(nome: str = "", preview_url: str = "") -> str:
