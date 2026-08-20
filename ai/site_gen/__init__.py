@@ -15,7 +15,15 @@ import secrets
 
 from .theme import tema
 from .content import gerar_conteudo
+from . import components as _components
+from .factual_components import contato as _contato_factual, faixa_cta as _faixa_cta_factual
 from .layouts import renderizar
+
+# Os layouts antigos chamam funções do módulo components. Mantemos essa API e
+# trocamos só os dois componentes que continham suposições de atendimento e um
+# formulário sem backend.
+_components.contato = _contato_factual
+_components.faixa_cta = _faixa_cta_factual
 
 logger = logging.getLogger(__name__)
 
