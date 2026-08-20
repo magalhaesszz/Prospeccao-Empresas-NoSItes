@@ -54,6 +54,22 @@ jobs:
         id: pytest
         continue-on-error: true
         run: pytest
+      - name: Smoke production app startup
+        id: smoke
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import app
+          client = app.app.test_client()
+          response = client.get('/healthz')
+          assert response.status_code == 200, response.data
+          assert response.get_json()['ok'] is True
+          print(response.get_json())
+          PY
+      - name: Build production Docker image
+        id: docker
+        continue-on-error: true
+        run: docker build --pull -t prospector-v2-ci .
       - name: Publish validation status
         if: always()
         env:
@@ -62,10 +78,12 @@ jobs:
           COMPILE_OUTCOME: ${{ steps.compile.outcome }}
           JS_OUTCOME: ${{ steps.javascript.outcome }}
           PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          DOCKER_OUTCOME: ${{ steps.docker.outcome }}
         run: |
           state=success
-          description="install + compile + js + pytest passed"
-          if [ "$INSTALL_OUTCOME" != "success" ] || [ "$COMPILE_OUTCOME" != "success" ] || [ "$JS_OUTCOME" != "success" ] || [ "$PYTEST_OUTCOME" != "success" ]; then
+          description="tests + startup smoke + Docker build passed"
+          if [ "$INSTALL_OUTCOME" != "success" ] || [ "$COMPILE_OUTCOME" != "success" ] || [ "$JS_OUTCOME" != "success" ] || [ "$PYTEST_OUTCOME" != "success" ] || [ "$SMOKE_OUTCOME" != "success" ] || [ "$DOCKER_OUTCOME" != "success" ]; then
             state=failure
             description="validation failed; inspect Actions logs"
           fi
@@ -77,5 +95,5 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -d "{\"state\":\"${state}\",\"context\":\"Prospector V2 CI\",\"description\":\"${description}\"}"
       - name: Fail job when validation failed
-        if: steps.install.outcome != 'success' || steps.compile.outcome != 'success' || steps.javascript.outcome != 'success' || steps.pytest.outcome != 'success'
+        if: steps.install.outcome != 'success' || steps.compile.outcome != 'success' || steps.javascript.outcome != 'success' || steps.pytest.outcome != 'success' || steps.smoke.outcome != 'success' || steps.docker.outcome != 'success'
         run: exit 1
