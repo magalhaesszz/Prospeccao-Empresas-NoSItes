@@ -1,5 +1,11 @@
-from ai.copy_rules import fallback_primeiro_contato, limpar_texto_whatsapp
+from ai.copy_rules import (
+    fallback_primeiro_contato,
+    is_whatsapp_task,
+    limpar_texto_whatsapp,
+    with_whatsapp_system,
+)
 from ai.site_gen.content import gerar_conteudo
+from ai.site_gen.factual_components import contato
 from whatsapp.humanizar import humanizar_mensagem
 
 
@@ -19,6 +25,16 @@ def test_limpeza_remove_caracteres_invisiveis_e_markdown():
 def test_humanizacao_nao_insere_variacao_invisivel():
     msg = humanizar_mensagem("Oi, tudo certo?", variar_invisivel=True)
     assert msg == "Oi, tudo certo?"
+
+
+def test_compat_aplica_system_so_em_tarefa_de_whatsapp():
+    wa = [{"role": "user", "content": "Crie uma mensagem curta para WhatsApp."}]
+    analise = [{"role": "user", "content": "Analise estes prospects e gere um ranking."}]
+
+    assert is_whatsapp_task(wa) is True
+    assert with_whatsapp_system(wa)[0]["role"] == "system"
+    assert is_whatsapp_task(analise) is False
+    assert with_whatsapp_system(analise) == analise
 
 
 def test_site_descarta_fatos_inventados_pelo_modelo():
@@ -56,3 +72,21 @@ def test_site_descarta_fatos_inventados_pelo_modelo():
     assert "R$ 89" not in str(conteudo["servicos"])
     assert "8h às 18h" not in str(conteudo["faq"])
     assert conteudo["servicos"][0]["titulo"] == "Oficina mecânica"
+
+
+def test_contato_nao_inventa_horario_agendamento_ou_formulario():
+    html = contato({
+        "nome": "Oficina Central",
+        "endereco": "Rua A, 10",
+        "telefone": "(62) 99999-9999",
+        "wa_link": "https://wa.me/5562999999999",
+        "tel_link": "tel:+5562999999999",
+        "maps_url": "https://maps.google.com/example",
+    })
+
+    baixo = html.lower()
+    assert "agende" not in baixo
+    assert "horário" not in baixo
+    assert "<form" not in baixo
+    assert "rua a, 10" in baixo
+    assert "(62) 99999-9999" in html
