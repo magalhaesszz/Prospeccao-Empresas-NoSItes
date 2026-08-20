@@ -28,8 +28,35 @@ Evite palavras e fórmulas como excelência, referência, qualidade e confiança
 Responda somente no formato solicitado pela tarefa."""
 
 
+WHATSAPP_TASK_HINTS = (
+    "whatsapp", "prospecção", "prospeccao", "follow-up", "followup",
+    "mensagem de resposta", "responder o cliente", "mensagem personalizada",
+)
+
 _ZERO_WIDTH_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
 _WHITESPACE_RE = re.compile(r"\s+")
+
+
+def is_whatsapp_task(messages) -> bool:
+    """Detecta chamadas legadas que produzem texto de WhatsApp."""
+    texto = "\n".join(
+        m.get("content", "") for m in (messages or [])
+        if isinstance(m, dict) and isinstance(m.get("content"), str)
+    ).lower()
+    return any(hint in texto for hint in WHATSAPP_TASK_HINTS)
+
+
+def with_whatsapp_system(messages):
+    """Acrescenta a regra central a prompts legados sem alterar o chamador."""
+    msgs = [
+        m for m in (messages or [])
+        if isinstance(m, dict) and isinstance(m.get("content"), str)
+    ]
+    if not is_whatsapp_task(msgs):
+        return msgs
+    if msgs and msgs[0].get("role") == "system" and msgs[0].get("content") == WHATSAPP_SYSTEM:
+        return msgs
+    return [{"role": "system", "content": WHATSAPP_SYSTEM}, *msgs]
 
 
 def limpar_texto_whatsapp(texto: str) -> str:
