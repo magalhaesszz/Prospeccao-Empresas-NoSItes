@@ -293,12 +293,13 @@ function renderizarCards() {
     const starsHtml = nota ? (() => {
       const full  = Math.round(nota);
       const stars = "★".repeat(full) + "☆".repeat(5 - full);
-      const avsPart = (avs && avs > 0)
-        ? ` · ${avs.toLocaleString('pt-BR')} avaliação${avs !== 1 ? "ões" : ""}`
+      const avNum  = avs > 0 ? avs : 0;
+      const avsTxt = avNum > 0
+        ? ` · ${avNum.toLocaleString('pt-BR')} avaliação${avNum !== 1 ? "ões" : ""}`
         : "";
       return `<div style="color:#f59e0b;font-size:.82rem;margin-top:4px">
         ${stars}
-        <span style="color:var(--muted);font-size:.75rem;margin-left:4px">${nota.toFixed(1)}${avsPart}</span>
+        <span style="color:var(--muted);font-size:.75rem;margin-left:4px">${nota.toFixed(1)}${avsTxt}</span>
       </div>`;
     })() : "";
 
