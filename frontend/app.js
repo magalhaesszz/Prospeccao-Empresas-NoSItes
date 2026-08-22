@@ -235,7 +235,8 @@ function setProgresso(texto, atual, total, empresa, pct) {
 // ── Cards de resultado ────────────────────────────────────────────────────────
 
 function carregarResultados(empresas) {
-  APP.empresas     = empresas;
+  // Remove empresas já disparadas e as já existentes no banco (duplicadas de buscas anteriores)
+  APP.empresas     = empresas.filter(e => !e.mensagem_enviada && !e._duplicado);
   APP.selecionados = new Set();
   APP.pagina       = 1;
   _aplicarFiltro();
@@ -250,8 +251,11 @@ function filtrarTabela() {
 
 function _aplicarFiltro() {
   const soSemSite = document.getElementById("chk-sem-site").checked;
-  // Sempre exclui empresas já disparadas da prospecção
-  let base = APP.empresas.filter(e => !e.mensagem_enviada);
+  // Mostra TODAS, inclusive já disparadas (marcadas com selo) — evita re-disparo.
+  let base = [...APP.empresas];
+  if (document.getElementById("chk-ocultar-enviadas")?.checked) {
+    base = base.filter(e => !e.mensagem_enviada);
+  }
   APP.filtradas = soSemSite ? base.filter(e => !e.tem_site) : base;
   renderizarCards();
   renderizarPaginacao();
