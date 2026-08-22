@@ -593,6 +593,13 @@ def api_crm_atualizar(empresa_id):
         atualizar_status_empresa(empresa_id, novo_status)
     if marcar_enviado:
         marcar_mensagem_enviada(empresa_id)
+        # Sincroniza o estado em memória para que F5 não restaure a empresa
+        with _lock:
+            for emp in _estado["empresas"]:
+                if emp.get("id") == empresa_id:
+                    emp["mensagem_enviada"] = 1
+                    emp["status"] = "contatado"
+                    break
     return jsonify({"ok": True})
 
 
