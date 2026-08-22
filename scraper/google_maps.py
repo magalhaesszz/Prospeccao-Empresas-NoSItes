@@ -553,8 +553,9 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
         if not txt:
             return None
         txt = str(txt).strip()
-        # Padrão 1: "1.234 avaliações" | "1,234 reviews" | "1 234 opiniões"
-        m = re.search(r'([\d][\d\s\.,]*)\s*(?:avalia|review|opini)', txt, re.IGNORECASE)
+        # Padrão 1: "1.234 avaliações" | "1,234 reviews" | "1.234 comentários"
+        # "comentár" cobre o termo que o Google Maps PT-BR usa nos aria-labels
+        m = re.search(r'([\d][\d\s\.,]*)\s*(?:avalia|review|opini|comentár)', txt, re.IGNORECASE)
         if m:
             n = int(re.sub(r'[^\d]', '', m.group(1)))
             if 1 <= n <= 9_999_999:
@@ -573,6 +574,7 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
     for _sel_wait in [
         'span[aria-label*="avalia"]', 'div.F7nice',
         'span[aria-label*="review"]', 'button[aria-label*="avalia"]',
+        'span[aria-label*="comentár"]',
     ]:
         try:
             WebDriverWait(driver, 5).until(
@@ -582,12 +584,15 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
         except Exception:
             pass
 
-    # 1) Elementos com aria-label contendo "avalia" ou "review"
+    # 1) Elementos com aria-label contendo "avalia", "review" ou "comentár"
+    #    Google Maps PT-BR usa "comentários" nos aria-labels do contador de avaliações
     #    Usa find_elements (plural) para iterar todos e não parar no primeiro inútil
     for sel in [
-        'span[aria-label*="avalia"]',   'button[aria-label*="avalia"]',
+        'span[aria-label*="avalia"]',    'button[aria-label*="avalia"]',
         'a[aria-label*="avalia"]',
-        'span[aria-label*="review"]',   'button[aria-label*="review"]',
+        'span[aria-label*="review"]',    'button[aria-label*="review"]',
+        'span[aria-label*="comentár"]',  'button[aria-label*="comentár"]',
+        'a[aria-label*="comentár"]',
     ]:
         if avaliacoes:
             break
@@ -605,20 +610,25 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
     if not avaliacoes:
         try:
             area = driver.find_element(By.CSS_SELECTOR, 'div.F7nice')
-            # 2a) aria-labels dos spans filhos (mais preciso)
-            for span in area.find_elements(By.CSS_SELECTOR, 'span[aria-label]'):
-                n = _avs_de_texto(span.get_attribute("aria-label") or "")
-                if n:
-                    avaliacoes = n
-                    break
-            # 2b) texto "(N)" nos spans filhos
+            # 2a) aria-label do próprio F7nice (contém "4,5 estrelas, 1.234 avaliações")
+            label_f7 = area.get_attribute("aria-label") or ""
+            if label_f7:
+                avaliacoes = _avs_de_texto(label_f7)
+            # 2b) aria-labels dos spans filhos (mais preciso)
+            if not avaliacoes:
+                for span in area.find_elements(By.CSS_SELECTOR, 'span[aria-label]'):
+                    n = _avs_de_texto(span.get_attribute("aria-label") or "")
+                    if n:
+                        avaliacoes = n
+                        break
+            # 2c) texto visível dos spans filhos — "(N)" ou "N comentários"
             if not avaliacoes:
                 for span in area.find_elements(By.CSS_SELECTOR, 'span'):
                     n = _avs_de_texto(span.text or "")
                     if n:
                         avaliacoes = n
                         break
-            # 2c) innerHTML completo do F7nice
+            # 2d) innerHTML completo do F7nice
             if not avaliacoes:
                 src = area.get_attribute("innerHTML") or ""
                 avaliacoes = _avs_de_texto(src)
@@ -657,7 +667,7 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
     # 5) Outros contêineres de rating (jsaction, aria-label no div)
     if not avaliacoes:
         for sel in ['div[jsaction*="rating"]', 'div[aria-label*="avalia"]',
-                    'div[data-item-id="rating"]']:
+                    'div[aria-label*="comentár"]', 'div[data-item-id="rating"]']:
             try:
                 area = driver.find_element(By.CSS_SELECTOR, sel)
                 src = area.get_attribute("innerHTML") or ""

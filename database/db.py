@@ -383,6 +383,17 @@ def salvar_empresa(empresa, busca_id):
     # 1) Já existe? (telefone OU maps_url)
     existente = _buscar_existente(c, tel, maps_url)
     if existente:
+        # Atualiza nota/avaliacoes se a nova raspagem trouxe dados melhores
+        nova_nota = empresa.get("nota")
+        novos_avs = empresa.get("avaliacoes") or None
+        if nova_nota or novos_avs:
+            c.execute("""
+                UPDATE empresas
+                SET nota      = COALESCE(%s, nota),
+                    avaliacoes = COALESCE(%s, NULLIF(avaliacoes, 0))
+                WHERE id = %s
+            """, (nova_nota, novos_avs, existente[0]))
+            conn.commit()
         conn.close()
         empresa["_duplicado"]       = True
         empresa["mensagem_enviada"] = existente[1]
