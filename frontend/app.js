@@ -250,11 +250,8 @@ function filtrarTabela() {
 
 function _aplicarFiltro() {
   const soSemSite = document.getElementById("chk-sem-site").checked;
-  // Mostra TODAS, inclusive já disparadas (marcadas com selo) — evita re-disparo.
-  let base = [...APP.empresas];
-  if (document.getElementById("chk-ocultar-enviadas")?.checked) {
-    base = base.filter(e => !e.mensagem_enviada);
-  }
+  // Sempre exclui empresas já disparadas da prospecção
+  let base = APP.empresas.filter(e => !e.mensagem_enviada);
   APP.filtradas = soSemSite ? base.filter(e => !e.tem_site) : base;
   renderizarCards();
   renderizarPaginacao();
@@ -292,9 +289,12 @@ function renderizarCards() {
     const starsHtml = nota ? (() => {
       const full  = Math.round(nota);
       const stars = "★".repeat(full) + "☆".repeat(5 - full);
+      const avsPart = (avs && avs > 0)
+        ? ` · ${avs.toLocaleString('pt-BR')} avaliação${avs !== 1 ? "ões" : ""}`
+        : "";
       return `<div style="color:#f59e0b;font-size:.82rem;margin-top:4px">
         ${stars}
-        <span style="color:var(--muted);font-size:.75rem;margin-left:4px">${nota.toFixed(1)} · ${avs || 0} avaliação${(avs||0)!==1?"ões":""}</span>
+        <span style="color:var(--muted);font-size:.75rem;margin-left:4px">${nota.toFixed(1)}${avsPart}</span>
       </div>`;
     })() : "";
 

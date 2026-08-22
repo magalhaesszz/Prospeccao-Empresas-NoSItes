@@ -55,7 +55,7 @@
       const resp = await fetch(`/api/crm/empresa/${empresaId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "contatado" }),
+        body: JSON.stringify({ status: "contatado", mensagem_enviada: 1 }),
       });
       const dados = await resp.json().catch(() => ({}));
       if (!resp.ok || dados.erro) {

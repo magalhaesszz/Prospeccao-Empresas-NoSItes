@@ -408,7 +408,7 @@ def salvar_empresa(empresa, busca_id):
         empresa.get("score", 0),
         empresa.get("descricao_google"),
         empresa.get("nota"),
-        empresa.get("avaliacoes") or 0,
+        empresa.get("avaliacoes") or None,
         maps_url,
         empresa.get("foto_url", ""),
         empresa.get("fotos_urls", "[]"),

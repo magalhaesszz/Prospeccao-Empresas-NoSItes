@@ -588,8 +588,11 @@ def api_crm_kanban():
 def api_crm_atualizar(empresa_id):
     dados = request.get_json(silent=True) or {}
     novo_status = dados.get("status")
+    marcar_enviado = dados.get("mensagem_enviada")
     if novo_status:
         atualizar_status_empresa(empresa_id, novo_status)
+    if marcar_enviado:
+        marcar_mensagem_enviada(empresa_id)
     return jsonify({"ok": True})
 
 

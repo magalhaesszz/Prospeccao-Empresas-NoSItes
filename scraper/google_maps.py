@@ -541,60 +541,112 @@ def _extrair_de_url(driver, maps_url, nome_hint=""):
         except Exception:
             pass
 
-    # Avaliações — 4 estratégias para cobrir variações do Google Maps
+    # Avaliações — 5 estratégias para cobrir variações do Google Maps
     avaliacoes = None
 
-    # 1) aria-label com "avalia" ou "review"
-    for sel in ['span[aria-label*="avalia"]', 'button[aria-label*="avalia"]',
-                'span[aria-label*="review"]', 'button[aria-label*="review"]']:
+    def _parse_contagem(txt):
+        """Extrai inteiro de strings como '1.234', '1,234', '(47)', '1.234 avaliações'."""
+        if not txt:
+            return None
+        # Remove parênteses e separadores de milhar PT-BR/EN, mantém apenas dígitos
+        txt = txt.strip()
+        m = re.search(r'(\d[\d\.\s]*\d|\d)', txt.replace(',', '').replace(' ', ''))
+        if m:
+            n = int(re.sub(r'\D', '', m.group(0)))
+            return n if 1 <= n <= 9_999_999 else None
+        return None
+
+    # 1) aria-label com "avalia", "review", "opini" (variações PT-BR)
+    for sel in [
+        'button[aria-label*="avalia"]', 'span[aria-label*="avalia"]',
+        'button[aria-label*="review"]', 'span[aria-label*="review"]',
+        'button[aria-label*="opini"]',  'span[aria-label*="opini"]',
+    ]:
         try:
             el    = driver.find_element(By.CSS_SELECTOR, sel)
             label = el.get_attribute("aria-label") or el.text or ""
-            m     = re.search(r'(\d[\d\.,]*)', label)
-            if m:
-                avaliacoes = int(m.group(1).replace('.', '').replace(',', ''))
+            n = _parse_contagem(label)
+            if n:
+                avaliacoes = n
                 break
         except Exception:
             pass
 
-    # 2) classes conhecidas — conteúdo textual direto
+    # 2) classes conhecidas — conteúdo textual direto (Google Maps muda com frequência)
     if avaliacoes is None:
-        for sel in ['span.UY7F9', 'span.e4rVHe']:
+        for sel in ['span.UY7F9', 'span.e4rVHe', 'span.RDApEe', 'span.HHrUdb']:
             try:
                 el  = driver.find_element(By.CSS_SELECTOR, sel)
-                txt = re.sub(r'[^\d]', '', el.text or "")
-                if txt:
-                    avaliacoes = int(txt)
+                n = _parse_contagem(el.text)
+                if n:
+                    avaliacoes = n
                     break
             except Exception:
                 pass
 
-    # 3) XPath — span com texto no formato "(47)"
+    # 3) XPath — span com texto no formato "(47)" ou "47 avaliações"
     if avaliacoes is None:
         try:
-            els = driver.find_elements(
-                By.XPATH,
-                "//span[contains(text(),'(') and contains(text(),')')]"
-            )
-            for el in els:
-                txt = re.sub(r'[^\d]', '', el.text or "")
-                if txt:
-                    n = int(txt)
-                    if 1 <= n <= 999999:
+            # Candidatos: spans com parênteses OU próximos ao elemento de estrelas
+            for xpath in [
+                "//span[contains(text(),'(') and contains(text(),')')]",
+                "//div[@class='F7nice']//span[not(@aria-hidden)]",
+                "//span[contains(@aria-label,'avalia')]",
+            ]:
+                els = driver.find_elements(By.XPATH, xpath)
+                for el in els:
+                    n = _parse_contagem(el.text or el.get_attribute("aria-label") or "")
+                    if n:
                         avaliacoes = n
                         break
+                if avaliacoes is not None:
+                    break
         except Exception:
             pass
 
-    # 4) regex no source HTML da área de rating
+    # 4) regex no source HTML da área de rating (F7nice contém nota + contagem)
     if avaliacoes is None:
         try:
-            area = driver.find_element(By.CSS_SELECTOR,
-                'div.F7nice, div[jsaction*="rating"], div[aria-label*="avalia"]')
-            src = area.get_attribute("innerHTML") or ""
-            m = re.search(r'(\d[\d\.]*)\s*(?:avalia|review)', src, re.IGNORECASE)
-            if m:
-                avaliacoes = int(m.group(1).replace('.', ''))
+            for rating_sel in [
+                'div.F7nice', 'div[jsaction*="rating"]',
+                'div[aria-label*="avalia"]', 'div[class*="fontBodySmall"]',
+            ]:
+                try:
+                    area = driver.find_element(By.CSS_SELECTOR, rating_sel)
+                    src = area.get_attribute("innerHTML") or ""
+                    # "1.234 avaliações" ou "(1.234)"
+                    for pat in [
+                        r'(\d[\d\.]*)\s*(?:avalia|review|opini)',
+                        r'\((\d[\d\.]*)\)',
+                    ]:
+                        m = re.search(pat, src, re.IGNORECASE)
+                        if m:
+                            n = _parse_contagem(m.group(1))
+                            if n:
+                                avaliacoes = n
+                                break
+                    if avaliacoes is not None:
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # 5) varredura geral no innerHTML do painel principal — último recurso
+    if avaliacoes is None:
+        try:
+            painel = driver.find_element(By.CSS_SELECTOR, 'div[role="main"]')
+            src = painel.get_attribute("innerHTML") or ""
+            for pat in [
+                r'\((\d[\d\.]{1,6})\)',
+                r'(\d[\d\.]{1,6})\s*avalia',
+            ]:
+                m = re.search(pat, src, re.IGNORECASE)
+                if m:
+                    n = _parse_contagem(m.group(1))
+                    if n:
+                        avaliacoes = n
+                        break
         except Exception:
             pass
 
