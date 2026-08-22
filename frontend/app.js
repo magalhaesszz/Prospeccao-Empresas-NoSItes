@@ -235,8 +235,10 @@ function setProgresso(texto, atual, total, empresa, pct) {
 // ── Cards de resultado ────────────────────────────────────────────────────────
 
 function carregarResultados(empresas) {
-  // Remove empresas já disparadas e as já existentes no banco (duplicadas de buscas anteriores)
-  APP.empresas     = empresas.filter(e => !e.mensagem_enviada && !e._duplicado);
+  // Remove apenas as duplicatas de buscas anteriores.
+  // Empresas marcadas como enviadas nesta sessão permanecem visíveis (com estilo "já enviada")
+  // e o checkbox "Ocultar já disparadas" controla a visibilidade delas.
+  APP.empresas     = empresas.filter(e => !e._duplicado);
   APP.selecionados = new Set();
   APP.pagina       = 1;
   _aplicarFiltro();
